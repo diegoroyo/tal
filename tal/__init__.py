@@ -1,1 +1,2 @@
-from .test import test
+import tal.io
+import tal.plot
