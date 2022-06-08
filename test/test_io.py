@@ -20,10 +20,14 @@ def test(filename):
     # NOTE: idk why but delta_t upgrades to float64 here - its still stored as float32
     print(f'delta_t: {capture.delta_t}')
     print(f't_start: {capture.t_start}')
+    print(
+        f't_accounts_first_last_bounces: {capture.t_accounts_first_last_bounces}')
     print(f'scene_info: {capture.scene_info}')
     print()
 
 
+test('data/NLOSDIRAC_nlosletters_nooffset.hdf5')
+test('data/ZNLOS_Zdiffuse_withoffset.hdf5')
 test('data/ZNLOS_Z_05_Exhaustive.hdf5')
 test('data/ZNLOS_Z_05_Single.hdf5')
 test('data/ZNLOS_Z_10_Confocal.hdf5')

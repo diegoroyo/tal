@@ -60,6 +60,7 @@ def __convert_dict_znlos_to_tal(capture_data: dict) -> dict:
         'volume_format': VolumeFormat.X_Y_Z_3,
         'delta_t': capture_data['deltaT'],
         't_start': capture_data['t0'],
+        't_accounts_first_last_bounces': True,
         'scene_info': {
             'original_format': 'HDF5_ZNLOS',
             'volume': {
@@ -72,8 +73,56 @@ def __convert_dict_znlos_to_tal(capture_data: dict) -> dict:
 
 
 def __convert_dict_dirac_to_tal(capture_data: dict) -> dict:
-    raise NotImplementedError(
-        'Conversion from HDF5_NLOS_DIRAC not implemented')
+    t_accounts_first_last_bounces = np.isclose(
+        0.0, np.linalg.norm(capture_data['offset_laser']))
+
+    nx = len(capture_data['xa'])
+    ny = len(capture_data['ya'])
+    da = capture_data['da']
+    nt = len(da)
+
+    sensor_grid = np.stack(
+        (capture_data['xg'],
+         capture_data['yg'],
+         np.zeros((nx, ny), dtype=np.float32)),
+        axis=-1)
+    laser_grid = np.copy(sensor_grid)
+
+    def expand(vec, x, y):
+        assert len(vec) == 3
+        return vec.reshape(1, 1, 3).repeat(x, axis=0).repeat(y, axis=1)
+
+    print('Warning: converting from HDF5_NLOS_DIRAC does some assumptions '
+          'on the positions of the laser and sensor. If your data has '
+          't_accounts_first_last_bounces = True, it has a chance to be wrong.')
+
+    return {
+        'H': capture_data['data_t'],
+        'H_format': HFormat.T_Sx_Sy,
+        'sensor_xyz': np.array([-0.5, 0, 0.25], dtype=np.float32),
+        'sensor_grid_xyz': sensor_grid,
+        'sensor_grid_normals': expand(np.array([0.0, 0.0, 1.0], dtype=np.float32), nx, ny),
+        'sensor_grid_format': GridFormat.X_Y_3,
+        'laser_xyz': np.array([-0.5, 0, 0.25], dtype=np.float32),
+        'laser_grid_xyz': laser_grid,
+        'laser_grid_normals': expand(np.array([0.0, 0.0, 1.0], dtype=np.float32), nx, ny),
+        'laser_grid_format': GridFormat.X_Y_3,
+        'volume_format': VolumeFormat.X_Y_Z_3,
+        'delta_t': da[1] - da[0],
+        't_start': None if t_accounts_first_last_bounces else 0.0,
+        't_accounts_first_last_bounces': t_accounts_first_last_bounces,
+        'scene_info': {
+            'original_format': 'HDF5_NLOS_DIRAC',
+            'offset': {
+                'sensor': capture_data['offset_camera'].reshape(nx, ny),
+                'laser': capture_data['offset_laser'].reshape(1, 1),
+            },
+            'sample_wavelength': {
+                'x': capture_data['sample_x'],
+                'y': capture_data['sample_y'],
+            }
+        },
+    }
 
 
 def __convert_dict_tal_to_znlos(capture_data: dict) -> dict:

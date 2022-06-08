@@ -69,6 +69,7 @@ class NLOSCaptureData:
     volume_format: VolumeFormat = None
     delta_t: Float = None
     t_start: Float = None
+    t_accounts_first_last_bounces: bool = None
     scene_info: dict = None  # additional information
     """
     Implemented scene_info keys:
