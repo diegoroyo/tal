@@ -9,15 +9,18 @@ class FileFormat(Enum):
 
 
 class HFormat(Enum):
-    T_Sx_Sy = 0  # confocal or not
-    T_Lx_Ly_Sx_Sy = 1
+    UNKNOWN = 0
+    T_Sx_Sy = 1  # confocal or not
+    T_Lx_Ly_Sx_Sy = 2
 
 
 class GridFormat(Enum):
-    N_3 = 0
-    X_Y_3 = 1
+    UNKNOWN = 0
+    N_3 = 1
+    X_Y_3 = 2
 
 
 class VolumeFormat(Enum):
-    N_3 = 0
-    X_Y_Z_3 = 1
+    UNKNOWN = 0
+    N_3 = 1
+    X_Y_Z_3 = 2

@@ -1,0 +1,7 @@
+h5py==3.6.0
+matplotlib==3.5.1
+nptyping==2.1.1
+numpy==1.19.5
+PyYAML==6.0
+setuptools==52.0.0
+tqdm==4.64.0

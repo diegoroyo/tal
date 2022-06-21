@@ -1,6 +1,6 @@
 from tal.io.capture_data import NLOSCaptureData
 from tal.io.enums import HFormat
-from tal.constants import SPEED_OF_LIGHT
+from tal.util import SPEED_OF_LIGHT
 from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np

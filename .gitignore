@@ -5,3 +5,4 @@ dist
 *.egg
 *.egg-info
 test/data
+test/render

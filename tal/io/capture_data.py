@@ -1,9 +1,12 @@
 
 
+from enum import Enum
 import os
 import h5py
+import yaml
 import numpy as np
-from typing import Union
+import inspect
+from typing import Union, get_type_hints
 from nptyping import NDArray, Shape
 from tal.io.format import convert_dict, detect_dict_format
 from tal.io.enums import FileFormat, HFormat, GridFormat, VolumeFormat
@@ -12,24 +15,48 @@ from tal.io.enums import FileFormat, HFormat, GridFormat, VolumeFormat
 def read_hdf5(filename: str) -> dict:
     raw_data = h5py.File(filename, 'r')
 
-    def parse(value):
-        if isinstance(value, h5py.Dataset):
-            value = value[()]
-        if isinstance(value, np.ndarray) and value.size == 1:
-            value = np.squeeze(value)[()]
+    def parse(key, value):
+        if isinstance(value, h5py.Empty):
+            value = None
+        else:
+            if isinstance(value, h5py.Dataset):
+                value = value[()]
+            if isinstance(value, np.ndarray) and value.size == 1:
+                value = np.squeeze(value)[()]
+
+        # parse enums and strings
+        key_class = get_type_hints(NLOSCaptureData)[key]
+        if inspect.isclass(key_class) and issubclass(key_class, Enum):
+            if isinstance(value, h5py.Empty):
+                value = key_class(0)
+            else:
+                value = key_class(value)
+        elif isinstance(value, bytes):
+            value = yaml.safe_load(value)
         return value
     # FIXME(diego): performing np.array() of each element is pretty slow
     # if the data is not going to be read (e.g. converting sensor_grid_xyz to
     # an array is not necessary if you are only going to read H)
     # however, the overhead is pretty small
-    raw_data = dict((key, parse(raw_data.get(key))) for key in raw_data.keys())
+    raw_data = dict((key, parse(key, raw_data.get(key)))
+                    for key in raw_data.keys())
     return raw_data
 
 
 def write_hdf5(capture_data: dict, filename: str):
     file = h5py.File(filename, 'w')
     for key, value in capture_data.items():
-        file[key] = value
+        if value is None:
+            file[key] = h5py.Empty(float)
+        elif isinstance(value, dict):
+            file[key] = yaml.dump(value)
+        elif isinstance(value, Enum):
+            dt = h5py.enum_dtype(dict((item.name, item.value)
+                                 for item in value.__class__), basetype='i')
+            ds = file.create_dataset(key, (1,), dtype=dt)
+            ds[0] = value.value
+        else:
+            file[key] = value
     file.close()
 
 
@@ -69,11 +96,13 @@ class NLOSCaptureData:
     volume_format: VolumeFormat = None
     delta_t: Float = None
     t_start: Float = None
-    t_accounts_first_last_bounces: bool = None
+    t_accounts_first_and_last_bounces: bool = None
     scene_info: dict = None  # additional information
     """
     Implemented scene_info keys:
     - 'original_format': str (e.g. 'HDF5_ZNLOS')
+    - 'config': dict (original scene_config.yaml when generated using TAL)
+    - 'args': dict (original args passed when generated using TAL)
     - 'volume': dict
         - 'center': Array3 (center of volume)
         - 'rotation': Array3 (rotation of volume formatted as per Z-NLOS - probably unused for now)
@@ -89,7 +118,10 @@ class NLOSCaptureData:
             '_start') + 1: variables.index('_end')]
         return variables
 
-    def __init__(self, filename: str, file_format: FileFormat):
+    def __init__(self, filename: str = None, file_format: FileFormat = FileFormat.AUTODETECT):
+        if filename is None:
+            return
+
         # Read raw data and check its current format
         assert os.path.isfile(filename), f'Does not exist: {filename}'
         raw_data = read_hdf5(filename)
@@ -98,7 +130,8 @@ class NLOSCaptureData:
 
         # Convert data to HDF5_TAL format
         if file_format != FileFormat.HDF5_TAL:
-            raw_data = convert_dict(raw_data, format_to=FileFormat.HDF5_TAL)
+            raw_data = convert_dict(
+                raw_data, format_to=FileFormat.HDF5_TAL)
 
         own_dict_keys = self.__get_dict_keys()
         for key, value in raw_data.items():

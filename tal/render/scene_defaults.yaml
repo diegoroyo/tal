@@ -1,0 +1,74 @@
+##
+# Mitsuba
+##
+mitsuba_variant: scalar_rgb  # see mitsuba for possible types
+integrator_max_depth: -1
+integrator_filter_depth: -1
+integrator_discard_direct_paths: false
+integrator_nlos_emitter_sampling: true
+integrator_nlos_hidden_geometry_sampling: true
+integrator_nlos_hidden_geometry_sampling_do_mis: true
+sample_count: 1_000_000
+account_first_and_last_bounces: false
+num_bins: 4096
+bin_width_opl: 0.003
+start_opl: 0.0
+auto_detect_bins: false
+
+##
+# Laser and sensor
+##
+scan_type: single  # single, confocal or exhaustive
+sensor_x: -0.5
+sensor_y: 0.0
+sensor_z: 0.25
+laser_x: -0.5
+laser_y: 0.0
+laser_z: 0.25
+sensor_width: 256
+sensor_height: 256
+# for scan_type=single
+laser_lookat_x: 127.5
+laser_lookat_y: 127.5
+# for scan_type=confocal/exhaustive
+laser_width: 32
+laser_height: 32
+
+##
+# Geometry (valid for hidden geometry or relay wall)
+##
+geometry:
+- name: Z
+  description: >
+    This is the hidden geometry
+    blah blah blah
+  mesh:
+    type: obj
+    filename: /home/droyo/mitsuba-dataset/scenes/meshes/Z.obj
+  displacement_x: 0.0
+  displacement_y: 0.0
+  displacement_z: 1.0  # using default RW settings this corresponds to depth
+  rot_degrees_x: 0.0
+  rot_degrees_y: 0.0
+  rot_degrees_z: 0.0
+  scale: 1
+  material:
+    id: white
+- name: relay_wall
+  mesh:
+    type: rectangle
+  # Relay wall displacement and rotation is NYI (see tal.render.render.py)
+  scale: 1
+  material:
+    id: white
+
+##
+# Relay walls
+##
+relay_wall: relay_wall  # must correspond to a geometry name above
+
+##
+# Implemented materials reference
+# (variables e.g. $alpha are substituted)
+##
+
