@@ -9,7 +9,6 @@ def xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
     return plot_xy_grid(data, size_x, size_y, t_start, t_end, t_step)
 
 
-def xy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType]):
-    # TODO(pablo): fill
-    # maybe use data_2 = None, data_3 = None for multiple etc.
-    return plot_xy_interactive(data)
+def xy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
+                    cmap:str = 'hot'):
+    return plot_xy_interactive(data, cmap)

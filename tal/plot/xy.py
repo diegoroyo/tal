@@ -3,6 +3,7 @@ from tal.io.enums import HFormat
 from tal.util import SPEED_OF_LIGHT
 from typing import Union
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider
 import numpy as np
 from tqdm import tqdm
 
@@ -45,14 +46,67 @@ def plot_xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
     plt.tight_layout()
     plt.show()
 
+# More general plotting
+def __plot_3d_interactive_axis(xyz: np.ndarray, focus_slider: np.ndarray,
+                                axis: int, title: str, slider_title: str,
+                                cmap: str = 'hot'):
+    assert xyz.ndim == 3, 'Unknown datatype to plot'
+    assert axis < 3, f'Data only have 3 dims (given axis={axis})'
+    assert xyz.shape[axis] == len(focus_slider), \
+            'The slider and the data have different lengths'
+    # Move the axis, so the interactive axis is at 0
+    xyz_p = np.moveaxis(xyz, axis, 0)
+    v_min = np.min(xyz); v_max = np.max(xyz)
 
-def plot_xy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType]):
+    # Plot the first figure
+    fig = plt.figure()
+    fig.suptitle(title)
+    # FIXME: size colide with other axes
+    ax = plt.axes([0.1, 0.2, 0.8, 0.8])
+    img = ax.imshow( xyz_p[0], cmap = cmap, vmin = v_min, vmax = v_max)
+    fig.colorbar(img, ax=ax, shrink = 0.5)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # Figure update
+    def update(i):
+        idx = int(np.round(i))
+        img.set_array(xyz_p[idx])
+    ax_slider = plt.axes([0.2, 0.1, 0.65, 0.03])
+    # FIXME: Slider text out of bounds
+    slider = Slider(
+            ax = ax_slider,
+            label = slider_title,
+            valmin = 0,
+            valmax = len(focus_slider) - 1,
+            valinit = 0,
+            orientation='horizontal' )
+    slider.on_changed(update)
+    plt.show()
+
+
+def plot_xy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
+                         cmap:str = 'hot'):
     if isinstance(data, NLOSCaptureData):
         assert data.H_format == HFormat.T_Sx_Sy, \
             'plot_xy_grid does not support this data format'
         txy = data.H
+        delta_t = data.delta_t
     else:
         assert data.ndim == 3 and data.shape[1] == data.shape[2], \
             'plot_xy_grid does not support this data format'
         txy = data
-    # TODO(pablo): fill
+        delta_t = None
+    
+    # Calculate time stamps
+    n_t = txy.shape[0]
+    t_v = np.arange(n_t, dtype = np.float32)
+    time_title = "Bin "
+    if delta_t is None: time_title += "number"
+    else: time_title += "time stamp (ps)"; t_v*=delta_t
+    # Plot the data
+    return __plot_3d_interactive_axis(txy, t_v, axis = 0, 
+                                title = 'Impulse response by time',
+                                slider_title = time_title,
+                                cmap = cmap)
+

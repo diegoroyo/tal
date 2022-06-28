@@ -25,12 +25,13 @@ def read_hdf5(filename: str) -> dict:
                 value = np.squeeze(value)[()]
 
         # parse enums and strings
-        key_class = get_type_hints(NLOSCaptureData)[key]
-        if inspect.isclass(key_class) and issubclass(key_class, Enum):
-            if isinstance(value, h5py.Empty):
-                value = key_class(0)
-            else:
-                value = key_class(value)
+        if key in get_type_hints(NLOSCaptureData):
+            key_class = get_type_hints(NLOSCaptureData)[key]
+            if inspect.isclass(key_class) and issubclass(key_class, Enum):
+                if isinstance(value, h5py.Empty):
+                    value = key_class(0)
+                else:
+                    value = key_class(value)
         elif isinstance(value, bytes):
             value = yaml.safe_load(value)
         return value

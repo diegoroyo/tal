@@ -60,7 +60,7 @@ def __convert_dict_znlos_to_tal(capture_data: dict) -> dict:
         'volume_format': VolumeFormat.X_Y_Z_3,
         'delta_t': capture_data['deltaT'],
         't_start': capture_data['t0'],
-        't_accounts_first_last_bounces': True,
+        't_accounts_first_and_last_bounces': True,
         'scene_info': {
             'original_format': 'HDF5_ZNLOS',
             'volume': {
@@ -110,7 +110,7 @@ def __convert_dict_dirac_to_tal(capture_data: dict) -> dict:
         'volume_format': VolumeFormat.X_Y_Z_3,
         'delta_t': da[1] - da[0],
         't_start': None if t_accounts_first_last_bounces else 0.0,
-        't_accounts_first_last_bounces': t_accounts_first_last_bounces,
+        't_accounts_first_and_last_bounces': t_accounts_first_last_bounces,
         'scene_info': {
             'original_format': 'HDF5_NLOS_DIRAC',
             'offset': {
