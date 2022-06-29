@@ -1,11 +1,10 @@
 from tal.io.capture_data import NLOSCaptureData
-from typing import Union, List
+from tal.plot.xy import plot_xy_grid
+from tal.plot.xy import plot_txy_interactive, plot_zxy_interactive
+from tal.plot.xy import ByAxis
+from typing import Union
 
-_Data = Union[NLOSCaptureData, NLOSCaptureData.HType]
-_DataList = Union[List[_Data], _Data]
-
-
-def xy_grid(data: _Data,
+def xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
             size_x: int = 8, size_y: int = 8,
             t_start: int = None, t_end: int = None, t_step: int = 1):
     from tal.plot.xy import plot_xy_grid
@@ -14,20 +13,20 @@ def xy_grid(data: _Data,
 
 def xy_interactive(data: _Data,
                    cmap: str = 'hot'):
-    from tal.plot.xy import plot_xy_interactive
-    return plot_xy_interactive(data, cmap)
+    from tal.plot.xy import ByAxis, plot_txy_interactive
+    return plot_txy_interactive(data, cmap, ByAxis.T)
 
 
 def tx_interactive(data: _Data,
                    cmap: str = 'hot'):
-    from tal.plot.xy import plot_xt_interactive
-    return plot_xt_interactive(data, cmap)
+    from tal.plot.xy import ByAxis, plot_txy_interactive
+    return plot_txy_interactive(data, cmap, ByAxis.Y)
 
 
 def ty_interactive(data: _Data,
                    cmap: str = 'hot'):
-    from tal.plot.xy import plot_yt_interactive
-    return plot_yt_interactive(data, cmap)
+    from tal.plot.xy import ByAxis, plot_txy_interactive
+    return plot_txy_interactive(data, cmap, ByAxis.X)
 
 
 def t_comparison(data_list: _DataList,
@@ -37,3 +36,12 @@ def t_comparison(data_list: _DataList,
                  labels: List[str] = None):
     from tal.plot.compare import plot_t_comparison
     return plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels)
+
+
+def txy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
+                    cmap:str = 'hot', by: ByAxis = ByAxis.T):
+    return plot_txy_interactive(data, cmap, by)
+
+def zxy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
+                    cmap:str = 'hot', by: ByAxis = ByAxis.Z):
+    return plot_zxy_interactive(data, cmap, by)
