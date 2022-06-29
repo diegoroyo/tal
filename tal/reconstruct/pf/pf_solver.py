@@ -357,7 +357,7 @@ def __v_desc(desc, threshold, given_verbose):
 def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
                  L:  np.ndarray,  V: np.ndarray, lambda_c: float = 6,
                  cycles: float = 4, S_rec_shape: tuple = None, 
-                 f_results: bool = False, L_rec_shape: tuple = None, 
+                 L_rec_shape: tuple = None, f_results: bool = False,
                  n_threads: int = 1, verbose: int = 0):
     """
     Returns a NLOS reconstruction with Phasor Fields

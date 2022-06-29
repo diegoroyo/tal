@@ -1,8 +1,8 @@
 from tal.io.capture_data import NLOSCaptureData
-from tal.plot.xy import plot_xy_grid, plot_xy_interactive
-from tal.plot.xy import plot_xt_interactive, plot_yt_interactive
+from tal.plot.xy import plot_xy_grid
+from tal.plot.xy import plot_txy_interactive, plot_zxy_interactive
+from tal.plot.xy import ByAxis
 from typing import Union
-
 
 def xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
             size_x: int = 8, size_y: int = 8,
@@ -10,14 +10,10 @@ def xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
     return plot_xy_grid(data, size_x, size_y, t_start, t_end, t_step)
 
 
-def xy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
-                    cmap:str = 'hot'):
-    return plot_xy_interactive(data, cmap)
+def txy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
+                    cmap:str = 'hot', by: ByAxis = ByAxis.T):
+    return plot_txy_interactive(data, cmap, by)
 
-def tx_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
-                    cmap:str = 'hot'):
-    return plot_xt_interactive(data, cmap)
-
-def ty_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
-                    cmap:str = 'hot'):
-    return plot_yt_interactive(data, cmap)
+def zxy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
+                    cmap:str = 'hot', by: ByAxis = ByAxis.Z):
+    return plot_zxy_interactive(data, cmap, by)

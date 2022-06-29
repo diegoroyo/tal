@@ -1,3 +1,4 @@
+from nptyping import NDArray
 from tal.io.capture_data import NLOSCaptureData
 from tal.io.enums import HFormat
 from tal.util import SPEED_OF_LIGHT
@@ -6,6 +7,14 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import numpy as np
 from tqdm import tqdm
+from enum import Enum
+
+class ByAxis(Enum):
+    UNKOWN = 0
+    T = 1
+    X = 2
+    Y = 3
+    Z = 4
 
 
 def plot_xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
@@ -47,7 +56,7 @@ def plot_xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
     plt.show()
 
 # More general plotting
-def __plot_3d_interactive_axis(xyz: np.ndarray, focus_slider: np.ndarray,
+def plot_3d_interactive_axis(xyz: np.ndarray, focus_slider: np.ndarray,
                                 axis: int, title: str, slider_title: str,
                                 slider_unit: str, cmap: str = 'hot',
                                 xlabel: str = '', ylabel: str = ''):
@@ -95,74 +104,87 @@ def __plot_3d_interactive_axis(xyz: np.ndarray, focus_slider: np.ndarray,
     plt.show()
 
 
-def plot_xy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
-                         cmap:str = 'hot'):
+def plot_txy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
+                         cmap:str = 'hot', by: ByAxis = ByAxis.T):
     if isinstance(data, NLOSCaptureData):
         assert data.H_format == HFormat.T_Sx_Sy, \
-            'plot_xy_interactive does not support this data format'
+            'plot_txy_interactive does not support this data format'
         txy = data.H
         delta_t = data.delta_t
     else:
         assert data.ndim == 3 and data.shape[1] == data.shape[2], \
-            'plot_xy_interactive does not support this data format'
+            'plot_txy_interactive does not support this data format'
         txy = data
         delta_t = None
     
-    # Calculate time stamps
-    n_t = txy.shape[0]
-    t_v = np.arange(n_t, dtype = np.float32)
-    time_unit = 'Index'
-    if delta_t is not None: t_v*=delta_t; time_unit = 'ps'
-    # Plot the data
-    return __plot_3d_interactive_axis(txy, t_v, axis = 0, 
-                                title = 'Impulse response by time',
-                                slider_title = 'Bins',
-                                slider_unit = time_unit,
-                                cmap = cmap,
-                                xlabel = 'x', ylabel = 'y')
-
-def plot_xt_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
-                         cmap:str = 'hot'):
-    if isinstance(data, NLOSCaptureData):
-        assert data.H_format == HFormat.T_Sx_Sy, \
-            'plot_xt_interactive does not support this data format'
-        txy = data.H
+    title = 'Impulse response '
+    # Plot parameters
+    if by == ByAxis.T:
+        axis = 0
+        n_it = txy.shape[axis]
+        it_v = np.arange(n_it, dtype = np.float32)
+        title += 'by time'; slider_title = 'Bins'; slider_unit = 'index'
+        if delta_t is not None: it_v*=delta_t; slider_unit = 'ps'
+        xlabel = 'x'; ylabel = 'y'
+    elif by == ByAxis.Y:
+        axis = 1
+        n_it = txy.shape[axis]
+        it_v = np.arange(n_it, dtype = np.float32)
+        title += 'by y'; slider_title = 'Planes'; slider_unit = 'index'
+        txy = txy.swapaxes(0,2)
+        xlabel = 't'; ylabel = 'x'
+    elif by == ByAxis.X:
+        axis = 2
+        n_it = txy.shape[axis]
+        it_v = np.arange(n_it, dtype = np.float32)
+        title += 'by x'; slider_title = 'Planes'; slider_unit = 'index'
+        txy = txy.swapaxes(0,1)
+        xlabel = 't'; ylabel = 'y'
     else:
-        assert data.ndim == 3 and data.shape[1] == data.shape[2], \
-            'plot_xt_interactive does not support this data format'
-        txy = data
-    
-    # Calculate time stamps
-    n_y = txy.shape[1]
-    y_v = np.arange(n_y, dtype = np.float32)
-    # Plot the data
-    return __plot_3d_interactive_axis(txy.swapaxes(0,2), y_v, axis = 1, 
-                                title = 'Impulse response by y',
-                                slider_title = 'Plane by y',
-                                slider_unit = 'Plane',
-                                cmap = cmap,
-                                xlabel = 't',
-                                ylabel = 'x')
+        raise 'plot_txy_interactive does not support this axis'
 
-def plot_yt_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
-                         cmap:str = 'hot'):
-    if isinstance(data, NLOSCaptureData):
-        assert data.H_format == HFormat.T_Sx_Sy, \
-            'plot_ty_interactive does not support this data format'
-        txy = data.H
-    else:
-        assert data.ndim == 3 and data.shape[1] == data.shape[2], \
-            'plot_ty_interactive does not support this data format'
-        txy = data
-    
-    # Calculate time stamps
-    n_x = txy.shape[2]
-    x_v = np.arange(n_x, dtype = np.float32)
     # Plot the data
-    return __plot_3d_interactive_axis(txy.swapaxes(0,1), x_v, axis = 2, 
-                                title = 'Impulse response by x',
-                                slider_title = 'Plane by x',
-                                slider_unit = 'Plane',
+    return plot_3d_interactive_axis(txy, it_v, axis = axis, 
+                                title = title,
+                                slider_title = slider_title,
+                                slider_unit = slider_unit,
                                 cmap = cmap,
-                                xlabel = 't',
-                                ylabel = 'y')
+                                xlabel = xlabel, ylabel = ylabel)
+
+
+def plot_zxy_interactive(data: NDArray, cmap:str = 'hot', by: ByAxis = ByAxis.Z):
+
+    assert data.ndim == 3 and data.shape[1] == data.shape[2], \
+        'plot_zxy_interactive does not support this data format'
+    zxy = data
+    
+    title = 'Amplitude by '
+    # Plot parameters
+    if by == ByAxis.Z:
+        axis = 0
+        n_it = zxy.shape[axis]
+        it_v = np.arange(n_it, dtype = np.float32)
+        title += 'by z'; slider_title = 'Planes'; slider_unit = 'index'
+        xlabel = 'x'; ylabel = 'y'
+    elif by == ByAxis.Y:
+        axis = 1
+        n_it = zxy.shape[axis]
+        it_v = np.arange(n_it, dtype = np.float32)
+        title += 'by y'; slider_title = 'Planes'; slider_unit = 'index'
+        xlabel = 'x'; ylabel = 'z'
+    elif by == ByAxis.X:
+        axis = 2
+        n_it = zxy.shape[axis]
+        it_v = np.arange(n_it, dtype = np.float32)
+        title += 'by x'; slider_title = 'Planes'; slider_unit = 'index'
+        xlabel = 'y'; ylabel = 'z'
+    else:
+        raise 'plot_zxy_interactive does not support this axis'
+
+    # Plot the data
+    return plot_3d_interactive_axis(zxy, it_v, axis = axis, 
+                                title = title,
+                                slider_title = slider_title,
+                                slider_unit = slider_unit,
+                                cmap = cmap,
+                                xlabel = xlabel, ylabel = ylabel)
