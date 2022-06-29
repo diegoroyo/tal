@@ -1,5 +1,6 @@
 from tal.io.capture_data import NLOSCaptureData
 from tal.plot.xy import plot_xy_grid, plot_xy_interactive
+from tal.plot.xy import plot_xt_interactive, plot_yt_interactive
 from typing import Union
 
 
@@ -12,3 +13,11 @@ def xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
 def xy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
                     cmap:str = 'hot'):
     return plot_xy_interactive(data, cmap)
+
+def tx_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
+                    cmap:str = 'hot'):
+    return plot_xt_interactive(data, cmap)
+
+def ty_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
+                    cmap:str = 'hot'):
+    return plot_yt_interactive(data, cmap)
