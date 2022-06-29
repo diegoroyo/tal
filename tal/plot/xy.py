@@ -86,7 +86,7 @@ def __plot_3d_interactive_axis(xyz: np.ndarray, focus_slider: np.ndarray,
     def update(i):
         idx = int(i)
         img.set_array(xyz_p[idx])
-        text.set_text('%0.4f'%focus_slider[idx] + ' ' +slider_unit)
+        text.set_text('%0.6f'%focus_slider[idx] + ' ' +slider_unit)
 
     slider.on_changed(update)
     plt.show()
