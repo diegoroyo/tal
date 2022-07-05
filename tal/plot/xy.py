@@ -112,7 +112,7 @@ def plot_txy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
         txy = data.H
         delta_t = data.delta_t
     else:
-        assert data.ndim == 3 and data.shape[1] == data.shape[2], \
+        assert data.ndim == 3, \
             'plot_txy_interactive does not support this data format'
         txy = data
         delta_t = None
@@ -154,7 +154,7 @@ def plot_txy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
 
 def plot_zxy_interactive(data: NDArray, cmap:str = 'hot', by: ByAxis = ByAxis.Z):
 
-    assert data.ndim == 3 and data.shape[1] == data.shape[2], \
+    assert data.ndim == 3, \
         'plot_zxy_interactive does not support this data format'
     zxy = data
     
