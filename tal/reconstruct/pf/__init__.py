@@ -17,20 +17,12 @@ def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
     
     # TODO correct volume
     V = volume
-    
     S = data.sensor_grid_xyz
-    L = data.laser_grid_xyz
+    L = np.zeros((1,3), float)
     # FIXME: Minimun distance assumes ordered points
     reshaped_S = S.reshape(-1,3)
-    wavelength = wavefactor*(reshaped_S[0] - reshaped_S[1])
+    wavelength = wavefactor*np.linalg.norm(reshaped_S[0] - reshaped_S[1])
 
-    S_grid = None
-    if isinstance(S, NLOSCaptureData.TensorXY3):
-        S_grid = (S.shape[0], S.shape[1])
 
-    L_grid = None
-    if isinstance(L, NLOSCaptureData.TensorXY3):
-        L_grid = (L.shape[0], L.shape[1])
-
-    return pf.reconstruct(H, T, S, L, V, wavelength, wave_cycles, S_grid,
-                          L_grid, True, n_threads, verbose)
+    return pf.reconstruct(H, T, S, L, V, wavelength, wave_cycles, True,
+                         n_threads, verbose)
