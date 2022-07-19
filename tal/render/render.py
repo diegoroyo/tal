@@ -37,7 +37,7 @@ def get_scene_xml(config, quiet=False):
             <integer name="max_depth" value="{v('integrator_max_depth')}"/>
             <integer name="filter_depth" value="{v('integrator_filter_depth')}"/>
             <boolean name="discard_direct_paths" value="{v('integrator_discard_direct_paths')}"/>
-            <boolean name="nlos_emitter_sampling" value="{v('integrator_nlos_emitter_sampling')}"/>
+            <boolean name="nlos_laser_sampling" value="{v('integrator_nlos_laser_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling" value="{v('integrator_nlos_hidden_geometry_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling_do_mis" value="{v('integrator_nlos_hidden_geometry_sampling_do_mis')}"/>
         </integrator>''')
@@ -139,6 +139,12 @@ def get_scene_xml(config, quiet=False):
             </film>
         </sensor>''')
 
+    confocal_capture = 'false'
+    if v('scan_type') == 'confocal' or v('scan_type') == 'exhaustive':
+        confocal_capture = 'true'
+    elif v('scan_type') != 'single':
+        raise AssertionError(
+            'scan_type should be one of {single|confocal|exhaustive}')
     sensor_nlos = fdent(f'''\
         <sensor type="nloscapturemeter">
             <sampler type="independent">
@@ -147,9 +153,10 @@ def get_scene_xml(config, quiet=False):
 
             <emitter type="projector">
                 <rgb name="irradiance" value="1.0, 1.0, 1.0"/>
-                <float name="fov" value="{0.2 if v('integrator_nlos_emitter_sampling') else 2}"/>
+                <float name="fov" value="{0.2 if v('integrator_nlos_laser_sampling') else 2}"/>
             </emitter>
 
+            <boolean name="confocal" value="{confocal_capture}"/>
             <boolean name="account_first_and_last_bounces" value="{v('account_first_and_last_bounces')}"/>
             <point name="sensor_origin" x="{v('sensor_x')}" y="{v('sensor_y')}" z="{v('sensor_z')}"/>
             <point name="laser_origin" x="{v('laser_x')}" y="{v('laser_y')}" z="{v('laser_z')}"/>
@@ -340,6 +347,7 @@ def render_nlos_scene(config_path, args):
         laser_lookats = []
         name = scene_config['name']
         scan_type = scene_config['scan_type']
+        num_bins = scene_config['num_bins']
         sensor_width = scene_config['sensor_width']
         sensor_height = scene_config['sensor_height']
         laser_width = scene_config['laser_width']
@@ -385,7 +393,6 @@ def render_nlos_scene(config_path, args):
             laser_lookats.append(((sensor_width - 1) / 2,
                                   (sensor_height - 1) / 2))
         elif scan_type == 'exhaustive' or scan_type == 'confocal':
-            raise NotImplementedError('Exhaustive/confocal NYI')
             assert not (scan_type == 'confocal' and
                         (laser_width != sensor_width or
                             laser_height != sensor_height)), \
@@ -483,9 +490,25 @@ def render_nlos_scene(config_path, args):
             capture_data.H = read_mitsuba_streakbitmap(
                 partial_laser_dir(*laser_lookats[0]))
             capture_data.H_format = HFormat.T_Sx_Sy
-            pass
         elif scan_type == 'exhaustive' or scan_type == 'confocal':
-            raise NotImplementedError('Exhaustive/confocal NYI')
+            if scan_type == 'exhaustive':
+                capture_data.H = np.empty(
+                    (num_bins, laser_width, laser_height,
+                     sensor_width, sensor_height),
+                    dtype=np.float32)
+                capture_data.H_format = HFormat.T_Lx_Ly_Sx_Sy
+            elif scan_type == 'confocal':
+                capture_data.H = np.empty(
+                    (num_bins, laser_width, laser_height),
+                    dtype=np.float32)
+                capture_data.H_format = HFormat.T_Sx_Sy
+            else:
+                raise AssertionError
+
+            for x in range(laser_width):
+                for y in range(laser_height):
+                    capture_data.H[:, x, y, ...] = read_mitsuba_streakbitmap(
+                        partial_laser_dir(x + 0.5, y + 0.5))
         else:
             raise AssertionError(
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
