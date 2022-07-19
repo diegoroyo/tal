@@ -5,7 +5,7 @@ mitsuba_variant: scalar_rgb  # see mitsuba for possible types
 integrator_max_depth: -1
 integrator_filter_depth: -1
 integrator_discard_direct_paths: false
-integrator_nlos_emitter_sampling: true
+integrator_nlos_laser_sampling: true
 integrator_nlos_hidden_geometry_sampling: true
 integrator_nlos_hidden_geometry_sampling_do_mis: true
 sample_count: 1_000_000

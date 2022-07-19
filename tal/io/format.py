@@ -73,7 +73,7 @@ def __convert_dict_znlos_to_tal(capture_data: dict) -> dict:
 
 
 def __convert_dict_dirac_to_tal(capture_data: dict) -> dict:
-    t_accounts_first_last_bounces = np.isclose(
+    t_accounts_first_and_last_bounces = np.isclose(
         0.0, np.linalg.norm(capture_data['offset_laser']))
 
     nx = len(capture_data['xa'])
@@ -94,7 +94,7 @@ def __convert_dict_dirac_to_tal(capture_data: dict) -> dict:
 
     print('Warning: converting from HDF5_NLOS_DIRAC does some assumptions '
           'on the positions of the laser and sensor. If your data has '
-          't_accounts_first_last_bounces = True, it has a chance to be wrong.')
+          't_accounts_first_and_last_bounces = True, it has a chance to be wrong.')
 
     return {
         'H': capture_data['data_t'],
@@ -109,8 +109,8 @@ def __convert_dict_dirac_to_tal(capture_data: dict) -> dict:
         'laser_grid_format': GridFormat.X_Y_3,
         'volume_format': VolumeFormat.X_Y_Z_3,
         'delta_t': da[1] - da[0],
-        't_start': None if t_accounts_first_last_bounces else 0.0,
-        't_accounts_first_and_last_bounces': t_accounts_first_last_bounces,
+        't_start': None if t_accounts_first_and_last_bounces else 0.0,
+        't_accounts_first_and_last_bounces': t_accounts_first_and_last_bounces,
         'scene_info': {
             'original_format': 'HDF5_NLOS_DIRAC',
             'offset': {
