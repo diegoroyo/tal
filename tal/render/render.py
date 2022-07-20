@@ -15,6 +15,7 @@ from tal.render.mitsuba2_transient_nlos import (
 from tal.config import local_file_path
 import datetime
 import numpy as np
+from tqdm import tqdm
 
 
 def get_scene_xml(config, quiet=False):
@@ -433,7 +434,9 @@ def render_nlos_scene(config_path, args):
         def partial_laser_dir(lx, ly):
             return os.path.join(partial_results_dir, f'{experiment_name}_L[{lx}][{ly}]'.replace('.', '_'))
 
-        for laser_lookat_x, laser_lookat_y in laser_lookats:
+        for i, (laser_lookat_x, laser_lookat_y) in tqdm(
+                enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
+                ascii=True, total=len(laser_lookats)):
             try:
                 exr_dir = partial_laser_dir(laser_lookat_x, laser_lookat_y)
                 os.mkdir(exr_dir)
@@ -449,7 +452,7 @@ def render_nlos_scene(config_path, args):
                     log_dir,
                     f'{experiment_name}_L[{laser_lookat_x}][{laser_lookat_y}].log'), 'w')
             run_mitsuba(nlos_scene_xml, exr_dir, defines,
-                        experiment_name, logfile, args)
+                        f'Laser {i} of {len(laser_lookats)}', logfile, args)
             if args.do_logging and not args.dry_run:
                 logfile.close()
 

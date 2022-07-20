@@ -104,15 +104,12 @@ def run_mitsuba(scene_xml_path, exr_path, defines,
         # this is totally not overengineering-trust me-this saves so much time
         progress_re = re.compile(
             r'Rendering \[(=* *)\] \([\d\.]+\w+, ETA: ([\d\.]+\w+)\)')
-        description = ''
-        if experiment_name is not None:
-            description = f'Rendering \'{experiment_name}\'...'
         read_opl = defines.get('auto_detect_bins', False)
         if read_opl:
             opl_output = ''
             opl_re = re.compile(
                 r'limits: \[(\d+\.\d+), \d+\.\d+\] with bin width (\d+\.\d+)')
-        with tqdm(desc=description, total=100, ascii=True,
+        with tqdm(desc=experiment_name, total=100, ascii=True, leave=False,
                   bar_format='{desc} |{bar}| [{n:.2f}%{postfix}] ') as pbar:
             output = None
             while output is None or len(output) > 0:
@@ -157,13 +154,9 @@ def run_mitsuba(scene_xml_path, exr_path, defines,
         # assume transient render
         n_exr_frames = len(os.listdir(exr_path))
         assert n_exr_frames > 0, 'No frames were rendered?'
-        if not args.quiet:
-            print(f'> Stored {n_exr_frames} EXR streak images in {exr_path}')
     else:
         # assume steady state render
         assert os.path.isfile(exr_path), 'No frames were rendered?'
-        if not args.quiet:
-            print(f'> Stored steady EXR in {exr_path}')
 
 
 def read_mitsuba_bitmap(path: str):
