@@ -5,22 +5,22 @@ import tal
 from matplotlib.widgets import Slider, RangeSlider
 
 
-def plot_t_comparison(x, y, t_start, t_end, a_min, a_max, **kwargs):
+def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
+    if isinstance(data_list, np.ndarray) or isinstance(data_list, NLOSCaptureData):
+        data_list = [data_list]
+    assert all(isinstance(data, np.ndarray) or
+               isinstance(data, NLOSCaptureData) for data in data_list), \
+        'Incorrect data types'
+
     def get_H(data):
         if isinstance(data, NLOSCaptureData):
             return data.H
         else:
             return data
 
-    def get_H_index(index):
-        return get_H(list(kwargs.values())[index])
-
-    assert all(isinstance(data, np.ndarray) or
-               isinstance(data, NLOSCaptureData) for data in kwargs.values()), \
-        'Incorrect data types'
-    nt, ny, nx = get_H_index(0).shape
-    for i in range(1, len(kwargs)):
-        nt2, ny2, nx2 = get_H_index(i).shape
+    nt, ny, nx = get_H(data_list[0]).shape
+    for data in data_list[1:]:
+        nt2, ny2, nx2 = get_H(data).shape
         assert nt == nt2 and ny == ny2 and nx == nx2, \
             'Dimensions do not match'
 
@@ -37,16 +37,16 @@ def plot_t_comparison(x, y, t_start, t_end, a_min, a_max, **kwargs):
     y = y or 0
     t_start = t_start or 0
     t_end = t_end or nt - 1
-    A_MAX_TOTAL = max(np.max(get_H_index(i)) for i in range(len(kwargs)))
+    A_MAX_TOTAL = max(np.max(get_H(data)) for data in data_list)
     a_min = a_min or 0.0
     a_max = a_max or A_MAX_TOTAL
 
     def update():
         ax.cla()
         x_range = list(range(t_start, t_end, 1))
-        for key, data in kwargs.items():
-
-            ax.plot(x_range, get_H(data)[t_start:t_end, x, y], label=key)
+        for i, data in enumerate(data_list):
+            ax.plot(x_range, get_H(data)[t_start:t_end, x, y],
+                    label=str(i) if labels is None else labels[i])
             ax.set_ylim(bottom=a_min, top=a_max)
             ax.legend()
         plt.draw()

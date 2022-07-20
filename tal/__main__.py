@@ -11,6 +11,30 @@ class SmartFormatter(argparse.HelpFormatter):
         return argparse.HelpFormatter._split_lines(self, text, width)
 
 
+def get_plot_functions():
+    """
+    Returns (function_names, function_params) where
+    function_names is a list of str
+    function_params is a list of tuples
+        (param_name, param_type)
+    """
+    from inspect import getmembers, isfunction, signature
+    import tal.plot
+    function_names = list()
+    function_param_names = dict()
+    function_param_data = set()
+    for name, func in getmembers(tal.plot, isfunction):
+        function_names.append(name)
+        parameters = signature(func).parameters
+        parameter_names = list(filter(lambda p: p not in ['data', 'data_list', 'args', 'kwargs'],
+                                      list(parameters)))
+        function_param_names[name] = parameter_names
+        function_param_data.update(
+            list(map(lambda p: (p, parameters[p].annotation),
+                     parameter_names)))
+    return function_names, function_param_names, function_param_data
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='TAL - Transient Auxiliary Library', formatter_class=SmartFormatter)
@@ -47,6 +71,19 @@ def main():
                                dest='keep_partial_results', action='store_false',
                                help='Remove the "partial" folder which stores temporal data after creating the final hdf5 file (e.g. multiple experiments for confocal/exhaustive)')
 
+    # render commands
+    plot_parser = subparsers.add_parser(
+        'plot', help='Plot capture data using one of the configured methods', formatter_class=SmartFormatter)
+    plot_func_names, plot_func_param_names, plot_func_param_data = get_plot_functions()
+    plot_parser.add_argument('preset', help=fdent('''\
+                                    R|Plot method. Can be one of:
+                                        {v}''', v='\n'.join(plot_func_names)))
+    plot_parser.add_argument('capture_files', nargs='*',
+                             help='One or more paths to capture files')
+    for var_name, var_type in plot_func_param_data:
+        plot_parser.add_argument(
+            '--{}'.format(var_name.replace('_', '-')), type=var_type, required=False)
+
     args = parser.parse_args()
 
     if args.command == 'render':
@@ -64,6 +101,22 @@ def main():
             from tal.render import render_nlos_scene
             config_file = config_file[0]
             render_nlos_scene(config_file, args)
+    elif args.command == 'plot':
+        import tal.plot
+        from tal.io import read_capture
+        command = args.preset
+        assert command in plot_func_names, \
+            'Unknown plot command: {}'.format(command)
+        data = list()
+        for capture_file in args.capture_files:
+            print(f'Reading {capture_file}...')
+            data.append(read_capture(capture_file))
+        if len(data) == 1:
+            data = data[0]
+        other_args = list(map(
+            lambda p: None if p not in args else getattr(args, p),
+            plot_func_param_names[command]))
+        getattr(tal.plot, command)(data, *other_args)
     else:
         raise AssertionError('Invalid command? Check argparse')
 
