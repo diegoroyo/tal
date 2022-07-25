@@ -17,25 +17,30 @@ class Propagator(object):
     """
     def propagate(self, fH: np.ndarray, P: np.ndarray,  
                     V: np.ndarray,  wl_v: np.ndarray,
-                    axis: Union[int, Tuple[int]] = None) -> np.ndarray:
+                    P_axis: Union[int, Tuple[int]] = None,
+                    V_axis: Union[int, Tuple[int]] = None) -> np.ndarray:
         """
         Propagate from P to V the value fH, where fH is the impulse response at
         P in the Fourier domain, and wl_v is the array of wavelengths for each
         fH component
-        @param self : Propagator subclass implementation
-        @param fH   : Impulse response in the Fourier domain
-        @param P    : Coordinates of the fH samples
-        @param V    : Coordinates to propagate fH
-        @param wl_v : Array of wavelengths for each fH Fourier component
-        @param axis : Axis of fH which represents P. If None, axis is assumed
-                      to be the last one
-        @return     : The propagation of fH to the V coordinates
+        @param self     : Propagator subclass implementation
+        @param fH       : Impulse response in the Fourier domain
+        @param P        : Coordinates of the fH samples
+        @param V        : Coordinates to propagate fH
+        @param wl_v     : Array of wavelengths for each fH Fourier component
+        @param P_axis   : Axis of fH which represents P. If None, axis is 
+                          assumed to be the last one
+        @param V_axis   : Axis of fH which represents V. If None, it is assumed
+                          there is no axis representing V. It use the axis to
+                          partially propagations (e.g. propagation from sensors
+                          but not from light sources)
+        @return         : The propagation of fH to the V coordinates
         """
         raise NotImplementedError('Subclasses should implement propagate')
 
 
     @staticmethod
-    def __reshape_data(fH: np.ndarray, P: np.ndarray, V: np.ndarray, 
+    def reshape_data(fH: np.ndarray, P: np.ndarray, V: np.ndarray, 
                        axis: Union[int, Tuple[int]]):
         """
         Reshape the data to the needed form for the propagation implementations
@@ -43,19 +48,33 @@ class Propagator(object):
         raise NotImplementedError('Subclasses should implement reshape_data')
     
 
+    # Reorder the results to match the given data
     @staticmethod
-    def __reshape_result(fI: np.ndarray, fH:np.ndarray, V: np.ndarray,
-                         axis: Union[int, Tuple[int]]):
-        """
-        Reshape the result to match the input data
-        """
-        raise NotImplementedError('Subclasses should implement reshape_result')
+    def reshape_result(fI: np.ndarray, fH:np.ndarray, V: np.ndarray,
+                         P_axis: Union[int, Tuple[int]],
+                         V_axis: Union[int, Tuple[int]]):
 
+        # Reshape to the corresponding shape. By axis: frequency, fH
+        # uncorresponding to P shape, V shape
+        V_l_axis = V_axis
+        if V_l_axis is None:
+            I_shape = tuple(np.delete(np.array(fH.shape), P_axis)) \
+                        + tuple(np.array(V.shape)[:-1])
+            V_l_axis = tuple(np.arange(- V.ndim + 1, 0))
+        else:
+            I_shape = tuple(np.delete(np.array(fH.shape), P_axis + V_axis)) \
+                    + tuple(np.array(V.shape)[:-1])
+        # Move the axis of frequencies to the beginning
+        fI_aux = np.moveaxis(fI, -2, 0)
+        # Reshape the data
+        I = fI_aux.reshape(I_shape)
+        return I
 
     @staticmethod
     def check_shapes(fH: np.ndarray, P: np.ndarray,  
                         V: np.ndarray,  wl_v: np.ndarray,
-                        axis: Union[int, Tuple[int]]):
+                        P_axis: Union[int, Tuple[int]],
+                        V_axis: Union[int, Tuple[int]]):
         """
         Check the shapes of all the input data
         """
@@ -64,8 +83,11 @@ class Propagator(object):
         P_shape = np.array(P.shape)
         fH_shape = np.array(fH.shape)
 
-        assert np.all(fH_shape[np.array(axis)] == P_shape[:-2]), \
+        assert np.all(fH_shape[np.array(P_axis)] == P_shape[:-1]), \
                 "fH and P are not the same shape"
+        if V_axis is not None:
+            assert np.all(fH_shape[np.array(V_axis)] == V_shape[:-1]), \
+                "Indicated axis for V in H, but shapes are not the same"
         assert wl_v.shape[0] == fH.shape[0], \
             'number of frequencies does not match in the first axis of fH'
         assert V_shape[-1] == 3, "propagate do not support this data format"
@@ -96,52 +118,52 @@ class RSD_propagator(Propagator):
 
     def propagate(self, fH: np.ndarray, P: np.ndarray,  
                     V: np.ndarray,  wl_v: np.ndarray,
-                    axis: Union[int, Tuple[int]] = None) -> np.ndarray:
+                    P_axis: Union[int, Tuple[int]] = None,
+                    V_axis: Union[int, Tuple[int]] = None) -> np.ndarray:
         """
         Overrides propagate. It uses a RSD propagation. It collapses the 
         given axis, and add new ones of size V
         """
-        print(V.shape)
         # Extract the axis and check the shapes
-        l_axis = RSD_propagator.axis_value(axis)
-        RSD_propagator.check_shapes(fH, P, V, wl_v, l_axis)
+        P_l_axis = RSD_propagator.axis_value(P_axis)
+        RSD_propagator.check_shapes(fH, P, V, wl_v, P_l_axis, V_axis)
         # Reshape the data to the needed form
-        V_a, P_a, fH_a = RSD_propagator.__reshape_data(fH, P, V, l_axis)
+        V_a, P_a, fH_a = RSD_propagator.reshape_data(fH, P, V, P_l_axis, V_axis)
         # calculate distances from P to all V
         dist = np.linalg.norm(P_a - V_a, axis = -1)
         # RSD kernel calculation
         RSD_k = RSD_kernel.RSD_kernel_w(dist, wl_v)
         # Propagate the light, and focus on the voxel
-        I_a = np.sum(fH_a[..., np.newaxis]*RSD_k, axis = -2)
-        I = RSD_propagator.__reshape_result(I_a, fH_a, V, l_axis)
+        I_a = np.sum(fH_a*RSD_k, axis = -2)
+        I = RSD_propagator.reshape_result(I_a, fH, V, P_l_axis, V_axis)
 
         return I
 
 
     @staticmethod
-    def __reshape_data(fH: np.ndarray, P: np.ndarray, V: np.ndarray, 
-                    l_axis: Union[int, Tuple[int]]):
+    def reshape_data(fH: np.ndarray, P: np.ndarray, V: np.ndarray, 
+                        P_axis: Union[int, Tuple[int]], 
+                        V_axis: Union[int, Tuple[int]]):
         # Reshape all the data to an array of 3d coordinates
         V_a = V.reshape(1, -1, 3)
         P_a = P.reshape(-1, 1, 3)
-        fH_new_shape = np.append(np.delete(fH.shape, l_axis), [P_a.shape[0]])
+        if V_axis is not None:
+            fH_new_shape = np.append(np.delete(fH.shape, P_axis + V_axis), 
+                                    [P_a.shape[0], V_a.shape[1]])
+        else:
+            fH_new_shape = np.append(np.delete(fH.shape, P_axis), 
+                                    [P_a.shape[0], 1])
         # Reshape fH to match the P 
         fH_a = fH
-        for axe in l_axis:
-            fH_a = np.moveaxis(fH_a, axe, -1)
+        fH_a = np.moveaxis(fH_a, P_axis, np.arange(-len(P_axis), 0))
+
+        # Reshape fH to match the V 
+        if V_axis is not None:
+                fH_a = np.moveaxis(fH_a, V_axis, np.arange(-len(V_axis), 0))
+            
         fH_a = fH_a.reshape(fH_new_shape)
-        fH_a = fH_a.swapaxes(0,-2)
+        fH_a = np.moveaxis(fH_a, 0, -3)    # move the axis of frequencies
         return V_a, P_a, fH_a
-
-
-    @staticmethod
-    def __reshape_result(I_a: np.ndarray, fH: np.ndarray, V: np.ndarray, 
-                        axis: Union[int, Tuple[int]]):
-        # Reshape to the corresponding shape. By axis: frequency, fH
-        # uncorresponding to P shape, V shape
-        I_shape = np.append(np.array(fH.shape)[:-1], np.array(V.shape)[:-1])
-        I = I_a.reshape(I_shape)
-        return I.swapaxes(0,-2)
 
 
 class RSD_parallel_propagator(Propagator):
@@ -165,22 +187,13 @@ class RSD_parallel_propagator(Propagator):
         self.__w_a = w_a
         self.__fH = None
 
-    # Reorder the results to match the given data
-    def __reorder_result(self, fI, axis):
-        fI_rs = np.moveaxis(fI, -3, 0)
-        fI_rs = np.moveaxis(fI_rs, [-2, -1], axis)
 
-
-    def set_fH(self, fH, axis: Union[int, Tuple[int]] = None):
+    def set_fH(self, fH, axis):
         """
         Set the new impulse response value to performance the propagation
         """
-        if axis is None:
-            l_axis = (-1, -2)
-        else:
-            l_axis = axis
         self.__fH = fH
-        ffH = np.fft.fft2(fH, s=self.K_rsd.kernel_shape(), axes = l_axis)
+        ffH = np.fft.fft2(fH, s=self.K_rsd.kernel_shape(), axes = axis)
         # Reorder the data to do easier the operations
         ffH = np.moveaxis(ffH, axis, [-2, -1])
         self.ffH = np.moveaxis(ffH, 0, -3)
@@ -188,7 +201,8 @@ class RSD_parallel_propagator(Propagator):
 
     def propagate(self, fH: np.ndarray, P: np.ndarray,  
                 V: np.ndarray,  wl_v: np.ndarray,
-                axis: Union[int, Tuple[int]] = None) -> np.ndarray:
+                P_axis: Union[int, Tuple[int]] = None,
+                V_axis: Union[int, Tuple[int]] = None) -> np.ndarray:
         """
         Override of propagate in Propagate. Optimized for parallel planes
         """
@@ -212,28 +226,32 @@ class RSD_parallel_propagator(Propagator):
             raise "propagate does not support this data"
         
         # Check the axis 
-        if axis is None:
-            l_axis = [-2,-1]
+        if P_axis is None:
+            P_l_axis = [-2,-1]
         else:
-            l_axis = axis
+            P_l_axis = P_axis
 
 
         if self.__fH is None or self.__fH is not fH:
-            self.set_fH(fH, axis)
+            self.set_fH(fH, P_l_axis)
 
         # Space to store results
+        fI_pre_shape = tuple(np.array(self.ffH.shape)[:-3])
         if V.ndim == 3:
-            fI_shape = (1, len(wl_v), V.shape[0], V.shape[1])
+            fI_shape = fI_pre_shape + (1, len(wl_v), V.shape[0], V.shape[1])
         else:   # V.ndim == 4
-            fI_shape = (V.shape[0], len(wl_v), V.shape[1], V.shape[2])
+            fI_shape = fI_pre_shape + (V.shape[0], len(wl_v), 
+                                         V.shape[1], V.shape[2])
         fI = np.zeros(fI_shape, dtype = np.complex128)
 
         # Propagate with the RSD kernel
-        for i in idx_plane:
-            print(self.K_rsd.f_propagate_i(self.ffH, i).shape)
-            fI[i] = self.K_rsd.f_propagate_i(self.ffH, i)
+        for idx_fI, plane_id in enumerate(idx_plane):
+            K = self.K_rsd.get_f_RSD_kernel_i(plane_id)
+            fI_padded = np.fft.ifft2(K * self.ffH)
+            fI[..., idx_fI, :, :, :] = fI_padded[..., :, 
+                                            -fI_shape[-2]:, -fI_shape[-1]:]
         
-        return self.__reorder_result(fI, l_axis)
+        return RSD_parallel_propagator.reshape_result(fI, fH, V, P_l_axis, V_axis)
 
 
 

@@ -14,7 +14,7 @@ from functools import partial
 from tqdm import tqdm
 from .rsd_kernel import RSD_kernel
 
-from tal.reconstruct.pf.propagator import RSD_parallel_propagator
+from tal.reconstruct.pf.propagator import RSD_parallel_propagator, RSD_propagator
 
 
 
@@ -313,10 +313,30 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
 
     __v_print(f"Done. {len(wv)} frequencies to use", 2, verbose)
     
-    __v_print("Propagating from Sensors...", 1, verbose)
-    print(V.shape)
-    propagator = RSD_parallel_propagator(S, V, wv)
-    print(propagator.propagate(f_H, S, V, wv, axis = (1,2)).shape)
+    __v_print("Generating propagator from sensors...", 2, verbose)
+    if S_r.shape == V[0].shape and __parallel(S_r, V[0]):
+        propagator_S = RSD_parallel_propagator(S_r, V, wv)
+        __v_print("Parallel RSD propagator", 2, verbose)
+    else:
+        propagator_S = RSD_propagator()
+        __v_print("Points RSD propagator", 2, verbose)
+    __v_print("Done", 2, verbose)
+    __v_print("Generating propagator from lights...", 2, verbose)
+    if L_r.shape == V[0].shape and __parallel(L_r, V[0]):
+        propagator_L = RSD_parallel_propagator(L_r, V, wv)
+        __v_print("Parallel RSD propagator", 2, verbose)
+    else:
+        propagator_L = RSD_propagator()
+        __v_print("Points RSD propagator", 2, verbose)
+    __v_print("Done", 2, verbose)
+    __v_print(f"Propagating with {n_threads} threads", 2, verbose)
+
+    for V_z in tqdm(V, disable = verbose != 2, unit='plane', total = V.shape[0]):
+        fI_s = propagator_S.propagate(f_H, S_r, V_z, wv, P_axis=(1,2))
+        print(fI_s.shape)
+        fI = propagator_L.propagate(fI_s, L_r, V_z, wv, P_axis=(1,2), V_axis=(3,4))
+        print(fI.shape)
+
     adfadfae
 
     # Propagate from sensors
@@ -439,14 +459,14 @@ def __H_format(H: np.ndarray, S: np.ndarray, L: np.ndarray):
 # Return true if the two planes are parallel
 def __parallel(S1, S2):
         # Vectors in plane 1
-        p1 = S1[0,0]; p2 = S1[0,-1], p3 = S1[-1,-1]
+        p1 = S1[0,0]; p2 = S1[0,-1]; p3 = S1[-1,0]
         v1 = p3 - p1
         v2 = p2 - p1
         # Normal to the plane
         n1 = np.cross(v1,v2)
 
         # Vectors in plane 2
-        p1 = S2[0,0]; p2 = S2[0,-1], p3 = S2[-1,-1]
+        p1 = S2[0,0]; p2 = S2[0,-1]; p3 = S2[-1,0]
         v1 = p3 - p1
         v2 = p2 - p1
         # Normal to the plane
