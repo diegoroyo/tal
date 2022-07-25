@@ -188,15 +188,19 @@ class RSD_parallel_propagator(Propagator):
         self.__fH = None
 
 
-    def set_fH(self, fH, axis):
+    def set_fH(self, fH, P_axis, V_axis):
         """
         Set the new impulse response value to performance the propagation
         """
         self.__fH = fH
-        ffH = np.fft.fft2(fH, s=self.K_rsd.kernel_shape(), axes = axis)
+        ffH = np.fft.fft2(fH, s=self.K_rsd.kernel_shape(), axes = P_axis)
         # Reorder the data to do easier the operations
-        ffH = np.moveaxis(ffH, axis, [-2, -1])
+        ffH = np.moveaxis(ffH, P_axis, [-2, -1])
+        # Reorder the frecuencies
         self.ffH = np.moveaxis(ffH, 0, -3)
+        if V_axis is not None:
+            ffH = np.moveaxis(ffH, V_axis, np.arange(-len(V_axis), 0))
+
     
 
     def propagate(self, fH: np.ndarray, P: np.ndarray,  
@@ -231,9 +235,8 @@ class RSD_parallel_propagator(Propagator):
         else:
             P_l_axis = P_axis
 
-
         if self.__fH is None or self.__fH is not fH:
-            self.set_fH(fH, P_l_axis)
+            self.set_fH(fH, P_l_axis, V_axis)
 
         # Space to store results
         fI_pre_shape = tuple(np.array(self.ffH.shape)[:-3])
