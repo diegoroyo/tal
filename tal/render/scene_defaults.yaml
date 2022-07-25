@@ -28,8 +28,10 @@ laser_z: 0.25
 sensor_width: 256
 sensor_height: 256
 # for scan_type=single
-laser_lookat_x: 127.5
-laser_lookat_y: 127.5
+# if set to null, laser points to the center pixel
+# if set to a number, laser points to that pixel (e.g. center = 127.5, 127.5)
+laser_lookat_x: null
+laser_lookat_y: null
 # for scan_type=confocal/exhaustive
 laser_width: 32
 laser_height: 32

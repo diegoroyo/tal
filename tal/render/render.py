@@ -391,8 +391,13 @@ def render_nlos_scene(config_path, args):
             np.array([0, 0, 1]), laser_width, laser_height)
 
         if scan_type == 'single':
-            laser_lookats.append(((sensor_width - 1) / 2,
-                                  (sensor_height - 1) / 2))
+            laser_width = 1.0
+            laser_height = 1.0
+            laser_lookat_x = \
+                scene_config['laser_lookat_x'] or (sensor_width - 1) / 2
+            laser_lookat_y = \
+                scene_config['laser_lookat_y'] or (sensor_height - 1) / 2
+            laser_lookats.append(laser_lookat_x, laser_lookat_y)
         elif scan_type == 'exhaustive' or scan_type == 'confocal':
             assert not (scan_type == 'confocal' and
                         (laser_width != sensor_width or
