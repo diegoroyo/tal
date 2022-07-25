@@ -20,7 +20,6 @@ plane_xy = np.linspace(row_a, row_b, 256)
 plane_a = np.stack([plane_xy[:,:,0], plane_xy[:,:,1], np.full((256,256), 0.5)], axis = -1)
 plane_b = np.stack([plane_xy[:,:,0], plane_xy[:,:,1], np.full((256,256), 1.5)], axis = -1)
 V = np.linspace(plane_a, plane_b, 32)
-print(V.shape)
 
 # reconstruction = solve(data, 6, 20, get_volume(), 1, 2)
 reconstruction = solve(data, 6, 20, V, 2, 1)

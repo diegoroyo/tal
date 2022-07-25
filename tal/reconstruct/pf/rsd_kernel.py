@@ -128,43 +128,6 @@ class RSD_kernel(object):
         (K_base, _) = self._preprocess
         return (K_base.shape[0], K_base.shape[1])
 
-    
-    def propagate_i(self, A: np.ndarray, i: int):
-        """
-        Propagate from P to the i-th plane in V, the light amplitudes values in
-        A, in the fourier domain
-        @param A    : Amplitude values in A, which is positioned at the plane
-                      P. The space is in domain Fourier, matching with the 
-                      wavelengths of the class.
-        @param i    : i-th plane to performance the propagation
-        :return     : The propagated from P with values H to the i-th plane of 
-                      V        
-        """
-        K_shape = self.kernel_shape()
-        f_A = np.fft.fft2(A, s = K_shape)
-        f_RSD_K_i = self.get_f_RSD_kernel_i(i)
-        f_B = f_A * f_RSD_K_i
-        return np.fft.ifft(f_B)[:, -A.shape[1]:, -A.shape[2]:]
-
-
-    def f_propagate_i(self, f_A: np.ndarray, i: int):
-        """
-        Propagate from P to the i-th plane in V, the light amplitudes values in
-        f_A, in the fourier domain, where f_A is already in 2d fourier domain
-        @param f_A  : Amplitude values in f_A, which is positioned at the plane
-                      P. The space is in domain Fourier, matching with the 
-                      wavelengths of the class. The data has to be in a 2d
-                      fourier space too.
-        @param i    : i-th plane to performance the propagation
-        :return     : The propagated from P with values H to the i-th plane of 
-                      V        
-        """
-        assert self._preprocess is not None, \
-            "pre_proc(self) has to be called before executing!"
-        f_RSD_K_i = self.get_f_RSD_kernel_i(i)
-        f_B = f_A * f_RSD_K_i
-        return np.fft.ifft2(f_B)
-
 
     def get_f_RSD_kernel_i(self, i: int):
         """
