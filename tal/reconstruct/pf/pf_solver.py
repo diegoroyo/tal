@@ -263,7 +263,7 @@ def propagate(fH: np.ndarray, P: np.ndarray, V: np.ndarray,
 
 def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
                  L:  np.ndarray,  V: np.ndarray, lambda_c: float = 6,
-                 cycles: float = 4, f_results: bool = False,
+                 cycles: float = 4, res_in_freq: bool = False,
                  n_threads: int = 1, verbose: int = 0):
     """
     Returns a NLOS solver object based on Phasor Fields
@@ -278,7 +278,7 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
     @param lambda_c     : Central wavelength for the virtual illumination 
                           gaussian pulse for the reconstruction
     @param cycles       : Number of cycles of the virtual illumination pulse
-    @param f_results    : Iff true, returns the data in the fourier domain 
+    @param res_in_freq  : Iff true, returns the data in the fourier domain 
                           (with the first axis for each frequency). It returns
                           the result in time domain 0 otherwise
     @param n_threads    : Number of threads to use on the reconstruction
@@ -331,53 +331,15 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
     __v_print("Done", 2, verbose)
     __v_print(f"Propagating with {n_threads} threads", 2, verbose)
 
-    for V_z in tqdm(V, disable = verbose != 2, unit='plane', total = V.shape[0]):
+    # TODO: parallelize execution
+    for V_z in tqdm(V, disable = verbose < 3, unit='plane', total = V.shape[0]):
         fI_s = propagator_S.propagate(f_H, S_r, V_z, wv, P_axis=(1,2))
-        print(fI_s.shape)
         fI = propagator_L.propagate(fI_s, L_r, V_z, wv, P_axis=(1,2), V_axis=(3,4))
-        print(fI.shape)
+        if not res_in_freq:
+            I = fIz2Iz(fI, f_pulse, sig_idx)
+    # TODO: return results
 
-    adfadfae
-
-    # Propagate from sensors
-    if S.ndim == 3 and V.ndim == 4 and __parallel(S, V[0]): # Parallel planes
-        desc = __v_desc("Reconstructing from Sensors", 2, verbose)
-        fI_s = propagate_parallel_planes(f_H, S_r, V, wv, n_threads=n_threads,
-                                        desc = desc)
-    else:                       # Propagate as sparse points
-        fI_s = propagate(f_H, S, V, wv, n_threads=n_threads,
-                    desc = __v_desc("Reconstructing from Sensors", 2, verbose))
-
-    del f_H
-
-    __v_print("Done\nPropagating from Light...", 1, verbose) 
-
-    # Propagate from light source
-    if L.ndim == 3 and V.ndim == 4 and __parallel(L, V[0]): # Parallel planes
-        desc = __v_desc("Reconstructing from Lights", 2, verbose)
-        fI = propagate_parallel_planes(fI_s, L_r, V, wv, n_threads=n_threads,
-                                        desc = desc)
-    else:                   # Propagate as sparse points
-        fI = propagate(fI_s, L, V, wv, n_threads=n_threads,
-                    desc = __v_desc("Reconstructing from Lights", 2, verbose))
-    
-    __v_print("Done", 1, verbose) 
-
-    # Release space
-    del fI_s
-
-    if f_results:  
-        # Data in frequency domain
-        return fI
-    else:
-        __v_print("Transforming reconstruction to time space...", 1, verbose)
-
-        # Data to time domain
-        I = fI_to_I(fI, f_pulse, sig_idx, n_threads, 
-                desc = __v_desc("Reconstruction to time domain", 2, verbose))
-
-        __v_print("Done", 1, verbose)
-        return I
+    __v_print("Done", 2, verbose)
 
 
 ###############################################################################
@@ -410,7 +372,7 @@ def __f_propagate_plane_i(K, ffH, ffH_3d, shape,  hd_z):
 
 # Auxiliary function to transform fourier to prime planes, 
 # given the pulse parameters
-def __fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, 
+def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, 
              significant_idx: np.ndarray):
     """
     Transforms the plane reconstruction I in Fourier domain to time domain
