@@ -3,7 +3,8 @@ from tal.io.enums import HFormat
 from tal.util import SPEED_OF_LIGHT
 from typing import Union
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
+from matplotlib.colors import LogNorm
+from matplotlib.widgets import Slider, Button
 import numpy as np
 from tqdm import tqdm
 
@@ -59,23 +60,48 @@ def __plot_3d_interactive_axis(xyz: np.ndarray, focus_slider: np.ndarray,
         'The slider and the data have different lengths'
     # Move the axis, so the interactive axis is at 0
     xyz_p = np.moveaxis(xyz, axis, 0)
+    max_idx = xyz_p.shape[0] - 1
     v_min = np.min(xyz)
     v_max = np.max(xyz)
 
     # Plot the first figure
     fig = plt.figure()
-    fig.suptitle(title)
-
     ax = plt.axes([0.2, 0.2, 0.7, 0.7])
-    img = ax.imshow(xyz_p[0], cmap=cmap, vmin=v_min, vmax=v_max)
-    fig.colorbar(img, ax=ax, shrink=0.5)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_xticks([])
-    ax.set_yticks([])
+    cax = plt.axes([0.85, 0.2, 0.03, 0.7])
+    colorbar = None
+    scale = 'linear'
+
+    def set_ax_common():
+        nonlocal colorbar
+        fig.suptitle(title)
+        if colorbar is not None:
+            cax.cla()
+        colorbar = fig.colorbar(img, cax=cax, shrink=0.5)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    def scale_linear(event):
+        nonlocal img, scale
+        scale = 'linear'
+        ax.cla()
+        img = ax.imshow(xyz_p[current_idx], cmap=cmap, vmin=v_min, vmax=v_max)
+        set_ax_common()
+
+    def scale_log(event):
+        nonlocal img, scale
+        scale = 'log'
+        ax.cla()
+        img = ax.imshow(xyz_p[current_idx] + 1, cmap=cmap,
+                        norm=LogNorm(vmin=v_min + 1, vmax=v_max))
+        set_ax_common()
+
+    current_idx = 0
+    img = None
+    scale_linear(None)
 
     ax_slider = plt.axes([0.25, 0.1, 0.5, 0.03])
-
     slider = Slider(
         ax=ax_slider,
         label=slider_title,
@@ -86,13 +112,58 @@ def __plot_3d_interactive_axis(xyz: np.ndarray, focus_slider: np.ndarray,
         orientation='horizontal')
     ax_text = plt.axes([0.25, 0.05, 0.5, 0.03])
     ax_text.axis('off')
-    text = ax_text.text(0, 0, f'{focus_slider[0]} {slider_unit}')
+    text = ax_text.text(0, 0, f'{focus_slider[0]:.3f} {slider_unit}')
+
+    ax_button_linear = plt.axes([0.05, 0.4, 0.1, 0.05])
+    button_linear = Button(ax_button_linear, 'Linear')
+    button_linear.on_clicked(scale_linear)
+    ax_button_log = plt.axes([0.05, 0.45, 0.1, 0.05])
+    button_log = Button(ax_button_log, 'Log')
+    button_log.on_clicked(scale_log)
+
+    def cmap_hot(event):
+        nonlocal cmap
+        cmap = 'hot'
+        if scale == 'linear':
+            scale_linear(None)
+        else:
+            scale_log(None)
+
+    def cmap_nipyspectral(event):
+        nonlocal cmap
+        cmap = 'nipy_spectral'
+        if scale == 'linear':
+            scale_linear(None)
+        else:
+            scale_log(None)
+
+    ax_button_cmap_hot = plt.axes([0.05, 0.55, 0.1, 0.05])
+    button_cmap_hot = Button(ax_button_cmap_hot, 'hot')
+    button_cmap_hot.on_clicked(cmap_hot)
+    ax_button_nipyspectral = plt.axes([0.05, 0.6, 0.1, 0.05])
+    button_nipyspectral = Button(
+        ax_button_nipyspectral, 'nipy_spectral')
+    button_nipyspectral.on_clicked(cmap_nipyspectral)
 
     # Figure update
     def update(i):
-        idx = int(i)
-        img.set_array(xyz_p[idx])
-        text.set_text(f'{focus_slider[idx]} {slider_unit}')
+        nonlocal current_idx
+        current_idx = int(i)
+        img.set_array(xyz_p[current_idx] + (1 if scale == 'log' else 0))
+        text.set_text(f'{focus_slider[current_idx]:.3f} {slider_unit}')
+
+    def update_prev(event):
+        slider.set_val(0 if current_idx == 0 else current_idx - 1)
+
+    def update_next(event):
+        slider.set_val(max_idx if current_idx == max_idx else current_idx + 1)
+
+    ax_prev = plt.axes([0.15, 0.1, 0.03, 0.03])
+    button_prev = Button(ax_prev, '<')
+    button_prev.on_clicked(update_prev)
+    ax_next = plt.axes([0.8, 0.1, 0.03, 0.03])
+    button_next = Button(ax_next, '>')
+    button_next.on_clicked(update_next)
 
     slider.on_changed(update)
     plt.show()
