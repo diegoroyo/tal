@@ -7,7 +7,7 @@ Description :   Interface of propagation to use with Phasor Fields solver, and
 """
 
 import numpy as np
-from collections import defaultdict
+from threading import Lock
 from tal.reconstruct.pf.rsd_kernel import RSD_kernel
 from typing import Tuple, Union
 
@@ -51,6 +51,7 @@ class Propagator(object):
     # Reorder the results to match the given data
     @staticmethod
     def reshape_result(fI: np.ndarray, fH:np.ndarray, V: np.ndarray,
+                         w_axis: int,
                          P_axis: Union[int, Tuple[int]],
                          V_axis: Union[int, Tuple[int]]):
 
@@ -65,7 +66,7 @@ class Propagator(object):
             I_shape = tuple(np.delete(np.array(fH.shape), P_axis + V_axis)) \
                     + tuple(np.array(V.shape)[:-1])
         # Move the axis of frequencies to the beginning
-        fI_aux = np.moveaxis(fI, -2, 0)
+        fI_aux = np.moveaxis(fI, w_axis, 0)
         # Reshape the data
         I = fI_aux.reshape(I_shape)
         return I
@@ -135,7 +136,7 @@ class RSD_propagator(Propagator):
         RSD_k = RSD_kernel.RSD_kernel_w(dist, wl_v)
         # Propagate the light, and focus on the voxel
         I_a = np.sum(fH_a*RSD_k, axis = -2)
-        I = RSD_propagator.reshape_result(I_a, fH, V, P_l_axis, V_axis)
+        I = RSD_propagator.reshape_result(I_a, fH, V, -2, P_l_axis, V_axis)
 
         return I
 
@@ -186,6 +187,7 @@ class RSD_parallel_propagator(Propagator):
                 self.__V_z_idx[str(V_z[0,0])] = hdz
         self.__w_a = w_a
         self.__fH = None
+        self.lock = Lock()
 
 
     def set_fH(self, fH, P_axis, V_axis):
@@ -201,7 +203,6 @@ class RSD_parallel_propagator(Propagator):
         if V_axis is not None:
             ffH = np.moveaxis(ffH, V_axis, np.arange(-len(V_axis), 0))
 
-    
 
     def propagate(self, fH: np.ndarray, P: np.ndarray,  
                 V: np.ndarray,  wl_v: np.ndarray,
@@ -235,15 +236,16 @@ class RSD_parallel_propagator(Propagator):
         else:
             P_l_axis = P_axis
 
-        if self.__fH is None or self.__fH is not fH:
-            self.set_fH(fH, P_l_axis, V_axis)
+        with self.lock:
+            if self.__fH is None or self.__fH is not fH:
+                self.set_fH(fH, P_l_axis, V_axis)
 
         # Space to store results
         fI_pre_shape = tuple(np.array(self.ffH.shape)[:-3])
         if V.ndim == 3:
-            fI_shape = fI_pre_shape + (1, len(wl_v), V.shape[0], V.shape[1])
+            fI_shape = fI_pre_shape + (len(wl_v), 1, V.shape[0], V.shape[1])
         else:   # V.ndim == 4
-            fI_shape = fI_pre_shape + (V.shape[0], len(wl_v), 
+            fI_shape = fI_pre_shape + (len(wl_v), V.shape[0],  
                                          V.shape[1], V.shape[2])
         fI = np.zeros(fI_shape, dtype = np.complex128)
 
@@ -251,10 +253,15 @@ class RSD_parallel_propagator(Propagator):
         for idx_fI, plane_id in enumerate(idx_plane):
             K = self.K_rsd.get_f_RSD_kernel_i(plane_id)
             fI_padded = np.fft.ifft2(K * self.ffH)
-            fI[..., idx_fI, :, :, :] = fI_padded[..., :, 
+            fI[..., idx_fI, :, :] = fI_padded[...,
                                             -fI_shape[-2]:, -fI_shape[-1]:]
+
+        # Squeeze unnedded axes
+        if V.ndim == 3:
+            fI = np.squeeze(fI, axis = -3) 
         
-        return RSD_parallel_propagator.reshape_result(fI, fH, V, P_l_axis, V_axis)
+        return RSD_parallel_propagator.reshape_result(fI, fH, V, -V.ndim, 
+                                                      P_l_axis, V_axis)
 
 
 

@@ -24,5 +24,5 @@ def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
     wavelength = wavefactor*np.linalg.norm(reshaped_S[0] - reshaped_S[1])
 
 
-    return pf.reconstruct(H, T, S, L, V, wavelength, wave_cycles, True,
+    return pf.reconstruct(H, T, S, L, V, wavelength, wave_cycles, False,
                          n_threads, verbose)
