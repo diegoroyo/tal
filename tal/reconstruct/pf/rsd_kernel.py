@@ -7,8 +7,6 @@ Description :   Class for a RSD kernel generator, and propagator, in order
 """
 
 import numpy as np
-import os
-from numba import njit
 
 class RSD_kernel(object):
     """
