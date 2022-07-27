@@ -104,22 +104,24 @@ def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray,
     @return                 : The plane reconstruction of the scene in time 
                               domain, evaluated in t=0
     """
-    # Shape of the 3d volume
-    (_, ny, nx) = fIz.shape
+    # Shape of the volume
+    fIz_shape = tuple(np.array(fIz.shape)[1:])
     # All frequencies to use
     nw_all = f_pulse.shape[0]
     nw_sig_max = np.max(significant_idx)
     # All no indicated frequencies values are 0
     all_freq = np.zeros((nw_sig_max + 1), dtype = np.complex128)
-    Iz = np.zeros((ny, nx), dtype = np.complex128)
+    Iz = np.zeros(fIz_shape, dtype = np.complex128)
 
-    for y, x in np.ndindex((ny, nx)):
-        fIp = fIz[:, y, x]
+    # Index along points of fIz
+    for it in np.ndindex(fIz_shape):
+        exp_it = (np.s_[:],) + it
+        fIp = fIz[exp_it]
         # Fill the significant data weighted with the illumination
         # pulse value
         all_freq[significant_idx] = fIp*f_pulse[significant_idx]
         # Inverse FFT to return the data, evaluated at time 0
-        Iz[y,x] = np.fft.ifft(all_freq, n=nw_all)[0]
+        Iz[it] = np.fft.ifft(all_freq, n=nw_all)[0]
 
     return Iz
 
@@ -274,6 +276,7 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
         fIz2Iz_partial = partial(fIz2Iz, f_pulse = f_pulse,
                                  significant_idx = sig_idx)
         with ProcessPoolExecutor(max_workers = n_threads) as executor:
+            print(fI.shape)
             I = np.array(
                     list(tqdm(
                         executor.map(fIz2Iz_partial, fI),
@@ -285,7 +288,7 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
         __v_print("Done", 1, verbose)
         return I
     elif not res_in_freq and sig_idx is None:
-        return fI[:, 0, :, :]
+        return fI[:, 0, ...]
     else:
         return fI
 
@@ -301,7 +304,10 @@ def __propagate(propagator_S, propagator_L, f_H, S, L, wv, V):
     # Propagate from sensors
     fI_s = propagator_S.propagate(f_H, S, V, wv, P_axis=(1,2))
     # Propagate from Lights
-    fI = propagator_L.propagate(fI_s, L, V, wv, P_axis=(1,2), V_axis=(3,4))
+    v_axis = (3,)
+    if V.ndim > 2:
+        v_axis += (4)
+    fI = propagator_L.propagate(fI_s, L, V, wv, P_axis=(1,2), V_axis=v_axis)
     return fI
 
 
