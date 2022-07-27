@@ -4,8 +4,8 @@ from tal.reconstruct.pf.rsd_kernel import RSD_kernel
 import numpy as np
 
 def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
-         volume: NLOSCaptureData.VolumeType = None, verbose: int = 1, 
-         n_threads: int = 1):
+         volume: NLOSCaptureData.VolumeType = None, res_in_freq = True,
+         verbose: int = 1, n_threads: int = 1):
     # Data extraction
     H = data.H
     # Time extraction
@@ -19,10 +19,11 @@ def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
     V = volume
     S = data.sensor_grid_xyz
     L = np.zeros((1,3), float)
+
     # FIXME: Minimun distance assumes ordered points
     reshaped_S = S.reshape(-1,3)
     wavelength = wavefactor*np.linalg.norm(reshaped_S[0] - reshaped_S[1])
 
 
-    return pf.reconstruct(H, T, S, L, V, wavelength, wave_cycles, False,
+    return pf.reconstruct(H, T, S, L, V, wavelength, wave_cycles, res_in_freq,
                          n_threads, verbose)

@@ -9,6 +9,7 @@ Description :   Solves the NLOS problem using the phasor fields approximation,
 import numpy as np
 from multiprocessing import Pool
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from tqdm import tqdm
 
@@ -88,6 +89,41 @@ def H_to_fH(H: np.ndarray, t_bins: np.ndarray,  lambda_c: float,
     return (fH, wv, f_pulse, significant_idx)
 
 
+# Auxiliary function to transform fourier to prime planes, 
+# given the pulse parameters
+def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, 
+             significant_idx: np.ndarray):
+    """
+    Transforms the plane reconstruction I in Fourier domain to time domain
+    @param fIz              : A plane reconstruction of the scene by frequency
+                              domain
+    @param f_pulse          : Virtual ilumination pulse in frequency space
+    @param significant_idx  : Indices with enough significance in the virtual
+                              illumination pulse to consider, in the numpy fft
+                              of the original signal
+    @return                 : The plane reconstruction of the scene in time 
+                              domain, evaluated in t=0
+    """
+    # Shape of the 3d volume
+    (_, ny, nx) = fIz.shape
+    # All frequencies to use
+    nw_all = f_pulse.shape[0]
+    nw_sig_max = np.max(significant_idx)
+    # All no indicated frequencies values are 0
+    all_freq = np.zeros((nw_sig_max + 1), dtype = np.complex128)
+    Iz = np.zeros((ny, nx), dtype = np.complex128)
+
+    for y, x in np.ndindex((ny, nx)):
+        fIp = fIz[:, y, x]
+        # Fill the significant data weighted with the illumination
+        # pulse value
+        all_freq[significant_idx] = fIp*f_pulse[significant_idx]
+        # Inverse FFT to return the data, evaluated at time 0
+        Iz[y,x] = np.fft.ifft(all_freq, n=nw_all)[0]
+
+    return Iz
+
+
 def fI_to_I(fI: np.ndarray, f_pulse: np.ndarray, sig_idx: np.ndarray,
         n_threads: int = 1, 
         desc: str = "Fourier to time reconstruction by planes"):
@@ -148,7 +184,7 @@ def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray)->Propagator:
         # Check the planes are in front 
         v1 = target_plane[0,0] - P[0,0]; v2 = target_plane[-1,0] - P[-1,0]
         v3 = target_plane[0,-1] - P[0,-1]; v4 = target_plane[-1,-1] - P[-1,-1]
-        if np.all(v1 == v2) and np.all(v2 == v3) and np.all(v3 == v4): 
+        if np.allclose(v1, v2) and np.allclose(v3, v2) and np.allclose(v3, v4):
             # Parallel propagator
             return RSD_parallel_propagator(P, V, wl)
 
@@ -201,11 +237,11 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
     # Time domain impulse response to Fourier
     __v_print(f"Generating virtual illumination pulse:\n" + 
               f"\tCentral wavelength: {lambda_c} m\n" + 
-              f"\t{cycles} cycles\n...", 2, verbose)
+              f"\t{cycles} cycles\n...", 1, verbose)
 
     f_H, wv, f_pulse, sig_idx = H_to_fH(H_r, t_bins, lambda_c, cycles)
 
-    __v_print(f"Done. {len(wv)} frequencies to use", 2, verbose)
+    __v_print(f"Done. {len(wv)} frequencies to use", 1, verbose)
     
     __v_print("Generating propagator from sensors...", 2, verbose)
     propagator_S = propagator(S_r, V, wv)
@@ -213,15 +249,15 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
     __v_print("Generating propagator from lights...", 2, verbose)
     propagator_L = propagator(L_r, V, wv)
     __v_print("Done", 2, verbose)
-    __v_print(f"Propagating with {n_threads} threads...", 2, verbose)
+    __v_print(f"Propagating with {n_threads} threads...", 1, verbose)
 
     # Propagate using multithreading
     propagate_partial = partial(__propagate, propagator_S, propagator_L, f_H,
-                                 S_r, L_r, wv, f_pulse, sig_idx, res_in_freq)
+                                 S_r, L_r, wv)
     with ThreadPoolExecutor(max_workers = n_threads) as executor:
         if V.ndim == 4: desc = "Planes reconstructed"; unit = "planes"
         else: desc = "Points reconstructed"; unit = "points"
-        I = np.array(
+        fI = np.array(
                 list(tqdm(
                     executor.map(propagate_partial, V),
                                 desc = desc,
@@ -229,10 +265,28 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
                                 unit = unit,
                                 total = V.shape[0]
                                 )))
+    __v_print("Done", 1, verbose)
 
-    __v_print("Done", 2, verbose)
+    if not res_in_freq:     # Result in time domain
+        __v_print(f"Transforming from Fourier to time domain with {n_threads}"\
+                 + " threads...", 1, verbose)
+        # fIz2Iz using multiprocessing
+        fIz2Iz_partial = partial(fIz2Iz, f_pulse = f_pulse,
+                                 significant_idx = sig_idx)
+        with ProcessPoolExecutor(max_workers = n_threads) as executor:
+            I = np.array(
+                    list(tqdm(
+                        executor.map(fIz2Iz_partial, fI),
+                                    desc = desc,
+                                    disable = verbose < 3,
+                                    unit = unit,
+                                    total = V.shape[0]
+                                    )))
+        __v_print("Done", 1, verbose)
+        return I
+    else:
+        return fI
 
-    return I
 
 ###############################################################################
 #                       Auxiliary methods and functions                       #
@@ -241,51 +295,18 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
 # Propagate given the propagators, the impulse response in fourier 
 # f_H, the sensor points S, the light points L, the target coordinates V_z,
 # with frecuency wavelengths wv
-def __propagate(propagator_S, propagator_L, f_H, S, L, wv, f_pulse, sig_idx,
-                res_in_freq, V):
+def __propagate(propagator_S, propagator_L, f_H, S, L, wv, V):
+    # Propagate from sensors
     fI_s = propagator_S.propagate(f_H, S, V, wv, P_axis=(1,2))
+    # Propagate from Lights
     fI = propagator_L.propagate(fI_s, L, V, wv, P_axis=(1,2), V_axis=(3,4))
-    if res_in_freq:
-        return fI
-    else:
-        return fIz2Iz(fI, f_pulse, sig_idx)
+    return fI
 
 
 # Prints only iff threshold =< given_verbose
 def __v_print(msg, threshold, given_verbose):
     if threshold <= given_verbose:
         print(msg)
-
-
-# Auxiliary function to transform fourier to prime planes, 
-# given the pulse parameters
-def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, 
-             significant_idx: np.ndarray):
-    """
-    Transforms the plane reconstruction I in Fourier domain to time domain
-    @param fIz              : A plane reconstruction of the scene by frequency
-                              domain
-    @param f_pulse          : Virtual ilumination pulse in frequency space
-    @param significant_idx  : Indices with enough significance in the virtual
-                              illumination pulse to consider, in the numpy fft
-                              of the original signal
-    @return                 : The plane reconstruction of the scene in time 
-                              domain, evaluated in t=0
-    """
-    # Shape of the 3d volume
-    (_, ny, nx) = fIz.shape
-    # All frequencies to use
-    nw_all = f_pulse.shape[0]
-    nw_sig_max = np.max(significant_idx)
-    # All no indicated frequencies values are 0
-    all_freq = np.zeros((nw_sig_max + 1, ny, nx), dtype = np.complex128)
-
-    # Fill the significant data weighted with the illumination
-    # pulse value
-    all_freq[significant_idx] = fIz*f_pulse[significant_idx,
-                                            np.newaxis, np.newaxis]
-    # Inverse FFT to return the data, evaluated at time 0
-    return np.fft.ifft(all_freq, axis = 0, n=nw_all)[0]
 
 
 # Update the format of H to the dimensions of S and L
