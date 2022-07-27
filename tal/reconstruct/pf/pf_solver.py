@@ -182,7 +182,8 @@ def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray)->Propagator:
         planes = False
 
     if planes and target_plane.shape == P.shape \
-        and __parallel(target_plane, P):
+        and target_plane.shape >= (2,2,3) and P.shape >= (2,2,3) \
+        and __parallel(target_plane, P) :
         # Check the planes are in front 
         v1 = target_plane[0,0] - P[0,0]; v2 = target_plane[-1,0] - P[-1,0]
         v3 = target_plane[0,-1] - P[0,-1]; v4 = target_plane[-1,-1] - P[-1,-1]
@@ -303,9 +304,7 @@ def __propagate(propagator_S, propagator_L, f_H, S, L, wv, V):
     # Propagate from sensors
     fI_s = propagator_S.propagate(f_H, S, V, wv, P_axis=(1,2))
     # Propagate from Lights
-    v_axis = (3,)
-    if V.ndim > 2:
-        v_axis += (4)
+    v_axis = tuple(np.arange(-V.ndim + 1, 0))
     fI = propagator_L.propagate(fI_s, L, V, wv, P_axis=(1,2), V_axis=v_axis)
     return fI
 
