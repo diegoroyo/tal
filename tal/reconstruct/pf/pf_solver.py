@@ -276,7 +276,6 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
         fIz2Iz_partial = partial(fIz2Iz, f_pulse = f_pulse,
                                  significant_idx = sig_idx)
         with ProcessPoolExecutor(max_workers = n_threads) as executor:
-            print(fI.shape)
             I = np.array(
                     list(tqdm(
                         executor.map(fIz2Iz_partial, fI),
