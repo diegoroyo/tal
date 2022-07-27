@@ -23,7 +23,7 @@ if __name__ == "__main__":
     V = np.linspace(plane_a, plane_b, 256)
 
     # reconstruction = solve(data, 6, 20, get_volume(), 1, 2)
-    reconstruction = solve(data, 6, 20, V, 3, 8)
+    reconstruction = solve(data, 6, 0, V, False, 3, 16)
 
     plot_zxy_interactive(np.abs(reconstruction))
     plot_zxy_interactive(np.angle(reconstruction), cmap = 'bwr')

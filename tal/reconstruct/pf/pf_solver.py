@@ -74,7 +74,7 @@ def H_to_fH(H: np.ndarray, t_bins: np.ndarray,  lambda_c: float,
     if cycles == 0:
         # Fourier term function
         fourier_term = np.exp( -2 * np.pi * t_bins / lambda_c * 1j)
-        fH = np.array([np.sum(H*fourier_term.reshape((-1,)+(1,)*H.ndim),
+        fH = np.array([np.sum(H*fourier_term.reshape((-1,)+(1,)*(H.ndim - 1)),
                              axis = 0)])
         wv = np.array([lambda_c])
         f_pulse = np.ones(1)
@@ -267,7 +267,7 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
                                 )))
     __v_print("Done", 1, verbose)
 
-    if not res_in_freq:     # Result in time domain
+    if not res_in_freq and sig_idx is not None:     # Result in time domain
         __v_print(f"Transforming from Fourier to time domain with {n_threads}"\
                  + " threads...", 1, verbose)
         # fIz2Iz using multiprocessing
@@ -284,6 +284,8 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
                                     )))
         __v_print("Done", 1, verbose)
         return I
+    elif not res_in_freq and sig_idx is None:
+        return fI[:, 0, :, :]
     else:
         return fI
 
