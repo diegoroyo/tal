@@ -124,7 +124,7 @@ _NOTE: No command-line version for now_
 import tal
 
 data = tal.io.read_capture('capture.hdf5')
-V = np.moveaxis(np.mgrid[-1:1.1:0.1, -1:1.1:0.1, 0.5:2.6:0.1], 0, -1)
+V = np.moveaxis(np.mgrid[-1:1.1:0.1, -1:1.1:0.1, 0.5:2.6:0.1], 0, -1).reshape(-1,3)
 # Reconstruct the data to the volume V with virtual illumination pulse
 # with central wavefactor 6 and 4 cycles
 reconstruction = tal.reconstruct.pf.solve(data, 6, 4, V, verbose = 3, n_threads=1)
