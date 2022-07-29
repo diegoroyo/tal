@@ -17,7 +17,6 @@ from tal.reconstruct.pf.propagator import Propagator, RSD_propagator
 from tal.reconstruct.pf.propagator import RSD_parallel_propagator
 
 
-
 def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float):
     """
     Generate a gaussian pulse in frequency space. It assume the data 
@@ -42,7 +41,8 @@ def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float):
     w[0] = 1e-30
     wavelengths = 1 / w                     # All wavelengths
     # Correct 0 and inf values
-    wavelengths[0] = np.inf; w[0] = 0.0
+    wavelengths[0] = np.inf
+    w[0] = 0.0
     # Frequency distances to central frequency in rad/s
     delta_w = 2*np.pi*(w - w_c)
     # Gaussian pulse for reconstruction
@@ -50,16 +50,16 @@ def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float):
 
     # Central freq and sigma to k up to numpy fft
     central_k = delta_t * n_w * w_c
-    sigma_k = delta_t * n_w /(2*np.pi*sigma)
+    sigma_k = delta_t * n_w / (2*np.pi*sigma)
 
     # Interest indicies in range [mu-3sigma, mu+3sigma]
     min_k = np.round(central_k - 3*sigma_k)
     max_k = np.round(central_k + 3*sigma_k)
     # Indices in the gaussian pulse
-    indices = np.arange(min_k, max_k+1, dtype=int) 
+    indices = np.arange(min_k, max_k+1, dtype=int)
 
     return (freq_pulse, wavelengths, indices)
-    
+
 
 def H_to_fH(H: np.ndarray, t_bins: np.ndarray,  lambda_c: float,
             cycles: float):
@@ -73,26 +73,26 @@ def H_to_fH(H: np.ndarray, t_bins: np.ndarray,  lambda_c: float,
     """
     if cycles == 0:
         # Fourier term function
-        fourier_term = np.exp( -2 * np.pi * t_bins / lambda_c * 1j)
+        fourier_term = np.exp(-2 * np.pi * t_bins / lambda_c * 1j)
         fH = np.array([np.sum(H*fourier_term.reshape((-1,)+(1,)*(H.ndim - 1)),
-                             axis = 0)])
+                              axis=0)])
         wv = np.array([lambda_c])
         f_pulse = np.ones(1)
         significant_idx = None
     else:
-        fH_all = np.fft.fft(H, axis = 0)
+        fH_all = np.fft.fft(H, axis=0)
         f_pulse, wv_all, significant_idx = pulse(t_bins[1], fH_all.shape[0],
-                                        lambda_c, cycles)
+                                                 lambda_c, cycles)
         wv = wv_all[significant_idx]
         fH = fH_all[significant_idx]
-    
+
     return (fH, wv, f_pulse, significant_idx)
 
 
-# Auxiliary function to transform fourier to prime planes, 
+# Auxiliary function to transform fourier to prime planes,
 # given the pulse parameters
-def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, 
-             significant_idx: np.ndarray):
+def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray,
+           significant_idx: np.ndarray):
     """
     Transforms the plane reconstruction I in Fourier domain to time domain
     @param fIz              : A plane reconstruction of the scene by frequency
@@ -110,8 +110,8 @@ def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray,
     nw_all = f_pulse.shape[0]
     nw_sig_max = np.max(significant_idx)
     # All no indicated frequencies values are 0
-    all_freq = np.zeros((nw_sig_max + 1), dtype = np.complex128)
-    Iz = np.zeros(fIz_shape, dtype = np.complex128)
+    all_freq = np.zeros((nw_sig_max + 1), dtype=np.complex128)
+    Iz = np.zeros(fIz_shape, dtype=np.complex128)
 
     # Index along points of fIz
     for it in np.ndindex(fIz_shape):
@@ -127,8 +127,8 @@ def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray,
 
 
 def fI_to_I(fI: np.ndarray, f_pulse: np.ndarray, sig_idx: np.ndarray,
-        n_threads: int = 1, 
-        desc: str = "Fourier to time reconstruction by planes"):
+            n_threads: int = 1,
+            desc: str = "Fourier to time reconstruction by planes"):
     """
     Transforms the volume reconstruction I in Fourier domain to time domain
     executed in parallel
@@ -147,16 +147,16 @@ def fI_to_I(fI: np.ndarray, f_pulse: np.ndarray, sig_idx: np.ndarray,
     else:                   # Multiple frequency
         with Pool(n_threads) as p:
             fIz2Iz_partial = partial(fIz2Iz,
-                                    f_pulse = f_pulse, 
-                                    significant_idx = sig_idx)
-            return np.array(list(tqdm(p.imap(fIz2Iz_partial, fI.swapaxes(0,1)),
-                                        desc=desc,
-                                        disable = desc is None,
-                                        unit = "plane",
-                                        total = fI.shape[1])))
+                                     f_pulse=f_pulse,
+                                     significant_idx=sig_idx)
+            return np.array(list(tqdm(p.imap(fIz2Iz_partial, fI.swapaxes(0, 1)),
+                                      desc=desc,
+                                      disable=desc is None,
+                                      unit="plane",
+                                      total=fI.shape[1])))
 
 
-def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray)->Propagator:
+def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray) -> Propagator:
     """
     Returns the proper RSD propagator given P, V and wl
     @param P    : Origin points to performance the propagator. It can be an 
@@ -182,11 +182,13 @@ def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray)->Propagator:
         planes = False
 
     if planes and target_plane.shape == P.shape \
-        and target_plane.shape >= (2,2,3) and P.shape >= (2,2,3) \
-        and __parallel(target_plane, P) :
-        # Check the planes are in front 
-        v1 = target_plane[0,0] - P[0,0]; v2 = target_plane[-1,0] - P[-1,0]
-        v3 = target_plane[0,-1] - P[0,-1]; v4 = target_plane[-1,-1] - P[-1,-1]
+            and target_plane.shape >= (2, 2, 3) and P.shape >= (2, 2, 3) \
+            and __parallel(target_plane, P):
+        # Check the planes are in front
+        v1 = target_plane[0, 0] - P[0, 0]
+        v2 = target_plane[-1, 0] - P[-1, 0]
+        v3 = target_plane[0, -1] - P[0, -1]
+        v4 = target_plane[-1, -1] - P[-1, -1]
         if np.allclose(v1, v2) and np.allclose(v3, v2) and np.allclose(v3, v4):
             # Parallel propagator
             return RSD_parallel_propagator(P, V, wl)
@@ -194,10 +196,10 @@ def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray)->Propagator:
     return RSD_propagator()
 
 
-def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
-                 L:  np.ndarray,  V: np.ndarray, lambda_c: float = 6,
-                 cycles: float = 4, res_in_freq: bool = False,
-                 n_threads: int = 1, verbose: int = 0):
+def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
+                L:  np.ndarray,  V: np.ndarray, lambda_c: float = 6,
+                cycles: float = 4, res_in_freq: bool = False,
+                n_threads: int = 1, verbose: int = 0):
     """
     Returns a NLOS solver object based on Phasor Fields
     @param H            : Array with the impulse response of the scene by time,
@@ -224,28 +226,30 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
                           problem
     """
     assert (V.ndim <= 4 and V.ndim >= 2) and V.shape[-1] == 3, \
-            "reconstruct does not support V data"
+        "reconstruct does not support V data"
     assert (S.ndim == 3 or S.ndim == 2) and S.shape[-1] == 3,\
-            "reconstruct does not support this S data"
+        "reconstruct does not support this S data"
     assert (L.ndim == 3 or L.ndim == 2) and L.shape[-1] == 3,\
-            "reconstruct does not support this L data"
+        "reconstruct does not support this L data"
 
     # Reshape all the data to match all the data
-    S_r = S; L_r = L
-    if S_r.ndim == 2: S_r = S_r.reshape(-1, 1, 3)
-    if L_r.ndim == 2: L_r = L_r.reshape(-1, 1, 3)
+    S_r = S
+    L_r = L
+    if S_r.ndim == 2:
+        S_r = S_r.reshape(-1, 1, 3)
+    if L_r.ndim == 2:
+        L_r = L_r.reshape(-1, 1, 3)
     H_r = __H_format(H, S, L)
 
-
     # Time domain impulse response to Fourier
-    __v_print(f"Generating virtual illumination pulse:\n" + 
-              f"\tCentral wavelength: {lambda_c} m\n" + 
+    __v_print(f"Generating virtual illumination pulse:\n" +
+              f"\tCentral wavelength: {lambda_c} m\n" +
               f"\t{cycles} cycles\n...", 1, verbose)
 
     f_H, wv, f_pulse, sig_idx = H_to_fH(H_r, t_bins, lambda_c, cycles)
 
     __v_print(f"Done. {len(wv)} frequencies to use", 1, verbose)
-    
+
     __v_print("Generating propagator from sensors...", 2, verbose)
     propagator_S = propagator(S_r, V, wv)
     __v_print("Done", 2, verbose)
@@ -256,35 +260,39 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
 
     # Propagate using multithreading
     propagate_partial = partial(__propagate, propagator_S, propagator_L, f_H,
-                                 S_r, L_r, wv)
-    with ThreadPoolExecutor(max_workers = n_threads) as executor:
-        if V.ndim == 4: desc = "Planes reconstructed"; unit = "planes"
-        else: desc = "Points reconstructed"; unit = "points"
+                                S_r, L_r, wv)
+    with ThreadPoolExecutor(max_workers=n_threads) as executor:
+        if V.ndim == 4:
+            desc = "Planes reconstructed"
+            unit = "planes"
+        else:
+            desc = "Points reconstructed"
+            unit = "points"
         fI = np.array(
-                list(tqdm(
-                    executor.map(propagate_partial, V),
-                                desc = desc,
-                                disable = verbose < 3,
-                                unit = unit,
-                                total = V.shape[0]
-                                )))
+            list(tqdm(
+                executor.map(propagate_partial, V),
+                desc=desc,
+                disable=verbose < 3,
+                unit=unit,
+                total=V.shape[0]
+            )))
     __v_print("Done", 1, verbose)
 
     if not res_in_freq and sig_idx is not None:     # Result in time domain
-        __v_print(f"Transforming from Fourier to time domain with {n_threads}"\
-                 + " threads...", 1, verbose)
+        __v_print(f"Transforming from Fourier to time domain with {n_threads}"
+                  + " threads...", 1, verbose)
         # fIz2Iz using multiprocessing
-        fIz2Iz_partial = partial(fIz2Iz, f_pulse = f_pulse,
-                                 significant_idx = sig_idx)
-        with ProcessPoolExecutor(max_workers = n_threads) as executor:
+        fIz2Iz_partial = partial(fIz2Iz, f_pulse=f_pulse,
+                                 significant_idx=sig_idx)
+        with ProcessPoolExecutor(max_workers=n_threads) as executor:
             I = np.array(
-                    list(tqdm(
-                        executor.map(fIz2Iz_partial, fI),
-                                    desc = desc,
-                                    disable = verbose < 3,
-                                    unit = unit,
-                                    total = V.shape[0]
-                                    )))
+                list(tqdm(
+                    executor.map(fIz2Iz_partial, fI),
+                    desc=desc,
+                    disable=verbose < 3,
+                    unit=unit,
+                    total=V.shape[0]
+                )))
         __v_print("Done", 1, verbose)
         return I
     elif not res_in_freq and sig_idx is None:
@@ -297,15 +305,15 @@ def reconstruct( H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
 #                       Auxiliary methods and functions                       #
 ###############################################################################
 
-# Propagate given the propagators, the impulse response in fourier 
+# Propagate given the propagators, the impulse response in fourier
 # f_H, the sensor points S, the light points L, the target coordinates V_z,
 # with frecuency wavelengths wv
 def __propagate(propagator_S, propagator_L, f_H, S, L, wv, V):
     # Propagate from sensors
-    fI_s = propagator_S.propagate(f_H, S, V, wv, P_axis=(1,2))
+    fI_s = propagator_S.propagate(f_H, S, V, wv, P_axis=(1, 2))
     # Propagate from Lights
     v_axis = tuple(np.arange(-V.ndim, 0))
-    fI = propagator_L.propagate(fI_s, L, V, wv, P_axis=(1,2), V_axis=v_axis)
+    fI = propagator_L.propagate(fI_s, L, V, wv, P_axis=(1, 2), V_axis=v_axis)
     return fI
 
 
@@ -336,19 +344,23 @@ def __H_format(H: np.ndarray, S: np.ndarray, L: np.ndarray):
 
 # Return true if the two planes are parallel
 def __parallel(S1, S2):
-        # Vectors in plane 1
-        p1 = S1[0,0]; p2 = S1[0,-1]; p3 = S1[-1,0]
-        v1 = p3 - p1
-        v2 = p2 - p1
-        # Normal to the plane
-        n1 = np.cross(v1,v2)
+    # Vectors in plane 1
+    p1 = S1[0, 0]
+    p2 = S1[0, -1]
+    p3 = S1[-1, 0]
+    v1 = p3 - p1
+    v2 = p2 - p1
+    # Normal to the plane
+    n1 = np.cross(v1, v2)
 
-        # Vectors in plane 2
-        p1 = S2[0,0]; p2 = S2[0,-1]; p3 = S2[-1,0]
-        v1 = p3 - p1
-        v2 = p2 - p1
-        # Normal to the plane
-        n2 = np.cross(v1,v2)
+    # Vectors in plane 2
+    p1 = S2[0, 0]
+    p2 = S2[0, -1]
+    p3 = S2[-1, 0]
+    v1 = p3 - p1
+    v2 = p2 - p1
+    # Normal to the plane
+    n2 = np.cross(v1, v2)
 
-        # Return similar to 0 with error
-        return np.linalg.norm(np.cross(n1, n2)) <= 1e-8
+    # Return similar to 0 with error
+    return np.linalg.norm(np.cross(n1, n2)) <= 1e-8

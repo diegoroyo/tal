@@ -2,7 +2,11 @@ from tal.io.capture_data import NLOSCaptureData
 from tal.plot.xy import plot_xy_grid
 from tal.plot.xy import plot_txy_interactive, plot_zxy_interactive
 from tal.plot.xy import ByAxis
-from typing import Union
+from typing import Union, List
+
+_Data = Union[NLOSCaptureData, NLOSCaptureData.HType]
+_DataList = Union[List[_Data], _Data]
+
 
 def xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
             size_x: int = 8, size_y: int = 8,
@@ -38,10 +42,11 @@ def t_comparison(data_list: _DataList,
     return plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels)
 
 
-def txy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
-                    cmap:str = 'hot', by: ByAxis = ByAxis.T):
+def txy_interactive(data: _Data,
+                    cmap: str = 'hot', by: ByAxis = ByAxis.T):
     return plot_txy_interactive(data, cmap, by)
 
-def zxy_interactive(data: Union[NLOSCaptureData, NLOSCaptureData.HType], 
-                    cmap:str = 'hot', by: ByAxis = ByAxis.Z):
+
+def zxy_interactive(data: _Data,
+                    cmap: str = 'hot', by: ByAxis = ByAxis.Z):
     return plot_zxy_interactive(data, cmap, by)
