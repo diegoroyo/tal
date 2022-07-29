@@ -1,6 +1,7 @@
 from nptyping import NDArray
 from tal.io.capture_data import NLOSCaptureData
 from tal.io.enums import HFormat
+from tal.plot import ByAxis
 from tal.util import SPEED_OF_LIGHT
 from typing import Union
 import matplotlib.pyplot as plt
@@ -8,15 +9,6 @@ from matplotlib.colors import LogNorm
 from matplotlib.widgets import Slider, Button
 import numpy as np
 from tqdm import tqdm
-from enum import Enum
-
-
-class ByAxis(Enum):
-    UNKOWN = 0
-    T = 1
-    X = 2
-    Y = 3
-    Z = 4
 
 
 def plot_xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
@@ -57,13 +49,12 @@ def plot_xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
     plt.tight_layout()
     plt.show()
 
-# More general plotting
-
 
 def plot_3d_interactive_axis(xyz: np.ndarray, focus_slider: np.ndarray,
                              axis: int, title: str, slider_title: str,
                              slider_unit: str, cmap: str = 'hot',
                              xlabel: str = '', ylabel: str = ''):
+    """More general plotting"""
     assert xyz.ndim == 3, 'Unknown datatype to plot'
     assert axis < 3, f'Data only have 3 dims (given axis={axis})'
     assert xyz.shape[axis] == len(focus_slider), \

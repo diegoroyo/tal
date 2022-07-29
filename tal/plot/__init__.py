@@ -1,8 +1,15 @@
 from tal.io.capture_data import NLOSCaptureData
-from tal.plot.xy import plot_xy_grid
-from tal.plot.xy import plot_txy_interactive, plot_zxy_interactive
-from tal.plot.xy import ByAxis
 from typing import Union, List
+from enum import Enum
+
+
+class ByAxis(Enum):
+    UNKNOWN = 0
+    T = 1
+    X = 2
+    Y = 3
+    Z = 4
+
 
 _Data = Union[NLOSCaptureData, NLOSCaptureData.HType]
 _DataList = Union[List[_Data], _Data]
@@ -44,9 +51,11 @@ def t_comparison(data_list: _DataList,
 
 def txy_interactive(data: _Data,
                     cmap: str = 'hot', by: ByAxis = ByAxis.T):
+    from tal.plot.xy import plot_txy_interactive
     return plot_txy_interactive(data, cmap, by)
 
 
 def zxy_interactive(data: _Data,
                     cmap: str = 'hot', by: ByAxis = ByAxis.Z):
+    from tal.plot.xy import plot_zxy_interactive
     return plot_zxy_interactive(data, cmap, by)
