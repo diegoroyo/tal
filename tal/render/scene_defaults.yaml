@@ -8,6 +8,7 @@ integrator_discard_direct_paths: false
 integrator_nlos_laser_sampling: true
 integrator_nlos_hidden_geometry_sampling: true
 integrator_nlos_hidden_geometry_sampling_do_mis: true
+integrator_nlos_hidden_geometry_sampling_includes_relay_wall: true
 sample_count: 1_000_000
 account_first_and_last_bounces: false
 num_bins: 4096

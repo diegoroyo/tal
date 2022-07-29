@@ -40,7 +40,8 @@ def get_scene_xml(config, quiet=False):
             <boolean name="discard_direct_paths" value="{v('integrator_discard_direct_paths')}"/>
             <boolean name="nlos_laser_sampling" value="{v('integrator_nlos_laser_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling" value="{v('integrator_nlos_hidden_geometry_sampling')}"/>
-            <boolean name="nlos_hidden_geometry_sampling_do_mis" value="{v('integrator_nlos_hidden_geometry_sampling_do_mis')}"/>
+            <boolean name="nlos_hidden_geometry_sampling_do_mis" value="{v('integrator_nlos_hidden_geometry_sampling_do_mis')}
+            <boolean name="nlos_hidden_geometry_sampling_includes_relay_wall" value="{v('integrator_nlos_hidden_geometry_sampling_includes_relay_wall')}"/>
         </integrator>''')
 
     if 'polarized' in v('mitsuba_variant'):
@@ -397,7 +398,7 @@ def render_nlos_scene(config_path, args):
                 scene_config['laser_lookat_x'] or (sensor_width - 1) / 2
             laser_lookat_y = \
                 scene_config['laser_lookat_y'] or (sensor_height - 1) / 2
-            laser_lookats.append(laser_lookat_x, laser_lookat_y)
+            laser_lookats.append((laser_lookat_x, laser_lookat_y))
         elif scan_type == 'exhaustive' or scan_type == 'confocal':
             assert not (scan_type == 'confocal' and
                         (laser_width != sensor_width or
