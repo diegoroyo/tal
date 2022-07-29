@@ -4,6 +4,8 @@
 
 Utilities library for our work in the development of non-line-of-sight imaging techniques. See [mitsuba2-transient-nlos](https://github.com/diegoroyo/mitsuba2-transient-nlos) for data capture simulation. This library provides different tools to generate and analyze data and implementations of non-line-of-sight reconstruction algorithms. Some parts are also accessible through command line for for ease of use.
 
+Authors: [Diego Royo](https://github.com/diegoroyo), [Pablo Luesia](https://github.com/p-luesia)
+
 ## Installation
 
 Latest published version (recommended):
@@ -127,6 +129,5 @@ data = tal.io.read_capture('capture.hdf5')
 V = np.moveaxis(np.mgrid[-1:1.1:0.1, -1:1.1:0.1, 0.5:2.6:0.1], 0, -1).reshape(-1,3)
 # Reconstruct the data to the volume V with virtual illumination pulse
 # with central wavefactor 6 and 4 cycles
-reconstruction = tal.reconstruct.pf.solve(data, 6, 4, V, verbose = 3, n_threads=1)
-
+reconstruction = tal.reconstruct.pf.solve(data, 6, 4, V, verbose=3, n_threads=1)
 ```
