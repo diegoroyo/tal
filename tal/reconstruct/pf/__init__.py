@@ -2,13 +2,11 @@ from tal.io.capture_data import NLOSCaptureData
 import tal.reconstruct.pf.pf_solver as pf
 import tal.reconstruct.pf.propagator as propagator
 from typing import Any, Tuple
-from nptyping import NDArray, Shape
 import numpy as np
 
 
 def to_Fourier(data: NLOSCaptureData, wavefactor: float, pulse_cycles: float
-              ) -> Tuple[NDArray[Shape['*'],NLOSCaptureData.HType], 
-                         NDArray[Shape['*'], float], Any]:
+              ) -> Tuple[np.ndarray, np.ndarray, Any]:
     """
     Given the data, and the pulse defined by the wavefactor and cycles, return
     the data in the Fourier domain and the wavelengths associated to each 
@@ -46,8 +44,8 @@ def to_Fourier(data: NLOSCaptureData, wavefactor: float, pulse_cycles: float
 
 
 def to_time(fourier_comp: np.ndarray, aux_param : Any, n_threads: int = 1,
-            t_eval: NDArray[Shape['*'], float] = np.array([0.0])
-            ) -> NDArray[Shape['*'],NLOSCaptureData.HType]:
+            t_eval: np.ndarray = np.array([0.0])
+            ) -> np.ndarray:
     """
     Given the Fourier components it transforms the data to time domain, and
     returns the evaluations at the given time
