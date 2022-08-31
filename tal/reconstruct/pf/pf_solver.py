@@ -7,17 +7,18 @@ Description :   Solves the NLOS problem using the phasor fields approximation,
                 voxelization
 """
 import numpy as np
-from multiprocessing import Pool
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from tqdm import tqdm
+from typing import Union, Tuple
 
 from tal.reconstruct.pf.propagator import Propagator, RSD_propagator
 from tal.reconstruct.pf.propagator import RSD_parallel_propagator
 
 
-def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float):
+def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float
+         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Generate a gaussian pulse in frequency space. It assume the data 
     bins are equally space in time. Returns the pulse in frequency,
@@ -62,7 +63,9 @@ def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float):
 
 
 def H_to_fH(H: np.ndarray, t_bins: np.ndarray,  lambda_c: float,
-            cycles: float):
+            cycles: float
+            ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, 
+                        Union[np.ndarray, None]]:
     """
     Transforms the data H in time, to the desired Fourier space frequencies
     @param H        : The impulse response of the scene
@@ -70,29 +73,34 @@ def H_to_fH(H: np.ndarray, t_bins: np.ndarray,  lambda_c: float,
     @param lambda_c : The wavelength of the central frequency for the virtual
                       illumination pulse
     @param cycles   : Number of cycles of the virtual illumination pulse
+    @return         : Tuple containting first the impulse response in fourier
+                      domain for those non zero values, second the wavelengths
+                      associated with each fourier component, third the pulse
+                      value, and fourth the indices of the pulse according the
+                      fft module of numpy
     """
     if cycles == 0:
         # Fourier term function
         fourier_term = np.exp(-2 * np.pi * t_bins / lambda_c * 1j)
         fH = np.array([np.sum(H*fourier_term.reshape((-1,)+(1,)*(H.ndim - 1)),
                               axis=0)])
-        wv = np.array([lambda_c])
+        wl = np.array([lambda_c])
         f_pulse = np.ones(1)
         significant_idx = None
     else:
         fH_all = np.fft.fft(H, axis=0)
         f_pulse, wv_all, significant_idx = pulse(t_bins[1], fH_all.shape[0],
                                                  lambda_c, cycles)
-        wv = wv_all[significant_idx]
+        wl = wv_all[significant_idx]
         fH = fH_all[significant_idx]
 
-    return (fH, wv, f_pulse, significant_idx)
+    return (fH, wl, f_pulse, significant_idx)
 
 
 # Auxiliary function to transform fourier to prime planes,
 # given the pulse parameters
-def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray,
-           significant_idx: np.ndarray):
+def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, significant_idx: np.ndarray, 
+            idx_t : np.ndarray = np.array([0])) -> np.ndarray:
     """
     Transforms the plane reconstruction I in Fourier domain to time domain
     @param fIz              : A plane reconstruction of the scene by frequency
@@ -101,8 +109,9 @@ def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray,
     @param significant_idx  : Indices with enough significance in the virtual
                               illumination pulse to consider, in the numpy fft
                               of the original signal
+    @param idx_t            : Evaluation in fft indices of the time
     @return                 : The plane reconstruction of the scene in time 
-                              domain, evaluated in t=0
+                              domain, evaluated at the time given by idx_t
     """
     # Shape of the volume
     fIz_shape = tuple(np.array(fIz.shape)[1:])
@@ -111,7 +120,7 @@ def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray,
     nw_sig_max = np.max(significant_idx)
     # All no indicated frequencies values are 0
     all_freq = np.zeros((nw_sig_max + 1), dtype=np.complex128)
-    Iz = np.zeros(fIz_shape, dtype=np.complex128)
+    Iz = np.zeros(idx_t.shape + fIz_shape, dtype=np.complex128)
 
     # Index along points of fIz
     for it in np.ndindex(fIz_shape):
@@ -121,39 +130,50 @@ def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray,
         # pulse value
         all_freq[significant_idx] = fIp*f_pulse[significant_idx]
         # Inverse FFT to return the data, evaluated at time 0
-        Iz[it] = np.fft.ifft(all_freq, n=nw_all)[0]
+        Iz[exp_it] = np.fft.ifft(all_freq, n=nw_all)[idx_t]
 
     return Iz
 
 
 def fI_to_I(fI: np.ndarray, f_pulse: np.ndarray, sig_idx: np.ndarray,
-            n_threads: int = 1,
-            desc: str = "Fourier to time reconstruction by planes"):
+            idx_t : np.ndarray = np.array([0]), n_threads: int = 1,
+            desc: str = "Fourier to time reconstruction"
+            ) -> np.ndarray:
     """
     Transforms the volume reconstruction I in Fourier domain to time domain
     executed in parallel
-    @param fI       : A volume reconstruction of the scene by frequency domain
-    @param f_pulse  : Pulse used for the reconstruction in Fourier domain
-    @param sig_idx  : Iff not None, indices that correspond in the f_pulse to
-                      the most significant values of the pulse
-    @param  desc    : Description to show in the progress bar. If none, it 
-                      shows no progress bar 
-    @return         : The volume reconstruction of the scene in time domain, 
-                      evaluated in t=0
+    @param fI           : A volume reconstruction of the scene by frequency 
+                          domain (in the first axis)
+    @param f_pulse      : Pulse used for the reconstruction in Fourier domain
+    @param sig_idx      : Iff not None, indices that correspond in the f_pulse
+                         to the most significant values of the pulse
+    @param idx_t        : Evaluation in fft indices of the time
+    @param n_threads    : Number of threads to use for the function
+    @param desc         : Description to show in the progress bar. If None, it
+                          shows no progress bar 
+    @return             : The volume reconstruction of the scene in time 
+                          domain, evaluated in t. By default t=[0]
     """
+    assert fI.ndim >= 2 and fI.ndim <= 4, "This data type is not supported"
     if sig_idx is None:    # Single frequency
         # No need to convert the data
         return fI[0]
     else:                   # Multiple frequency
-        with Pool(n_threads) as p:
+        assert fI.shape[0] == len(sig_idx), "Different number of frequencies"
+        with ProcessPoolExecutor(max_workers=n_threads) as ex:
             fIz2Iz_partial = partial(fIz2Iz,
                                      f_pulse=f_pulse,
-                                     significant_idx=sig_idx)
-            return np.array(list(tqdm(p.imap(fIz2Iz_partial, fI.swapaxes(0, 1)),
-                                      desc=desc,
-                                      disable=desc is None,
-                                      unit="plane",
-                                      total=fI.shape[1])))
+                                     significant_idx=sig_idx,
+                                     idx_t=idx_t)
+            units = {1: 'points', 2: 'rows', 3: 'planes'}
+            return np.array(
+                    list(
+                        tqdm(
+                            ex.map(fIz2Iz_partial, fI.swapaxes(0, 1)),
+                                    desc=desc,
+                                    disable=desc is None,
+                                    unit=units.get(fI.ndim - 1, ' '),
+                                    total=fI.shape[1]))).swapaxes(0,1)
 
 
 def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray) -> Propagator:
@@ -199,7 +219,7 @@ def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray) -> Propagator:
 def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
                 L:  np.ndarray,  V: np.ndarray, lambda_c: float = 6,
                 cycles: float = 4, res_in_freq: bool = False,
-                n_threads: int = 1, verbose: int = 0):
+                n_threads: int = 1, verbose: int = 0) -> np.ndarray:
     """
     Returns a NLOS solver object based on Phasor Fields
     @param H            : Array with the impulse response of the scene by time,
@@ -241,6 +261,9 @@ def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
         L_r = L_r.reshape(-1, 1, 3)
     H_r = __H_format(H, S, L)
 
+    units = {1:'points', 2: 'rows', 3:'planes'}
+    unit = units.get(V.ndim-1, ' ')
+
     # Time domain impulse response to Fourier
     __v_print(f"Generating virtual illumination pulse:\n" +
               f"\tCentral wavelength: {lambda_c} m\n" +
@@ -262,16 +285,10 @@ def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
     propagate_partial = partial(__propagate, propagator_S, propagator_L, f_H,
                                 S_r, L_r, wv)
     with ThreadPoolExecutor(max_workers=n_threads) as executor:
-        if V.ndim == 4:
-            desc = "Planes reconstructed"
-            unit = "planes"
-        else:
-            desc = "Points reconstructed"
-            unit = "points"
         fI = np.array(
             list(tqdm(
                 executor.map(propagate_partial, V),
-                desc=desc,
+                desc=unit + ' reconstructed',
                 disable=verbose < 3,
                 unit=unit,
                 total=V.shape[0]
@@ -281,18 +298,13 @@ def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
     if not res_in_freq and sig_idx is not None:     # Result in time domain
         __v_print(f"Transforming from Fourier to time domain with {n_threads}"
                   + " threads...", 1, verbose)
-        # fIz2Iz using multiprocessing
-        fIz2Iz_partial = partial(fIz2Iz, f_pulse=f_pulse,
-                                 significant_idx=sig_idx)
-        with ProcessPoolExecutor(max_workers=n_threads) as executor:
-            I = np.array(
-                list(tqdm(
-                    executor.map(fIz2Iz_partial, fI),
-                    desc=desc,
-                    disable=verbose < 3,
-                    unit=unit,
-                    total=V.shape[0]
-                )))
+        if verbose >= 3:
+            desc = unit + ' to time domain'
+        else:
+            desc = None
+        # Transform the data to Fourier domain
+        I = fI_to_I(fI.swapaxes(0,1), f_pulse, sig_idx, n_threads = n_threads, 
+                    desc = desc)[0]
         __v_print("Done", 1, verbose)
         return I
     elif not res_in_freq and sig_idx is None:
