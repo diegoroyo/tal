@@ -81,9 +81,6 @@ def get_propagators(data: NLOSCaptureData, voxels: np.ndarray, wl: np.ndarray
     """
     S = data.sensor_grid_xyz
     L = data.laser_grid_xyz
-    #FIXME: laser grids are not set properly (maybe capture data?)
-    import warnings
-    warnings.warn("laser grids are not set properly (maybe capture data?)")
     return (pf.propagator(S, voxels, wl), pf.propagator(L, voxels, wl)) 
 
 
