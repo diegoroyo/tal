@@ -270,6 +270,7 @@ def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
               f"\t{cycles} cycles\n...", 1, verbose)
 
     f_H, wv, f_pulse, sig_idx = H_to_fH(H_r, t_bins, lambda_c, cycles)
+    del H_r
 
     __v_print(f"Done. {len(wv)} frequencies to use", 1, verbose)
 
@@ -293,6 +294,7 @@ def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
                 unit=unit,
                 total=V.shape[0]
             )))
+    del S_r, L_r, f_H
     __v_print("Done", 1, verbose)
 
     if not res_in_freq and sig_idx is not None:     # Result in time domain
