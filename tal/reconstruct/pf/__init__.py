@@ -1,12 +1,12 @@
 from tal.io.capture_data import NLOSCaptureData
-import tal.reconstruct.pf.pf_solver as pf
-import tal.reconstruct.pf.propagator as propagator
+from tal.reconstruct.pf.propagator import Propagator
 from typing import Any, Tuple
 import numpy as np
 
 
-def to_Fourier(data: NLOSCaptureData, wavefactor: float, pulse_cycles: float
-              ) -> Tuple[np.ndarray, np.ndarray, Any]:
+def to_Fourier(data: NLOSCaptureData,
+               wavefactor: float,
+               pulse_cycles: float) -> Tuple[np.ndarray, np.ndarray, Any]:
     """
     Given the data, and the pulse defined by the wavefactor and cycles, return
     the data in the Fourier domain and the wavelengths associated to each 
@@ -25,6 +25,7 @@ def to_Fourier(data: NLOSCaptureData, wavefactor: float, pulse_cycles: float
                           component, and the third auxiliary information to
                           performance the inverse operation
     """
+    from tal.reconstruct.pf.pf_solver import H_to_fH
     # Data extraction
     H = data.H
     # Time extraction
@@ -37,15 +38,16 @@ def to_Fourier(data: NLOSCaptureData, wavefactor: float, pulse_cycles: float
     # FIXME: Minimun distance assumes ordered points
     reshaped_S = data.sensor_grid_xyz.reshape(-1, 3)
     lambda_c = wavefactor * np.linalg.norm(reshaped_S[0] - reshaped_S[1])
-    # Transform to Fourier domain and extract the wavelengths and auxiliary 
+    # Transform to Fourier domain and extract the wavelengths and auxiliary
     # parameters
-    fH, wl, f_pulse, sig_idx = pf.H_to_fH(H, T, lambda_c, pulse_cycles)
+    fH, wl, f_pulse, sig_idx = H_to_fH(H, T, lambda_c, pulse_cycles)
     return fH, wl, (f_pulse, sig_idx, data.delta_t)
 
 
-def to_time(fourier_comp: np.ndarray, aux_param : Any, n_threads: int = 1,
-            t_eval: np.ndarray = np.array([0.0])
-            ) -> np.ndarray:
+def to_time(fourier_comp: np.ndarray,
+            aux_param: Any,
+            n_threads: int = 1,
+            t_eval: np.ndarray = None) -> np.ndarray:
     """
     Given the Fourier components it transforms the data to time domain, and
     returns the evaluations at the given time
@@ -59,16 +61,19 @@ def to_time(fourier_comp: np.ndarray, aux_param : Any, n_threads: int = 1,
                           frequency, it return the first element of the 
                           array
     """
+    from tal.reconstruct.pf.pf_solver import fI_to_I
     # Extract the auxiliary params
     f_pulse, sig_idx, delta_t = aux_param
     # Approximate the time stamps to the fft index
-    t_eval_it = int(np.round(t_eval/delta_t))
+    t_eval = t_eval or np.array([0.0])
+    t_eval_it = int(np.round(t_eval / delta_t))
     # Return the result in time domain
-    return pf.fI_to_I(fourier_comp, f_pulse, sig_idx, t_eval_it, n_threads)
+    return fI_to_I(fourier_comp, f_pulse, sig_idx, t_eval_it, n_threads)
 
 
-def get_propagators(data: NLOSCaptureData, voxels: np.ndarray, wl: np.ndarray
-                    ) -> Tuple[propagator.Propagator, propagator.Propagator]:
+def get_propagators(data: NLOSCaptureData,
+                    voxels: np.ndarray,
+                    wl: np.ndarray) -> Tuple[Propagator, Propagator]:
     """
     Return the propagators from the sensor points, and from the light sources
     of the data to the voxels
@@ -79,9 +84,10 @@ def get_propagators(data: NLOSCaptureData, voxels: np.ndarray, wl: np.ndarray
                       points to voxels propagator, and the second the light
                       sources to the voxels propagator
     """
+    from tal.reconstruct.pf.pf_solver import propagator
     S = data.sensor_grid_xyz
     L = data.laser_grid_xyz
-    return (pf.propagator(S, voxels, wl), pf.propagator(L, voxels, wl)) 
+    return (propagator(S, voxels, wl), propagator(L, voxels, wl))
 
 
 def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
@@ -111,6 +117,7 @@ def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
     @return             : Reconstruction from the relay wall data to the given
                           volume, in the given form.    
     """
+    from tal.reconstruct.pf.pf_solver import reconstruct
     # Data extraction
     H = data.H
     # Time extraction
@@ -129,5 +136,5 @@ def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
     reshaped_S = S.reshape(-1, 3)
     wavelength = wavefactor*np.linalg.norm(reshaped_S[0] - reshaped_S[1])
 
-    return pf.reconstruct(H, T, S, L, V, wavelength, wave_cycles, res_in_freq,
-                          n_threads, verbose)
+    return reconstruct(H, T, S, L, V, wavelength, wave_cycles, res_in_freq,
+                       n_threads, verbose)
