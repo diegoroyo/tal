@@ -18,7 +18,7 @@ from tal.reconstruct.pf.propagator import RSD_parallel_propagator
 
 
 def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float
-         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+          ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Generate a gaussian pulse in frequency space. It assume the data 
     bins are equally space in time. Returns the pulse in frequency,
@@ -64,8 +64,8 @@ def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float
 
 def H_to_fH(H: np.ndarray, t_bins: np.ndarray,  lambda_c: float,
             cycles: float
-            ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, 
-                        Union[np.ndarray, None]]:
+            ) -> Tuple[np.ndarray, np.ndarray, np.ndarray,
+                       Union[np.ndarray, None]]:
     """
     Transforms the data H in time, to the desired Fourier space frequencies
     @param H        : The impulse response of the scene
@@ -99,8 +99,8 @@ def H_to_fH(H: np.ndarray, t_bins: np.ndarray,  lambda_c: float,
 
 # Auxiliary function to transform fourier to prime planes,
 # given the pulse parameters
-def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, significant_idx: np.ndarray, 
-            idx_t : np.ndarray = np.array([0])) -> np.ndarray:
+def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, significant_idx: np.ndarray,
+           idx_t: np.ndarray = np.array([0])) -> np.ndarray:
     """
     Transforms the plane reconstruction I in Fourier domain to time domain
     @param fIz              : A plane reconstruction of the scene by frequency
@@ -136,7 +136,7 @@ def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, significant_idx: np.ndarray,
 
 
 def fI_to_I(fI: np.ndarray, f_pulse: np.ndarray, sig_idx: np.ndarray,
-            idx_t : np.ndarray = np.array([0]), n_threads: int = 1,
+            idx_t: np.ndarray = np.array([0]), n_threads: int = 1,
             desc: str = "Fourier to time reconstruction"
             ) -> np.ndarray:
     """
@@ -167,13 +167,13 @@ def fI_to_I(fI: np.ndarray, f_pulse: np.ndarray, sig_idx: np.ndarray,
                                      idx_t=idx_t)
             units = {1: 'points', 2: 'rows', 3: 'planes'}
             return np.array(
-                    list(
-                        tqdm(
-                            ex.map(fIz2Iz_partial, fI.swapaxes(0, 1)),
-                                    desc=desc,
-                                    disable=desc is None,
-                                    unit=units.get(fI.ndim - 1, ' '),
-                                    total=fI.shape[1]))).swapaxes(0,1)
+                list(
+                    tqdm(
+                        ex.map(fIz2Iz_partial, fI.swapaxes(0, 1)),
+                        desc=desc,
+                        disable=desc is None,
+                        unit=units.get(fI.ndim - 1, ' '),
+                        total=fI.shape[1]))).swapaxes(0, 1)
 
 
 def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray) -> Propagator:
@@ -261,7 +261,7 @@ def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
         L_r = L_r.reshape(-1, 1, 3)
     H_r = __H_format(H, S, L)
 
-    units = {1:'points', 2: 'rows', 3:'planes'}
+    units = {1: 'points', 2: 'rows', 3: 'planes'}
     unit = units.get(V.ndim-1, ' ')
 
     # Time domain impulse response to Fourier
@@ -305,8 +305,8 @@ def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
         else:
             desc = None
         # Transform the data to Fourier domain
-        I = fI_to_I(fI.swapaxes(0,1), f_pulse, sig_idx, n_threads = n_threads, 
-                    desc = desc)[0]
+        I = fI_to_I(fI.swapaxes(0, 1), f_pulse, sig_idx, n_threads=n_threads,
+                    desc=desc)[0]
         __v_print("Done", 1, verbose)
         return I
     elif not res_in_freq and sig_idx is None:

@@ -91,7 +91,7 @@ def get_propagators(data: NLOSCaptureData,
 
 
 def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
-          volume: NLOSCaptureData.VolumeType = None, res_in_freq=False,
+          volume: NLOSCaptureData.VolumeXYZType = None, res_in_freq=False,
           verbose: int = 1, n_threads: int = 1) -> np.ndarray:
     """
     Reconstruct a NLOS captured data with a gaussian pulse in the volume
