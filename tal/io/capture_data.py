@@ -75,7 +75,7 @@ class NLOSCaptureData:
     LaserGridType = Union[MatrixN3, TensorXY3]
     SensorGridType = Union[MatrixN3, TensorXY3]
     TensorXYZ3 = NDArray[Shape['X, Y, Z, 3'], Float]
-    VolumeType = Union[MatrixN3, TensorXYZ3]
+    VolumeXYZType = Union[MatrixN3, TensorXYZ3]
     Array3 = NDArray[Shape['3'], Float]
 
     """ Capture data start (ignore _start) """
@@ -93,7 +93,7 @@ class NLOSCaptureData:
     laser_grid_xyz: LaserGridType = None
     laser_grid_normals: LaserGridType = None
     laser_grid_format: GridFormat = None
-    # volume_xyz : VolumeType = None  # implemented as a property, see below
+    # volume_xyz : VolumeXYZType = None  # implemented as a property, see below
     volume_format: VolumeFormat = None
     delta_t: Float = None
     t_start: Float = None
