@@ -354,6 +354,9 @@ def render_nlos_scene(config_path, args):
         sensor_height = scene_config['sensor_height']
         laser_width = scene_config['laser_width']
         laser_height = scene_config['laser_height']
+        if scan_type == 'single':
+            laser_width = 1
+            laser_height = 1
 
         relay_wall = next(filter(
             lambda g: g['name'] == scene_config['relay_wall'],
@@ -370,9 +373,10 @@ def render_nlos_scene(config_path, args):
             p = relay_wall_scale
             xg = np.stack((np.linspace(-p, p, num=2*nx + 1)[1::2],)*ny, axis=0)
             yg = np.stack((np.linspace(-p, p, num=2*ny + 1)[1::2],)*nx, axis=1)
+            print(xg.shape, yg.shape, nx, ny)
             assert xg.shape[0] == yg.shape[0] == ny and xg.shape[1] == yg.shape[1] == nx, \
                 'Incorrect shapes'
-            return np.stack([xg, yg, np.zeros((nx, ny))], axis=-1).astype(np.float32)
+            return np.stack([xg, yg, np.zeros((ny, nx))], axis=-1).astype(np.float32)
 
         def expand(vec, x, y):
             assert len(vec) == 3
@@ -392,8 +396,6 @@ def render_nlos_scene(config_path, args):
             np.array([0, 0, 1]), laser_width, laser_height)
 
         if scan_type == 'single':
-            laser_width = 1.0
-            laser_height = 1.0
             laser_lookat_x = \
                 scene_config['laser_lookat_x'] or (sensor_width - 1) / 2
             laser_lookat_y = \
