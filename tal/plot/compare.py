@@ -2,7 +2,8 @@ from tal.io.capture_data import NLOSCaptureData
 import matplotlib.pyplot as plt
 import numpy as np
 import tal
-from matplotlib.widgets import Slider, RangeSlider
+from matplotlib.widgets import Slider, RangeSlider, Button
+from matplotlib.colors import LogNorm
 
 
 def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
@@ -12,14 +13,20 @@ def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
                isinstance(data, NLOSCaptureData) for data in data_list), \
         'Incorrect data types'
 
+    data_real = list(map(
+        lambda x:
+        np.abs(x.H) if isinstance(x, NLOSCaptureData)
+        else np.abs(x),
+        data_list))
+
     def get_H(data):
         if isinstance(data, NLOSCaptureData):
             return data.H
         else:
             return data
 
-    nt, ny, nx = get_H(data_list[0]).shape
-    for data in data_list[1:]:
+    nt, ny, nx = get_H(data_real[0]).shape
+    for data in data_real[1:]:
         nt2, ny2, nx2 = get_H(data).shape
         assert nt == nt2 and ny == ny2 and nx == nx2, \
             'Dimensions do not match'
@@ -37,18 +44,27 @@ def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
     y = y or 0
     t_start = t_start or 0
     t_end = t_end or nt - 1
-    A_MAX_TOTAL = max(np.max(get_H(data)) for data in data_list)
+    A_MAX_TOTAL = max(np.max(get_H(data)) for data in data_real)
     a_min = a_min or 0.0
     a_max = a_max or A_MAX_TOTAL
+    q01s = list(np.quantile(
+        get_H(data)[get_H(data) > 0], 0.01) for data in data_real)
+    scale = 'linear'
 
     def update():
         ax.cla()
         x_range = list(range(t_start, t_end, 1))
-        for i, data in enumerate(data_list):
-            ax.plot(x_range, get_H(data)[t_start:t_end, x, y],
-                    label=str(i) if labels is None else labels[i])
-            ax.set_ylim(bottom=a_min, top=a_max)
+        for i, data in enumerate(data_real):
+            if scale == 'linear':
+                ax.plot(x_range, get_H(data)[t_start:t_end, x, y],
+                        label=str(i) if labels is None else labels[i])
+                ax.set_ylim(bottom=a_min, top=a_max)
+            else:
+                ax.plot(x_range, get_H(data)[t_start:t_end, x, y] + q01s[i],
+                        label=str(i) if labels is None else labels[i])
+                ax.set_ylim(bottom=a_min + q01s[i], top=a_max)
             ax.legend()
+        ax.set_yscale(scale)
         plt.draw()
 
     x_slider = Slider(
@@ -88,5 +104,23 @@ def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
     y_slider.on_changed(update_y)
     t_slider.on_changed(update_t)
     a_slider.on_changed(update_a)
+
+    def scale_linear(_):
+        nonlocal scale
+        scale = 'linear'
+        update()
+
+    def scale_log(_):
+        nonlocal scale
+        scale = 'log'
+        update()
+
+    ax_button_linear = plt.axes([0.03, 0.4, 0.1, 0.05])
+    button_linear = Button(ax_button_linear, 'Linear')
+    button_linear.on_clicked(scale_linear)
+    ax_button_log = plt.axes([0.03, 0.45, 0.1, 0.05])
+    button_log = Button(ax_button_log, 'Log')
+    button_log.on_clicked(scale_log)
+
     update()
     plt.show()

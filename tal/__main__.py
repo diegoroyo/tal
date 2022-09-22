@@ -108,11 +108,15 @@ def main():
         assert command in plot_func_names, \
             'Unknown plot command: {}'.format(command)
         data = list()
+        labels = []
         for capture_file in args.capture_files:
             print(f'Reading {capture_file}...')
+            labels.append(capture_file)
             data.append(read_capture(capture_file))
         if len(data) == 1:
             data = data[0]
+        if 'labels' in plot_func_param_names[command]:
+            setattr(args, 'labels', labels)
         other_args = list(map(
             lambda p: None if p not in args else getattr(args, p),
             plot_func_param_names[command]))
