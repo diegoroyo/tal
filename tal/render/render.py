@@ -373,7 +373,6 @@ def render_nlos_scene(config_path, args):
             p = relay_wall_scale
             xg = np.stack((np.linspace(-p, p, num=2*nx + 1)[1::2],)*ny, axis=0)
             yg = np.stack((np.linspace(-p, p, num=2*ny + 1)[1::2],)*nx, axis=1)
-            print(xg.shape, yg.shape, nx, ny)
             assert xg.shape[0] == yg.shape[0] == ny and xg.shape[1] == yg.shape[1] == nx, \
                 'Incorrect shapes'
             return np.stack([xg, yg, np.zeros((ny, nx))], axis=-1).astype(np.float32)
@@ -460,7 +459,7 @@ def render_nlos_scene(config_path, args):
                     log_dir,
                     f'{experiment_name}_L[{laser_lookat_x}][{laser_lookat_y}].log'), 'w')
             run_mitsuba(nlos_scene_xml, exr_dir, defines,
-                        f'Laser {i} of {len(laser_lookats)}', logfile, args)
+                        f'Laser {i + 1} of {len(laser_lookats)}', logfile, args)
             if args.do_logging and not args.dry_run:
                 logfile.close()
 
