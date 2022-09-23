@@ -152,6 +152,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         <sensor type="nloscapturemeter">
             <sampler type="independent">
                 <integer name="sample_count" value="{v('sample_count')}"/>
+                <integer name="seed" value="{random_seed}"/>
             </sampler>
 
             <emitter type="projector">
