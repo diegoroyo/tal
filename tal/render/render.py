@@ -18,7 +18,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-def get_scene_xml(config, quiet=False):
+def get_scene_xml(config, random_seed=0, quiet=False):
     def s(value):
         if isinstance(value, bool):
             return str(value).lower()
@@ -110,6 +110,7 @@ def get_scene_xml(config, quiet=False):
             </transform>
             <sampler type="independent">
                 <integer name="sample_count" value="512"/>
+                <integer name="seed" value="{random_seed}"/>
             </sampler>
             <film type="hdrfilm">
                 <integer name="width" value="512"/>
@@ -319,7 +320,8 @@ def render_nlos_scene(config_path, args):
     scene_config = {**scene_defaults, **scene_config}
 
     mitsuba_set_variant(scene_config['mitsuba_variant'])
-    steady_xml, nlos_xml = get_scene_xml(scene_config, quiet=args.quiet)
+    steady_xml, nlos_xml = get_scene_xml(
+        scene_config, random_seed=args.seed, quiet=args.quiet)
 
     try:
         root_dir = os.path.join(

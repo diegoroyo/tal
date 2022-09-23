@@ -52,6 +52,9 @@ def main():
     render_parser.add_argument('-t', '--threads',
                                type=int, default=os.cpu_count() - 1, required=False,
                                help='Number of threads')
+    render_parser.add_argument('-s', '--seed',
+                               type=int, default=0, required=False,
+                               help='Random seed for the sampler. Without setting this value to different values, the same results will be produced everytime.')
     render_parser.add_argument('-n', '--nice',
                                type=int, default=0, required=False,
                                help='Change +/- in nice factor. Positive values = lower priority. Negative values = higher priority (needs sudo)')
