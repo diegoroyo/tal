@@ -374,11 +374,11 @@ def render_nlos_scene(config_path, args):
 
         def get_grid_xyz(nx, ny, relay_wall_scale):
             p = relay_wall_scale
-            xg = np.stack((np.linspace(-p, p, num=2*nx + 1)[1::2],)*ny, axis=0)
-            yg = np.stack((np.linspace(-p, p, num=2*ny + 1)[1::2],)*nx, axis=1)
-            assert xg.shape[0] == yg.shape[0] == ny and xg.shape[1] == yg.shape[1] == nx, \
+            xg = np.stack((np.linspace(-p, p, num=2*nx + 1)[1::2],)*ny, axis=1)
+            yg = np.stack((np.linspace(-p, p, num=2*ny + 1)[1::2],)*nx, axis=0)
+            assert xg.shape[0] == yg.shape[0] == nx and xg.shape[1] == yg.shape[1] == ny, \
                 'Incorrect shapes'
-            return np.stack([xg, yg, np.zeros((ny, nx))], axis=-1).astype(np.float32)
+            return np.stack([xg, yg, np.zeros((nx, ny))], axis=-1).astype(np.float32)
 
         def expand(vec, x, y):
             assert len(vec) == 3

@@ -9,9 +9,9 @@ def backproject(data, volume_xyz, progress=False):
         'Backprojection solve only supports H in (T_Sx_Sy) format yet'
     assert data.sensor_grid_format == GridFormat.X_Y_3, \
         'Backprojection solve only supports H in (T_Sx_Sy) format yet'
-    H = np.real(data.H)
+    H = data.H
 
-    f = np.zeros(volume_xyz.shape[0], dtype=np.float32)
+    f = np.zeros(volume_xyz.shape[0], dtype=H.dtype)
     nt, nsx, nsy = H.shape
 
     # d_1: laser origin to laser illuminated point

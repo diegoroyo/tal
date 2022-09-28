@@ -6,3 +6,4 @@ dist
 *.egg-info
 test/data
 test/render
+test/debug_notebook.ipynb
