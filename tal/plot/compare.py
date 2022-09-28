@@ -15,8 +15,8 @@ def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
 
     data_real = list(map(
         lambda x:
-        np.abs(x.H) if isinstance(x, NLOSCaptureData)
-        else np.abs(x),
+        np.real(x.H) if isinstance(x, NLOSCaptureData)
+        else np.real(x),
         data_list))
 
     def get_H(data):
@@ -44,11 +44,12 @@ def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
     y = y or 0
     t_start = t_start or 0
     t_end = t_end or nt - 1
+    A_MIN_TOTAL = min(np.min(get_H(data)) for data in data_real)
     A_MAX_TOTAL = max(np.max(get_H(data)) for data in data_real)
-    a_min = a_min or 0.0
+    a_min = a_min or A_MIN_TOTAL
     a_max = a_max or A_MAX_TOTAL
-    q01s = list(np.quantile(
-        get_H(data)[get_H(data) > 0], 0.01) for data in data_real)
+    q001 = np.min(list(np.quantile(
+        get_H(data)[get_H(data) > 0], 0.001) for data in data_real))
     scale = 'linear'
 
     def update():
@@ -60,9 +61,9 @@ def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
                         label=str(i) if labels is None else labels[i])
                 ax.set_ylim(bottom=a_min, top=a_max)
             else:
-                ax.plot(x_range, get_H(data)[t_start:t_end, x, y] + q01s[i],
+                ax.plot(x_range, get_H(data)[t_start:t_end, x, y] + q001,
                         label=str(i) if labels is None else labels[i])
-                ax.set_ylim(bottom=a_min + q01s[i], top=a_max)
+                ax.set_ylim(bottom=a_min + q001, top=a_max)
             ax.legend()
         ax.set_yscale(scale)
         plt.draw()
@@ -77,7 +78,7 @@ def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
         ax=t_slider_ax, label='t', valmin=0, valmax=nt - 1,
         valinit=(t_start, t_end), valstep=1, orientation='horizontal')
     a_slider = RangeSlider(
-        ax=a_slider_ax, label='Amplitude', valmin=0, valmax=A_MAX_TOTAL,
+        ax=a_slider_ax, label='Amplitude', valmin=A_MIN_TOTAL, valmax=A_MAX_TOTAL,
         valinit=(a_min, a_max), orientation='horizontal')
 
     def update_x(new_x):
