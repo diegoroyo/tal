@@ -65,8 +65,10 @@ def to_time(fourier_comp: np.ndarray,
     # Extract the auxiliary params
     f_pulse, sig_idx, delta_t = aux_param
     # Approximate the time stamps to the fft index
-    t_eval = t_eval or np.array([0.0])
-    t_eval_it = np.round(t_eval / delta_t).astype(int)
+    if t_eval is None:
+        t_eval_it = np.array([0])
+    else:
+        t_eval_it = np.round(t_eval / delta_t).astype(int)
     # Return the result in time domain
     return fI_to_I(fourier_comp, f_pulse, sig_idx, t_eval_it, n_threads)
 
