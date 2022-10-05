@@ -4,6 +4,9 @@ from tal import __version__ as tal_version
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
+with open("requirements.txt", "r", encoding="utf-8") as fh:
+    requirements = fh.read().splitlines()
+
 setuptools.setup(
     name="y-tal",
     version=tal_version,
@@ -30,5 +33,6 @@ setuptools.setup(
             'tal=tal.__main__:main'
         ]
     },
-    python_requires=">=3.6",
+    python_requires=">=3.7",
+    install_requires=requirements
 )
