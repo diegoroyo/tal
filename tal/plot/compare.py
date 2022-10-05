@@ -48,8 +48,14 @@ def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
     A_MAX_TOTAL = max(np.max(get_H(data)) for data in data_real)
     a_min = a_min or A_MIN_TOTAL
     a_max = a_max or A_MAX_TOTAL
-    q001 = np.min(list(np.quantile(
-        get_H(data)[get_H(data) > 0], 0.001) for data in data_real))
+
+    def get_q001(H):
+        if np.any(H > 0):
+            return np.quantile(H[H > 0], 0.001)
+        else:
+            return 0.0
+
+    q001 = np.min(list(get_q001(get_H(data)) for data in data_real))
     scale = 'linear'
 
     def update():
