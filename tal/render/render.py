@@ -246,13 +246,14 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
             shapes_steady.append(shapify(shape_contents_steady, filename))
             shapes_nlos.append(shapify(shape_contents_nlos, filename))
-        elif g('mesh')['type'] == 'rectangle':
+        elif g('mesh')['type'] == 'rectangle' or g('mesh')['type'] == 'sphere':
             def shapify(content):
                 return fdent('''\
                 {shape_name}
-                <shape type="rectangle">
+                <shape type="{shape_type}">
                     {content}
-                </shape>''', shape_name=shape_name, content=content)
+                </shape>''', shape_name=shape_name, content=content,
+                             shape_type=g('mesh')['type'])
 
             shapes_steady.append(shapify(shape_contents_steady))
             shapes_nlos.append(shapify(shape_contents_nlos))
