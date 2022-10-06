@@ -9,7 +9,7 @@ import numpy as np
 if __name__ == "__main__":
     print('Start read')
     # data_path = 'D:/Documentos/nlos_dataset/rotated_mesh_cube_256x256/rotation[0]/data.hdf5'
-    data_path = 'D:/Documentos/nlos_dataset/goal1-nomirror.hdf5'
+    data_path = 'D:/Documentos/nlos_dataset/goal1-bigmirror.hdf5'
     data = tal.io.read_capture(data_path)
     print('Finish read')
 
