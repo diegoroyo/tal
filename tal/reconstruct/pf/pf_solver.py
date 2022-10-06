@@ -116,7 +116,7 @@ def fIz2Iz(fIz: np.ndarray, f_pulse: np.ndarray, significant_idx: np.ndarray,
     # Shape of the volume
     fIz_shape = tuple(np.array(fIz.shape)[1:])
     # All frequencies to use
-    nw_all = f_pulse.shape[0]
+    nw_all = f_pulse.shape[0] + significant_idx.shape[0] - 1
     nw_sig_max = np.max(significant_idx)
     # All no indicated frequencies values are 0
     all_freq = np.zeros((nw_sig_max + 1), dtype=np.complex128)
