@@ -1,6 +1,6 @@
 import argparse
 import os
-from tal import __version__ as version
+from tal import __version__ as tal_version
 from tal.util import fdent
 
 
@@ -38,7 +38,9 @@ def get_plot_functions():
 
 def main():
     parser = argparse.ArgumentParser(
-        description=f'Y-TAL - (Your) Transient Auxiliary Library - v{version}', formatter_class=SmartFormatter)
+        description=f'Y-TAL - (Your) Transient Auxiliary Library - v{tal_version}', formatter_class=SmartFormatter)
+    parser.add_argument('-v', '--version', action='version',
+                        version=f'%(prog)s v{tal_version}')
     subparsers = parser.add_subparsers(
         help='Command', required=True, dest='command')
 
