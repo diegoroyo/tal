@@ -1,6 +1,5 @@
 from tal.io.capture_data import NLOSCaptureData
 from tal.io.enums import HFormat
-from scipy.ndimage import convolve1d
 import numpy as np
 
 
@@ -24,8 +23,11 @@ def filter_H_impl(data, filter_name, data_format, plot_filter, return_filter, **
         nt, nsx, nsy = H.shape
     elif H_format == HFormat.T_Lx_Ly_Sx_Sy:
         nt, nlx, nly, nsx, nsy = H.shape
+        K_shape = (nt, 1, 1, 1, 1)
     else:
         raise AssertionError('Unknown H_format')
+
+    padding = 0
 
     if filter_name == 'pf':
         wl_mean = kwargs.get('wl_mean', None)
@@ -37,23 +39,48 @@ def filter_H_impl(data, filter_name, data_format, plot_filter, return_filter, **
         assert delta_t is not None, \
             'For the "pf" filter, delta_t must be specified through an NLOSCaptureData object or the delta_t argument'
 
-        t_max = delta_t * (nt - 1)
-        t = np.linspace(start=0, stop=t_max, num=nt)
+        padding = int(np.ceil(3 * wl_sigma / delta_t))
 
-        K = np.exp(-(t - t_max / 2) ** 2 / (2 * wl_sigma) ** 2) * \
+        t_max = delta_t * (nt + padding - 1)
+        t = np.linspace(start=0, stop=t_max, num=nt + padding)
+
+        #   vvv Gaussian envelope (x = t - t_max/2, mu = 0, sigma = wl_sigma)
+        K = np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2) * \
             np.exp(2j * np.pi * t / wl_mean)
+        #   ^^^ Pulse inside the Gaussian envelope (complex exponential)
+
+        # center at zero (not in freq. domain but fftshift works)
+        K = np.fft.fftshift(K)
     else:
         raise AssertionError(
             'Unknown filter_name. Check the documentation for available filters')
 
     if plot_filter:
         import matplotlib.pyplot as plt
-        plt.plot(t[:len(K)] - t[len(K) // 2], np.real(K), c='b')
-        plt.plot(t[:len(K)] - t[len(K) // 2],
-                 np.imag(K), c='b', linestyle='--')
+        K_show = np.fft.ifftshift(K)
+        plt.plot(t[:len(K_show)] - t[len(K_show) // 2], np.real(K_show), c='b')
+        plt.plot(t[:len(K_show)] - t[len(K_show) // 2],
+                 np.imag(K_show), c='b', linestyle='--')
         plt.show()
     if return_filter:
         return K
 
-    HoK = convolve1d(H, K, axis=0, mode='constant', cval=0)
-    return HoK
+    # pad with zeros at the end of T dimension
+    if H_format == HFormat.T_Sx_Sy or H_format == HFormat.T_Lx_Ly_Sx_Sy:
+        pad_width = ((0, padding),) + ((0, 0),) * (H.ndim - 1)
+        K_shape = (nt + padding,) + (1,) * (H.ndim - 1)
+    else:
+        raise AssertionError('Unknown H_format')
+    H = np.pad(H, pad_width=pad_width, mode='constant', constant_values=0)
+
+    H_fft = np.fft.fft(H, axis=0)
+    K_fft = np.fft.fft(K)
+    HoK = np.fft.ifft(
+        H_fft * K_fft.reshape(K_shape), axis=0)
+    del H_fft, K_fft
+
+    # undo padding
+    if H_format == HFormat.T_Sx_Sy or H_format == HFormat.T_Lx_Ly_Sx_Sy:
+        return HoK[:nt, ...]
+    else:
+        raise AssertionError('Unknown H_format')
