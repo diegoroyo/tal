@@ -1,5 +1,5 @@
 from tal.io.capture_data import NLOSCaptureData
-from tal.io.enums import HFormat
+from tal.enums import HFormat
 import numpy as np
 
 
@@ -39,13 +39,12 @@ def filter_H_impl(data, filter_name, data_format, plot_filter, return_filter, **
         assert delta_t is not None, \
             'For the "pf" filter, delta_t must be specified through an NLOSCaptureData object or the delta_t argument'
 
-        padding = int(np.ceil(3 * wl_sigma / delta_t))
-
-        t_max = delta_t * (nt + padding - 1)
-        t = np.linspace(start=0, stop=t_max, num=nt + padding)
+        t_max = delta_t * (nt * 2 - 1)
+        t = np.linspace(start=0, stop=t_max, num=nt * 2)
 
         #   vvv Gaussian envelope (x = t - t_max/2, mu = 0, sigma = wl_sigma)
-        K = np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2) * \
+        K = (1 / (wl_sigma * np.sqrt(2 * np.pi))) * \
+            np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2) * \
             np.exp(2j * np.pi * t / wl_mean)
         #   ^^^ Pulse inside the Gaussian envelope (complex exponential)
 
@@ -65,19 +64,20 @@ def filter_H_impl(data, filter_name, data_format, plot_filter, return_filter, **
     if return_filter:
         return K
 
-    # pad with zeros at the end of T dimension
+    # pad with identical, inverted signal
     if H_format == HFormat.T_Sx_Sy or H_format == HFormat.T_Lx_Ly_Sx_Sy:
-        pad_width = ((0, padding),) + ((0, 0),) * (H.ndim - 1)
-        K_shape = (nt + padding,) + (1,) * (H.ndim - 1)
+        H = np.resize(H, (nt * 2, *H.shape[1:]))
+        H[nt:, ...] = H[:nt, ...][::-1, ...]
+        K_shape = (nt * 2,) + (1,) * (H.ndim - 1)
     else:
         raise AssertionError('Unknown H_format')
-    H = np.pad(H, pad_width=pad_width, mode='constant', constant_values=0)
 
     H_fft = np.fft.fft(H, axis=0)
     K_fft = np.fft.fft(K)
-    HoK = np.fft.ifft(
-        H_fft * K_fft.reshape(K_shape), axis=0)
-    del H_fft, K_fft
+    H_fft *= K_fft.reshape(K_shape)
+    del K_fft
+    HoK = np.fft.ifft(H_fft, axis=0)
+    del H_fft
 
     # undo padding
     if H_format == HFormat.T_Sx_Sy or H_format == HFormat.T_Lx_Ly_Sx_Sy:

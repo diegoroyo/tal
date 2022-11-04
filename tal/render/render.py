@@ -4,7 +4,7 @@ import yaml
 import tal
 from tal import __version__ as tal_version
 from tal.io.capture_data import NLOSCaptureData
-from tal.io.enums import FileFormat, GridFormat, HFormat
+from tal.enums import FileFormat, GridFormat, HFormat
 from tal.util import fdent, write_img, tonemap_ldr
 from tal.render.mitsuba2_transient_nlos import (
     get_material_keys, get_materials,

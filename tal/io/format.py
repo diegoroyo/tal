@@ -1,4 +1,4 @@
-from tal.io.enums import FileFormat, GridFormat, HFormat, VolumeFormat
+from tal.enums import FileFormat, GridFormat, HFormat, VolumeFormat
 import numpy as np
 
 

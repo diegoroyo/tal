@@ -9,7 +9,7 @@ import inspect
 from typing import Union, get_type_hints
 from nptyping import NDArray, Shape
 from tal.io.format import convert_dict, detect_dict_format
-from tal.io.enums import FileFormat, HFormat, GridFormat, VolumeFormat
+from tal.enums import FileFormat, HFormat, GridFormat, VolumeFormat
 
 
 def read_hdf5(filename: str) -> dict:

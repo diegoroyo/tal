@@ -1,6 +1,6 @@
 from nptyping import NDArray
 from tal.io.capture_data import NLOSCaptureData
-from tal.io.enums import HFormat
+from tal.enums import HFormat
 from tal.plot import ByAxis
 from tal.util import SPEED_OF_LIGHT
 from typing import Union
