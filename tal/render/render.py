@@ -1,9 +1,8 @@
-from functools import partial
-from multiprocessing import dummy
 import os
 import shutil
 import yaml
 import tal
+from tal import __version__ as tal_version
 from tal.io.capture_data import NLOSCaptureData
 from tal.io.enums import FileFormat, GridFormat, HFormat
 from tal.util import fdent, write_img, tonemap_ldr
@@ -168,6 +167,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             <film type="streakhdrfilm" name="streakfilm">
                 <integer name="width" value="{v('sensor_width')}"/>
                 <integer name="height" value="{v('sensor_height')}"/>
+                <string name="pixel_format" value="rgb"/>
                 <string name="component_format" value="float32"/>
 
                 <integer name="num_bins" value="{v('num_bins')}"/>
@@ -321,7 +321,8 @@ def render_nlos_scene(config_path, args):
             f'Invalid YAML format in TAL config file: {exc}') from exc
     scene_config = {**scene_defaults, **scene_config}
 
-    mitsuba_set_variant(scene_config['mitsuba_variant'])
+    if not args.dry_run:
+        mitsuba_set_variant(scene_config['mitsuba_variant'])
     steady_xml, nlos_xml = get_scene_xml(
         scene_config, random_seed=args.seed, quiet=args.quiet)
 
@@ -497,6 +498,7 @@ def render_nlos_scene(config_path, args):
         capture_data.t_accounts_first_and_last_bounces = \
             scene_config['account_first_and_last_bounces']
         capture_data.scene_info = {
+            'tal_version': tal_version,
             'config': scene_config,
             'args': vars(args),
         }
