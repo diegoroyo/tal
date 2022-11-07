@@ -41,9 +41,9 @@ def backproject(data, volume_xyz, camera_system, progress=False):
                 d_4 = 0.0
             for i_v, x_v in enumerate(volume_xyz):
                 if camera_system.bp_accounts_for_d_2():
-                    d_2 = 0.0
-                else:
                     d_2 = np.linalg.norm(x_l - x_v)
+                else:
+                    d_2 = 0.0
                 d_3 = np.linalg.norm(x_v - x_s)
                 t_i = int((d_1 + d_2 + d_3 + d_4 - data.t_start) / data.delta_t)
                 if camera_system.is_transient():
