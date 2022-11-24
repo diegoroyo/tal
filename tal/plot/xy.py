@@ -55,8 +55,8 @@ def plot_3d_interactive_axis(xyz: np.ndarray, focus_slider: np.ndarray,
                              slider_unit: str, cmap: str = 'hot',
                              xlabel: str = '', ylabel: str = ''):
     """More general plotting"""
-    assert xyz.ndim == 3, 'Unknown datatype to plot'
-    assert axis < 3, f'Data only have 3 dims (given axis={axis})'
+    assert xyz.ndim == 3, 'Unknown H_Format to plot'
+    assert axis < 3, f'Data only has 3 dims (given axis={axis})'
     assert xyz.shape[axis] == len(focus_slider), \
         'The slider and the data have different lengths'
     # Move the axis, so the interactive axis is at 0

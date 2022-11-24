@@ -4,14 +4,15 @@ import numpy as np
 import tal
 from matplotlib.widgets import Slider, RangeSlider, Button
 from matplotlib.colors import LogNorm
+from tal.enums import HFormat
 
 
 def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
     if isinstance(data_list, np.ndarray) or isinstance(data_list, NLOSCaptureData):
         data_list = [data_list]
-    assert all(isinstance(data, np.ndarray) or
-               isinstance(data, NLOSCaptureData) for data in data_list), \
-        'Incorrect data types'
+    assert all((isinstance(data, np.ndarray) and data.ndim == 3) or
+               (isinstance(data, NLOSCaptureData) and data.H_format == HFormat.T_Sx_Sy) for data in data_list), \
+        'Incorrect data types or HFormat, this function only works for HFormat = T_Sx_Sy'
 
     data_real = list(map(
         lambda x:

@@ -125,12 +125,66 @@ def __convert_dict_dirac_to_tal(capture_data: dict) -> dict:
     }
 
 
+def __convert_dict_pfmat_to_tal(capture_data: dict) -> dict:
+    dataset = capture_data['dataset']
+
+    nt_expected = dataset['t']
+    H = dataset['data']
+    nt, ns, nl = H.shape
+    assert H.ndim == 3 and nt == nt_expected and ns == 1, \
+        'Conversion assumes H to be of shape (nt, ns, nl)'
+    # convert to (nt, nl)
+    H = np.squeeze(H)
+
+    def conv_to_n3(arr, expected_len=None):
+        if arr.shape[0] == 3:
+            arr = np.transpose(arr)
+        if expected_len is not None and arr.shape[0] == 1:
+            arr = np.stack((arr,) * expected_len, axis=0)
+        return arr
+
+    # NOTE(diego): this data typically uses one camera position,
+    # and multiple laser positions, taking advantage of the fact that
+    # light propagation in both path directions (laser->sensor and sensor->laser)
+    # is equivalent. We invert laser and sensors to be more consistent with
+    # other dataset types and existing code
+    return {
+        'H': H,
+        'H_format': HFormat.T_Si,
+        'sensor_xyz': dataset['laserOrigin'].reshape(3),
+        'sensor_grid_xyz': conv_to_n3(dataset['laserPos']),
+        'sensor_grid_normals': conv_to_n3(dataset['laserNorm'], expected_len=nl),
+        'sensor_grid_format': GridFormat.N_3,
+        'laser_xyz': dataset['cameraPos'].reshape(3),
+        'laser_grid_xyz': conv_to_n3(dataset['cameraPos']),
+        'laser_grid_normals': conv_to_n3(dataset['cameraNormal'], expected_len=ns),
+        'laser_grid_format': GridFormat.N_3,
+        'volume_format': VolumeFormat.X_Y_Z_3,
+        'delta_t': dataset['deltat'],
+        't_start': dataset['t0'],
+        't_accounts_first_and_last_bounces': True,
+        'scene_info': {
+            'original_format': 'MAT_PHASOR_FIELDS',
+            'volume': {
+                'minimal_pos': capture_data['minimalpos'].reshape(3),
+                'maximal_pos': capture_data['maximalpos'].reshape(3),
+                'sampling_grid_spacing': capture_data['sampling_grid_spacing'],
+            }
+        },
+    }
+
+
 def __convert_dict_tal_to_znlos(capture_data: dict) -> dict:
     raise NotImplementedError('Conversion to HDF5_ZNLOS not implemented')
 
 
 def __convert_dict_tal_to_dirac(capture_data: dict) -> dict:
     raise NotImplementedError('Conversion to HDF5_NLOS_DIRAC not implemented')
+
+
+def __convert_dict_tal_to_pfmat(capture_data: dict) -> dict:
+    raise NotImplementedError(
+        'Conversion to MAT_PHASOR_FIELDS not implemented')
 
 
 def detect_dict_format(raw_data: dict) -> FileFormat:
@@ -140,6 +194,8 @@ def detect_dict_format(raw_data: dict) -> FileFormat:
         return FileFormat.HDF5_NLOS_DIRAC
     elif 'H' in raw_data:
         return FileFormat.HDF5_TAL
+    elif 'dataset' in raw_data:
+        return FileFormat.MAT_PHASOR_FIELDS
     else:
         raise AssertionError('Unable to detect capture data file format')
 
@@ -157,6 +213,8 @@ def convert_dict(capture_data: dict,
         capture_data_tal = __convert_dict_znlos_to_tal(capture_data)
     elif file_format == FileFormat.HDF5_NLOS_DIRAC:
         capture_data_tal = __convert_dict_dirac_to_tal(capture_data)
+    elif file_format == FileFormat.MAT_PHASOR_FIELDS:
+        capture_data_tal = __convert_dict_pfmat_to_tal(capture_data)
     else:
         raise AssertionError(
             'convert_dict not implemented for this file format')
@@ -168,6 +226,8 @@ def convert_dict(capture_data: dict,
         return __convert_dict_tal_to_znlos(capture_data_tal)
     elif format_to == FileFormat.HDF5_NLOS_DIRAC:
         return __convert_dict_tal_to_dirac(capture_data_tal)
+    elif format_to == FileFormat.MAT_PHASOR_FIELDS:
+        return __convert_dict_tal_to_pfmat(capture_data_tal)
     else:
         raise AssertionError(
             'convert_dict not implemented for this file format')

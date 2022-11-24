@@ -1,5 +1,3 @@
-
-
 from enum import Enum
 import os
 import h5py
@@ -12,15 +10,37 @@ from tal.io.format import convert_dict, detect_dict_format
 from tal.enums import FileFormat, HFormat, GridFormat, VolumeFormat
 
 
+class LazyDataset:
+    def __init__(self, dataset):
+        self.read = False
+        self.dataset = dataset
+
+    def __get__(self, instance, owner):
+        if not self.read:
+            self.dataset = self.dataset[()]
+            self.read = True
+        return self.dataset
+
+    def __getattr__(self, name):
+        return getattr(self.dataset, name)
+
+
 def read_hdf5(filename: str) -> dict:
     raw_data = h5py.File(filename, 'r')
 
     def parse(key, value):
         if isinstance(value, h5py.Empty):
             value = None
+        elif isinstance(value, h5py.Group):
+            value = {k: parse(k, v) for k, v in value.items()}
         else:
             if isinstance(value, h5py.Dataset):
                 value = value[()]
+                # FIXME(diego): unused, need to figure out how
+                # to call do stuff like value.size or
+                # isinstance(value, bytes) without reading the
+                # whole dataset
+                # value = LazyDataset(value)
             if isinstance(value, np.ndarray) and value.size == 1:
                 value = np.squeeze(value)[()]
 
@@ -35,10 +55,7 @@ def read_hdf5(filename: str) -> dict:
         elif isinstance(value, bytes):
             value = yaml.safe_load(value)
         return value
-    # FIXME(diego): performing np.array() of each element is pretty slow
-    # if the data is not going to be read (e.g. converting sensor_grid_xyz to
-    # an array is not necessary if you are only going to read H)
-    # however, the overhead is pretty small
+
     raw_data = dict((key, parse(key, raw_data.get(key)))
                     for key in raw_data.keys())
     return raw_data
