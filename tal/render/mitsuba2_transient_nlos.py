@@ -83,12 +83,16 @@ def run_mitsuba(scene_xml_path, exr_path, defines,
     command = ['nice', '-n', str(nice), " ".join(command)]
 
     setpath_location = _get_setpath_location()
-    command = ['/bin/bash', '-c',
-               f'"source \\"{setpath_location}\\" && {" ".join(command)}"']
 
     if args.dry_run:
+        # add extra commas to make it easier to copy-paste
+        command = ['/bin/bash', '-c',
+                   f'"source \\"{setpath_location}\\" && {" ".join(command)}"']
         print(' '.join(command))
         return
+    else:
+        command = ['/bin/bash', '-c',
+                   f'source "{setpath_location}" && {" ".join(command)}']
 
     if args.quiet:
         # simplified version, block until done rendering
