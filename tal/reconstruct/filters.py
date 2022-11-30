@@ -3,7 +3,7 @@ from tal.enums import HFormat
 import numpy as np
 
 
-def filter_H_impl(data, filter_name, data_format, plot_filter, return_filter, **kwargs):
+def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, **kwargs):
     if isinstance(data, NLOSCaptureData):
         assert data.H_format != HFormat.UNKNOWN or data_format is not None, \
             'H format must be specified through the NLOSCaptureData object or the data_format argument'
@@ -19,15 +19,11 @@ def filter_H_impl(data, filter_name, data_format, plot_filter, return_filter, **
         H = data
         delta_t = None
 
-    if H_format == HFormat.T_Sx_Sy:
-        nt, nsx, nsy = H.shape
-    elif H_format == HFormat.T_Lx_Ly_Sx_Sy:
-        nt, nlx, nly, nsx, nsy = H.shape
-        K_shape = (nt, 1, 1, 1, 1)
-    else:
-        raise AssertionError('Unknown H_format')
+    assert border in ['erase', 'zero', 'edge'], \
+        'border must be one of "erase", "zero" or "edge"'
 
-    padding = 0
+    nt = H.shape[H_format.time_dim()]
+    nt_pad = nt
 
     if filter_name == 'pf':
         wl_mean = kwargs.get('wl_mean', None)
@@ -39,40 +35,65 @@ def filter_H_impl(data, filter_name, data_format, plot_filter, return_filter, **
         assert delta_t is not None, \
             'For the "pf" filter, delta_t must be specified through an NLOSCaptureData object or the delta_t argument'
 
-        t_max = delta_t * (nt * 2 - 1)
-        t = np.linspace(start=0, stop=t_max, num=nt * 2)
+        t_6sigma = int(np.round(6 * wl_sigma / delta_t))  # used for padding
+        if t_6sigma % 2 == 1:
+            t_6sigma += 1  # its easier if padding is even
+        if return_filter:
+            nt_pad = t_6sigma
+        else:
+            nt_pad = nt + 2 * (t_6sigma - 1)
+        t_max = delta_t * (nt_pad - 1)
+        t = np.linspace(start=0, stop=t_max, num=nt_pad)
 
         #   vvv Gaussian envelope (x = t - t_max/2, mu = 0, sigma = wl_sigma)
-        K = (1 / (wl_sigma * np.sqrt(2 * np.pi))) * \
-            np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2) * \
+        gaussian_envelope = np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2)
+        K = gaussian_envelope / np.sum(gaussian_envelope) * \
             np.exp(2j * np.pi * t / wl_mean)
         #   ^^^ Pulse inside the Gaussian envelope (complex exponential)
 
         # center at zero (not in freq. domain but fftshift works)
-        K = np.fft.fftshift(K)
+        K = np.fft.ifftshift(K)
     else:
         raise AssertionError(
             'Unknown filter_name. Check the documentation for available filters')
 
     if plot_filter:
         import matplotlib.pyplot as plt
-        K_show = np.fft.ifftshift(K)
-        plt.plot(t[:len(K_show)] - t[len(K_show) // 2], np.real(K_show), c='b')
-        plt.plot(t[:len(K_show)] - t[len(K_show) // 2],
-                 np.imag(K_show), c='b', linestyle='--')
+        K_show = np.fft.fftshift(K)
+        cut = (nt_pad - t_6sigma) // 2
+        if cut > 0:
+            K_show = K_show[cut:-cut]
+        plt.plot(t[:len(K_show)] - t[len(K_show) // 2], np.real(K_show),
+                 c='b')
+        plt.plot(t[:len(K_show)] - t[len(K_show) // 2], np.imag(K_show),
+                 c='b', linestyle='--')
+        plt.plot(t[:len(K_show)] - t[len(K_show) // 2], np.abs(K_show),
+                 c='r')
         plt.show()
     if return_filter:
         return K
 
-    # pad with identical, inverted signal
-    if H_format == HFormat.T_Sx_Sy or H_format == HFormat.T_Lx_Ly_Sx_Sy:
-        H = np.resize(H, (nt * 2, *H.shape[1:]))
-        H[nt:, ...] = H[:nt, ...][::-1, ...]
-        K_shape = (nt * 2,) + (1,) * (H.ndim - 1)
+    padding = (nt_pad - nt)
+    assert padding % 2 == 0
+    padding //= 2
+
+    # pad with edge values
+    if H_format.time_dim() == 0:
+        mode = None
+        if border == 'edge':
+            mode = 'edge'
+        if border == 'zero' or border == 'erase':
+            mode = 'constant'
+        if mode:
+            H_pad = np.pad(H,
+                           ((padding, padding),) +  # first dim (time)
+                           ((0, 0),) * (H.ndim - 1),  # other dims
+                           mode=mode)
+        K_shape = (nt_pad,) + (1,) * (H.ndim - 1)
     else:
         raise AssertionError('Unknown H_format')
 
-    H_fft = np.fft.fft(H, axis=0)
+    H_fft = np.fft.fft(H_pad, axis=0)
     K_fft = np.fft.fft(K)
     H_fft *= K_fft.reshape(K_shape)
     del K_fft
@@ -80,7 +101,11 @@ def filter_H_impl(data, filter_name, data_format, plot_filter, return_filter, **
     del H_fft
 
     # undo padding
-    if H_format == HFormat.T_Sx_Sy or H_format == HFormat.T_Lx_Ly_Sx_Sy:
-        return HoK[:nt, ...]
+    if H_format.time_dim() == 0:
+        HoK = HoK[padding:-padding, ...]
+        if border == 'erase':
+            HoK[:padding//2] = 0
+            HoK[-padding//2:] = 0
+        return HoK
     else:
         raise AssertionError('Unknown H_format')

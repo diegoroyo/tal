@@ -16,6 +16,14 @@ class HFormat(Enum):
     T_Si = 3  # confocal or not
     T_Si_Li = 4
 
+    def time_dim(self) -> int:
+        assert self in [HFormat.T_Sx_Sy,
+                        HFormat.T_Lx_Ly_Sx_Sy,
+                        HFormat.T_Si,
+                        HFormat.T_Si_Li], \
+            f'Unexpected HFormat {self}'
+        return 0
+
 
 class GridFormat(Enum):
     UNKNOWN = 0
@@ -28,6 +36,12 @@ class VolumeFormat(Enum):
     N_3 = 1
     X_Y_Z_3 = 2
     X_Y_3 = 3
+
+    def xyz_dim_is_last(self) -> bool:
+        assert self in [VolumeFormat.N_3,
+                        VolumeFormat.X_Y_Z_3,
+                        VolumeFormat.X_Y_3]
+        return True
 
 
 class CameraSystem(Enum):
