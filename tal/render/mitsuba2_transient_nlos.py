@@ -169,7 +169,7 @@ def read_mitsuba_bitmap(path: str):
     return np.array(Bitmap(path), copy=False)
 
 
-def read_mitsuba_streakbitmap(path: str, exr_format='RGBA'):
+def read_mitsuba_streakbitmap(path: str, exr_format='RGB'):
     """
     Reads all the images x-t that compose the streak image.
 
@@ -183,11 +183,11 @@ def read_mitsuba_streakbitmap(path: str, exr_format='RGBA'):
     from tqdm import tqdm
 
     # FIXME(diego): for now this assumes that the EXR that it reads
-    # are in RGBA format, and returns an image with 3 channels,
+    # are in RGB format, and returns an image with 3 channels,
     # in the case of polarized light it should return something else
-    if exr_format != 'RGBA':
+    if exr_format != 'RGB':
         raise NotImplementedError(
-            'Formats different from RGBA are not implemented')
+            'Formats different from RGB are not implemented')
 
     xtframes = glob.glob(os.path.join(
         glob.escape(path), f'frame_*.exr'))
@@ -204,7 +204,7 @@ def read_mitsuba_streakbitmap(path: str, exr_format='RGBA'):
             pbar.update(1)
 
     # for now streak_img has dimensions (y, x, time, channels)
-    assert streak_img.shape[-1] == 4, \
-        f'Careful, streak_img has shape {streak_img.shape} (i.e. its probably not RGBA as we assume)'
+    assert streak_img.shape[-1] == 3, \
+        f'Careful, streak_img has shape {streak_img.shape} (i.e. its probably not RGB as we assume, last dimension should be 3)'
     # and we want it as (time, x, y)
     return np.sum(np.transpose(streak_img), axis=0)

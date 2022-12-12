@@ -523,8 +523,9 @@ def render_nlos_scene(config_path, args):
 
             for x in range(laser_width):
                 for y in range(laser_height):
-                    capture_data.H[:, x, y, ...] = read_mitsuba_streakbitmap(
-                        partial_laser_dir(x + 0.5, y + 0.5))
+                    capture_data.H[:, x, y, ...] = np.squeeze(
+                        read_mitsuba_streakbitmap(
+                            partial_laser_dir(x + 0.5, y + 0.5)))
         else:
             raise AssertionError(
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
