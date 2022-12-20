@@ -38,18 +38,9 @@ def filter_H(data: _Data,
 
 
 def get_volume_min_max_resolution(minimal_pos, maximal_pos, resolution):
-    assert np.all(maximal_pos > minimal_pos)
-
+    assert np.all(maximal_pos > minimal_pos), \
+        'maximal_pos must be greater than minimal_pos'
     e = resolution / 2  # half-voxel
-    x = np.arange(minimal_pos[0] + e, maximal_pos[0], resolution)
-    y = np.arange(minimal_pos[1] + e, maximal_pos[1], resolution)
-    z = np.arange(minimal_pos[2] + e, maximal_pos[2], resolution)
-    nx, ny, nz = len(x), len(y), len(z)
-    x = np.repeat(x.reshape(nx, 1, 1), ny, axis=1)
-    x = np.repeat(x.reshape(nx, ny, 1), nz, axis=2)
-    y = np.repeat(y.reshape(1, ny, 1), nx, axis=0)
-    y = np.repeat(y.reshape(nx, ny, 1), nz, axis=2)
-    z = np.repeat(z.reshape(1, 1, nz), nx, axis=0)
-    z = np.repeat(z.reshape(nx, 1, nz), ny, axis=1)
-
-    return np.stack((x, y, z), axis=-1)
+    return np.moveaxis(np.mgrid[minimal_pos[0]+e:maximal_pos[0]:resolution,
+                                minimal_pos[1]+e:maximal_pos[1]:resolution,
+                                minimal_pos[2]+e:maximal_pos[2]:resolution], 0, -1)

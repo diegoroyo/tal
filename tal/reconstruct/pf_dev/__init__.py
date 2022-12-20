@@ -7,7 +7,7 @@ import numpy as np
 def solve(data: NLOSCaptureData,
           wl_mean: float,
           wl_sigma: float,
-          edges: str = 'zero',
+          border: str = 'zero',
           volume_xyz: NLOSCaptureData.VolumeXYZType = None,
           volume_format: VolumeFormat = None,
           camera_system: CameraSystem = CameraSystem.STEADY) -> np.array:  # FIXME type
@@ -25,7 +25,7 @@ def solve(data: NLOSCaptureData,
         H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3,
         camera_system, data.t_accounts_first_and_last_bounces,
         data.t_start, data.delta_t,
-        wl_mean, wl_sigma, edges,
+        wl_mean, wl_sigma, border,
         data.laser_xyz, data.sensor_xyz,
         progress=True)
 

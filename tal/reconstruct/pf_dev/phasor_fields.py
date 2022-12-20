@@ -33,7 +33,7 @@ def backproject_pf_multi_frequency(
         H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3,
         camera_system, t_accounts_first_and_last_bounces,
         t_start, delta_t,
-        wl_mean, wl_sigma, edges,
+        wl_mean, wl_sigma, border,
         laser_xyz=None, sensor_xyz=None, progress=False):
     assert H_0.ndim == 2, 'Incorrect H format'
     assert volume_xyz_n3.ndim == 2 and volume_xyz_n3.shape[1] == 3, \
@@ -77,10 +77,10 @@ def backproject_pf_multi_frequency(
     freqs = K_fftfreq[freq_min_idx:freq_max_idx+1]
     nw = len(weights)
 
-    if edges == 'zero':
+    if border == 'zero':
         H_0 = np.pad(H_0, ((padding, padding), (0, 0)), 'constant')
     else:
-        raise AssertionError('Implemented only for edges="zero"')
+        raise AssertionError('Implemented only for border="zero"')
 
     """ Propagation of specific frequencies """
 

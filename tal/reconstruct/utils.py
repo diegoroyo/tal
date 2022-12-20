@@ -34,12 +34,8 @@ def convert_to_N_3(data: NLOSCaptureData,
     assert H.shape[1] == sensor_grid_xyz.shape[0], \
         'H.shape does not match with sensor_grid_xyz.shape. Different number of points than measurements.'
 
-    if volume_format == VolumeFormat.X_Y_Z_3:
-        volume_xyz_n3 = volume_xyz.reshape((-1, 3))
-    elif volume_format == VolumeFormat.N_3:
-        volume_xyz_n3 = volume_xyz
-    else:
-        raise AssertionError('volume_format must be specified')
+    assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
+    volume_xyz_n3 = volume_xyz.reshape((-1, 3))
 
     return (H, data.laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3)
 
