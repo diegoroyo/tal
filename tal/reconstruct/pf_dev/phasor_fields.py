@@ -75,6 +75,8 @@ def backproject_pf_multi_frequency(
 
     weights = K_fftshift[freq_min_idx:freq_max_idx+1]
     freqs = K_fftfreq[freq_min_idx:freq_max_idx+1]
+    # FIXME log in a prettier way
+    print(f'Using wavelengths from {1 / freqs[-1]}m to {1 / freqs[0]}m')
     nw = len(weights)
 
     if border == 'zero':

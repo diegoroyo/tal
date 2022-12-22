@@ -1,9 +1,14 @@
+import dill
 import os
 import shutil
 import yaml
+import multiprocessing as mp
+import numpy as np
 from enum import Enum
 
 from tal.util import local_file_path
+
+""" Utils to read/write to persistent config file """
 
 
 class Config(Enum):
@@ -69,3 +74,152 @@ def read_yaml(filename: str):
 
 def write_yaml_string(data_dict: dict) -> str:
     return yaml.dump(data_dict)
+
+
+""" Utils to read/write to the context configuration (tal.config) """
+
+
+def get_memory_usage(*args):
+    return sum(np.prod(shape) * item_size for shape, item_size in args) / 2 ** 30
+
+
+def _run_dill_encoded(payload):
+    fun, args = dill.loads(payload)
+    return fun(*args)
+
+
+def _apply_async(pool, fun, args, **kwargs):
+    payload = dill.dumps((fun, args))
+    return pool.apply_async(_run_dill_encoded, (payload,), **kwargs)
+
+
+DEFAULT_CPU_PROCESSES = 1
+DEFAULT_MEMORY_LIMIT_GB = None
+
+
+class ResourcesConfig:
+    def __init__(self,
+                 cpu_processes=DEFAULT_CPU_PROCESSES,
+                 max_memory_gb=DEFAULT_MEMORY_LIMIT_GB):
+        self.cpu_processes = cpu_processes
+        self.max_memory_gb = max_memory_gb
+        self.force_single_thread = cpu_processes == 1
+
+    def __enter__(self):
+        global TAL_RESOURCES_CONFIG
+        self.old_resources = TAL_RESOURCES_CONFIG
+        TAL_RESOURCES_CONFIG = self
+
+    def __exit__(self, _, __, ___):
+        global TAL_RESOURCES_CONFIG
+        TAL_RESOURCES_CONFIG = self.old_resources
+        del self.old_resources
+        return False
+
+    def split_work(self, f_work, data_in, data_out, f_mem_usage, slice_dims):
+
+        def single_process():
+            data_out[:] = f_work(data_in)
+
+        if self.force_single_thread:
+            single_process()
+            return
+
+        max_cpu = min(
+            mp.cpu_count(),
+            999 if self.cpu_processes == 'max' else self.cpu_processes
+        )
+
+        in_slice_dim, out_slice_dim = slice_dims
+
+        def check_divisible(x):
+            if in_slice_dim is not None and data_in.shape[in_slice_dim] % x != 0:
+                return False
+            if out_slice_dim is not None and data_out.shape[out_slice_dim] % x != 0:
+                return False
+            return True
+
+        cpus = 1
+        downscale = 1
+        done = False
+        DOWNSCALE_LIMIT = 128
+        if self.max_memory_gb is None:
+            cpus = max_cpu
+            downscale = int(2 ** np.ceil(np.log2(max_cpu)))
+        else:
+            while not done and downscale <= DOWNSCALE_LIMIT:
+                if f_mem_usage((downscale, cpus)) > self.max_memory_gb and check_divisible(downscale * 2):
+                    # computations do not fit in memory
+                    downscale *= 2
+                elif cpus < max_cpu and cpus < downscale and f_mem_usage((downscale, cpus + 1)) < self.max_memory_gb:
+                    # we can use more cpus
+                    cpus += 1
+                elif cpus < max_cpu and f_mem_usage((downscale * 2, cpus + 1)) < self.max_memory_gb and check_divisible(downscale * 2):
+                    # we can use more cpus only if we downscale more
+                    downscale *= 2
+                    cpus += 1
+                else:
+                    # found optimal configuration
+                    done = True
+
+        if downscale > DOWNSCALE_LIMIT:
+            print(f'WARNING: Memory usage is too big even with the lowest configuration '
+                  f'({f_mem_usage((downscale, cpus))} GiB used of {self.max_memory_gb} GiB available '
+                  f'by splitting computations in {downscale} chunks).')
+
+        if downscale == 1:
+            single_process()
+            return
+
+        # NOTE(diego): remove this message? this can be very useful for debugging
+        print(f'tal.resources: Using {cpus} processes out of {max_cpu} '
+              f'and downscale {downscale}')
+
+        if in_slice_dim is not None:
+            in_shape = np.insert(data_in.shape, in_slice_dim + 1, downscale)
+            in_shape[in_slice_dim] //= downscale
+        if out_slice_dim is not None:
+            out_shape = np.insert(data_out.shape, out_slice_dim + 1, downscale)
+            out_shape[out_slice_dim] //= downscale
+
+        with mp.Pool(processes=max_cpu) as pool:
+            try:
+                def do_work(din):
+                    return _apply_async(pool, f_work, (din,),
+                                        error_callback=lambda exc: print(f'/!\ Process found an exception: {exc}'))
+
+                if in_slice_dim is not None:
+                    data_in = np.moveaxis(
+                        data_in.reshape(in_shape), in_slice_dim + 1, 0)
+                if out_slice_dim is not None:
+                    data_out = np.moveaxis(
+                        data_out.reshape(out_shape), out_slice_dim + 1, 0)
+
+                asyncs = []
+                for in_slice in data_in:
+                    asyncs.append(do_work(in_slice))
+
+                pool.close()
+                if out_slice_dim is None:
+                    for i, async_ in enumerate(asyncs):
+                        data_out += async_.get()
+                else:
+                    for i, (async_, out_slice) in enumerate(zip(asyncs, data_out)):
+                        out_slice[:] = async_.get()
+                pool.join()
+            except KeyboardInterrupt:
+                pool.terminate()
+                pool.join()
+                raise KeyboardInterrupt
+
+
+TAL_RESOURCES_CONFIG = ResourcesConfig()
+
+
+def get_resources():
+    return TAL_RESOURCES_CONFIG
+
+
+def set_resources(cpu_processes=DEFAULT_CPU_PROCESSES, memory_limit_gb=DEFAULT_MEMORY_LIMIT_GB):
+    global TAL_RESOURCES_CONFIG
+    TAL_RESOURCES_CONFIG = ResourcesConfig(cpu_processes, memory_limit_gb)

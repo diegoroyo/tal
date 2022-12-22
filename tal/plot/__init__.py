@@ -60,9 +60,10 @@ def zxy_interactive(data: _Data,
     from tal.plot.xy import plot_zxy_interactive
     return plot_zxy_interactive(data, cmap, by)
 
-def volume(data: _Data, title: str = '', slider_title: str = 'Time', 
-           slider_step: float = 0.1, cmap = 'hot',
-           opacity = 'sigmoid', backgroundcolor = None):
+
+def volume(data: _Data, title: str = '', slider_title: str = 'Time',
+           slider_step: float = 0.1, cmap='hot',
+           opacity='sigmoid', backgroundcolor=None):
     from tal.plot.plotter3d import plot3d
-    return plot3d(data, title, slider_title, slider_step, cmap, opacity, 
-                    backgroundcolor)
+    return plot3d(data, title, slider_title, slider_step, cmap, opacity,
+                  backgroundcolor)

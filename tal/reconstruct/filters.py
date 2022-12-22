@@ -1,5 +1,6 @@
 from tal.io.capture_data import NLOSCaptureData
 from tal.enums import HFormat
+from tal.config import get_resources, get_memory_usage
 import numpy as np
 
 
@@ -77,35 +78,46 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
     assert padding % 2 == 0
     padding //= 2
 
-    # pad with edge values
-    if H_format.time_dim() == 0:
-        mode = None
-        if border == 'edge':
-            mode = 'edge'
-        if border == 'zero' or border == 'erase':
-            mode = 'constant'
-        if mode:
-            H_pad = np.pad(H,
-                           ((padding, padding),) +  # first dim (time)
-                           ((0, 0),) * (H.ndim - 1),  # other dims
-                           mode=mode)
-        K_shape = (nt_pad,) + (1,) * (H.ndim - 1)
-    else:
-        raise AssertionError('Unknown H_format')
+    assert H_format.time_dim() == 0, 'Unknown H_format'
 
-    H_fft = np.fft.fft(H_pad, axis=0)
-    K_fft = np.fft.fft(K)
-    H_fft *= K_fft.reshape(K_shape)
-    del K_fft
-    HoK = np.fft.ifft(H_fft, axis=0)
-    del H_fft
+    if border == 'edge':
+        mode = 'edge'
+    if border == 'zero' or border == 'erase':
+        mode = 'constant'
+    K_shape = (nt_pad,) + (1,) * (H.ndim - 1)
+
+    def work(H):
+        H_pad = np.pad(H,
+                       ((padding, padding),) +  # first dim (time)
+                       ((0, 0),) * (H.ndim - 1),  # other dims
+                       mode=mode)
+        H_fft = np.fft.fft(H_pad, axis=0)
+        K_fft = np.fft.fft(K)
+        H_fft *= K_fft.reshape(K_shape)
+        del K_fft
+        HoK = np.fft.ifft(H_fft, axis=0)
+        del H_fft
+        return HoK
+
+    HoK = np.zeros((nt_pad,) + H.shape[1:], dtype=np.complex64)
+    s = H.dtype.itemsize
+    c = HoK.dtype.itemsize
+
+    get_resources().split_work(
+        work,
+        data_in=H,
+        data_out=HoK,
+        f_mem_usage=lambda dc: (
+            lambda downscale, cpus:
+            get_memory_usage(
+                (HoK.shape, s + c), (K.shape, (s + c) * cpus), (HoK.shape, c * 2 * cpus / downscale))
+        )(*dc),
+        slice_dims=(1, 1),
+    )
 
     # undo padding
-    if H_format.time_dim() == 0:
-        HoK = HoK[padding:-padding, ...]
-        if border == 'erase':
-            HoK[:padding//2] = 0
-            HoK[-padding//2:] = 0
-        return HoK
-    else:
-        raise AssertionError('Unknown H_format')
+    HoK = HoK[padding:-padding, ...]
+    if border == 'erase':
+        HoK[:padding//2] = 0
+        HoK[-padding//2:] = 0
+    return HoK
