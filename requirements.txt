@@ -7,3 +7,4 @@ numpy==1.22.0
 PyYAML==6.0
 setuptools==52.0.0
 tqdm==4.64.0
+pyvista==0.37.0
