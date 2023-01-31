@@ -2,7 +2,7 @@ import os
 import re
 from textwrap import dedent, indent
 
-SPEED_OF_LIGHT = 300_000_000
+SPEED_OF_LIGHT = 299_792_458
 
 
 def local_file_path(path):
