@@ -1,6 +1,5 @@
 from tal.io.capture_data import NLOSCaptureData
 from tal.enums import VolumeFormat, CameraSystem
-from tal.reconstruct.utils import convert_to_N_3, convert_reconstruction_from_N_3
 import numpy as np
 
 
@@ -17,6 +16,7 @@ def solve(data: NLOSCaptureData,
       - 1/d^2 decay
     TODO(diego): docs
     """
+    from tal.reconstruct.utils import convert_to_N_3, convert_reconstruction_from_N_3
     H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3 = \
         convert_to_N_3(data, volume_xyz, volume_format)
 
