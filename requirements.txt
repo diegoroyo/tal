@@ -9,4 +9,4 @@ pyvista==0.37.0
 PyYAML==6.0
 setuptools==65.5.1
 tqdm==4.64.0
-pyvista==0.37.0
+pyvista==0.38.0
