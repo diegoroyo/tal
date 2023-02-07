@@ -142,9 +142,9 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         </sensor>''')
 
     confocal_capture = 'false'
-    if v('scan_type') == 'confocal' or v('scan_type') == 'exhaustive':
+    if v('scan_type') == 'confocal':
         confocal_capture = 'true'
-    elif v('scan_type') != 'single':
+    elif v('scan_type') != 'single' or v('scan_type') == 'exhaustive':
         raise AssertionError(
             'scan_type should be one of {single|confocal|exhaustive}')
     sensor_nlos = fdent(f'''\
