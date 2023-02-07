@@ -41,7 +41,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz,
             H_1 = np.zeros(nv, dtype=H_0.dtype)
 
         if progress:
-            subrange_s = tqdm(subrange_s)
+            subrange_s = tqdm(subrange_s, leave=False)
 
         for s_i in subrange_s:
             x_s = sensor_grid_xyz[s_i, :]
@@ -80,7 +80,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz,
         f_mem_usage=lambda dc: (
             lambda _, cpus:
             get_memory_usage(
-                (sensor_grid_xyz.shape, s * cpus), (H_0.shape, h * cpus), (H_1.shape, h * cpus))
+                (sensor_grid_xyz.shape, s * cpus), (H_0.shape, (1 + h) * cpus), (H_1.shape, (1 + h) * cpus))
         )(*dc),
         slice_dims=(0, None),
     )

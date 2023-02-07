@@ -1,16 +1,15 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import tal
-from tal.enums import HFormat
+from tal.config import get_resources, get_memory_usage
 from tqdm import tqdm
 
 
-def backproject_pf_single_frequency(H_0, delta_t, d, wavelength, progress=True):
+def backproject_pf_single_frequency(H_0, d, t, frequency):
     """
     H_0: (nt, ns)
-    delta_t: scalar, in meters
     d: (ns, nv)
-    wavelength: scalar, in meters
+    t: (nt)
+    frequency: scalar, in meters
     """
     assert H_0.ndim == 2, 'Incorrect H format'
 
@@ -18,10 +17,9 @@ def backproject_pf_single_frequency(H_0, delta_t, d, wavelength, progress=True):
     nt, ns_ = H_0.shape
     assert ns == ns_, 'Incorrect shape'
 
-    propagator = np.exp(2j * np.pi * d / wavelength)
+    propagator = np.exp(2j * np.pi * d * frequency)
 
-    t = delta_t * np.linspace(start=0, stop=nt - 1, num=nt)
-    e = np.exp(-2j * np.pi * t / wavelength)
+    e = np.exp(-2j * np.pi * t * frequency)
     H_0_w = np.sum(H_0 * e.reshape((nt, 1)), axis=0).reshape((ns, 1))
     # FIXME(diego): implement convolution in frequency domain
     H_1_w = np.sum(H_0_w * propagator, axis=0)
@@ -75,8 +73,8 @@ def backproject_pf_multi_frequency(
 
     weights = K_fftshift[freq_min_idx:freq_max_idx+1]
     freqs = K_fftfreq[freq_min_idx:freq_max_idx+1]
-    # FIXME log in a prettier way
-    print(f'Using wavelengths from {1 / freqs[-1]}m to {1 / freqs[0]}m')
+    print('tal.reconstruct.pf_dev: '
+          f'Using wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
     nw = len(weights)
 
     if border == 'zero':
@@ -86,48 +84,78 @@ def backproject_pf_multi_frequency(
 
     """ Propagation of specific frequencies """
 
-    # d_3
-    d = np.linalg.norm(
-        sensor_grid_xyz.reshape((ns, 1, 3)) -
-        volume_xyz_n3.reshape((1, nv, 3)),
-        axis=2)
-    d -= t_start
-    if t_accounts_first_and_last_bounces:
-        # d_1
-        d += np.linalg.norm(laser_xyz.reshape(3) -
-                            laser_grid_xyz.reshape(3))
-        # d_4
-        d += np.linalg.norm(sensor_xyz.reshape((1, 1, 3)) -
-                            sensor_grid_xyz.reshape((ns, 1, 3)), axis=2)
-    if camera_system.bp_accounts_for_d_2():
-        # d_2
-        d += np.linalg.norm(
-            laser_grid_xyz.reshape((1, 1, 3)) -
-            volume_xyz_n3.reshape((1, nv, 3)),
-            axis=2)
-
     if camera_system.is_transient():
         H_1 = np.zeros((nt, nv), dtype=np.complex64)
     else:
         H_1 = np.zeros(nv, dtype=np.complex64)
 
-    t = delta_t * np.linspace(start=0, stop=nf - 1, num=nf)
+    d_014 = t_start * -1
+    if t_accounts_first_and_last_bounces:
+        # d_1
+        d_014 += np.linalg.norm(laser_xyz.reshape(3) -
+                                laser_grid_xyz.reshape(3))
+        # d_4
+        d_014 += np.linalg.norm(sensor_xyz.reshape((1, 1, 3)) -
+                                sensor_grid_xyz.reshape((ns, 1, 3)), axis=2)
 
-    iterator = zip(freqs, weights)
-    if progress:
-        iterator = tqdm(iterator, total=nw)
-
-    for frequency, weight in iterator:
-        wavelength = np.inf if np.isclose(frequency, 0) else 1 / frequency
-        H_1_w = weight * \
-            backproject_pf_single_frequency(
-                H_0, delta_t, d, wavelength, progress=progress)
-        e = np.exp(2 * np.pi * 1j * t * frequency) / nf
-        H_1_i = H_1_w.reshape((1, nv)) * e.reshape((nf, 1))
+    def work(subrange_v):
+        nvd = len(subrange_v)
+        volume_xyz_n3_d = volume_xyz_n3[subrange_v]
 
         if camera_system.is_transient():
-            H_1 += H_1_i[padding: -padding, ...]
+            H_1 = np.zeros((nt, nvd), dtype=np.complex64)
         else:
-            H_1 += H_1_i[padding]
+            H_1 = np.zeros(nvd, dtype=np.complex64)
+
+        # d_3
+        d = np.linalg.norm(
+            sensor_grid_xyz.reshape((ns, 1, 3)) -
+            volume_xyz_n3_d.reshape((1, nvd, 3)),
+            axis=2)
+        if camera_system.bp_accounts_for_d_2():
+            # d_2
+            d += np.linalg.norm(
+                laser_grid_xyz.reshape((1, 1, 3)) -
+                volume_xyz_n3_d.reshape((1, nvd, 3)),
+                axis=2)
+        d += d_014  # add t_start, d_1 and d_4 terms
+
+        t = delta_t * np.linspace(start=0, stop=nf - 1, num=nf)
+
+        iterator = zip(freqs, weights)
+        if progress:
+            iterator = tqdm(iterator, total=nw, leave=False)
+
+        for frequency, weight in iterator:
+            H_1_w = weight * \
+                backproject_pf_single_frequency(
+                    H_0, d, t, frequency)
+            e = np.exp(2 * np.pi * 1j * t * frequency) / nf
+            H_1_i = H_1_w.reshape((1, nvd)) * e.reshape((nf, 1))
+
+            if camera_system.is_transient():
+                H_1 += H_1_i[padding: -padding, ...]
+            else:
+                H_1 += H_1_i[padding]
+
+        return H_1
+
+    h0 = H_0.dtype.itemsize
+    h1 = H_1.dtype.itemsize
+    s = sensor_grid_xyz.dtype.itemsize
+
+    range_v = np.arange(nv, dtype=np.int32)
+
+    get_resources().split_work(
+        work,
+        data_in=range_v,
+        data_out=H_1,
+        f_mem_usage=lambda dc: (
+            lambda downscale, cpus:
+            get_memory_usage(
+                ((ns, nv, 3), s * (1 + cpus / downscale)), (H_0.shape, (1 + h0) * cpus), (H_1.shape, 2 * h1))
+        )(*dc),
+        slice_dims=(0, H_1.ndim - 1),
+    )
 
     return H_1

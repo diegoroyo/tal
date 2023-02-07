@@ -144,8 +144,17 @@ class ResourcesConfig:
         done = False
         DOWNSCALE_LIMIT = 128
         if self.max_memory_gb is None:
-            cpus = max_cpu
-            downscale = int(2 ** np.ceil(np.log2(max_cpu)))
+            data_dim = min((x for x in [
+                           None if in_slice_dim is None else data_in.shape[in_slice_dim],
+                           None if out_slice_dim is None else data_out.shape[out_slice_dim],
+                           ] if x is not None), default=None)
+            if data_dim is not None and data_dim < max_cpu:
+                while check_divisible(downscale * 2) and downscale * 2 <= DOWNSCALE_LIMIT:
+                    downscale *= 2
+                cpus = downscale
+            else:
+                cpus = max_cpu
+                downscale = int(2 ** np.ceil(np.log2(max_cpu)))
         else:
             while not done and downscale <= DOWNSCALE_LIMIT:
                 if f_mem_usage((downscale, cpus)) > self.max_memory_gb and check_divisible(downscale * 2):
