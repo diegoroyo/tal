@@ -1,5 +1,14 @@
 from tal.io.capture_data import NLOSCaptureData
 from typing import Union, List
+from enum import Enum
+
+
+class ByAxis(Enum):
+    UNKNOWN = 0
+    T = 1
+    X = 2
+    Y = 3
+    Z = 4
 
 
 _Data = Union[NLOSCaptureData, NLOSCaptureData.HType]
@@ -13,6 +22,24 @@ def xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
     return plot_xy_grid(data, size_x, size_y, t_start, t_end, t_step)
 
 
+def xy_interactive(data: _Data,
+                   cmap: str = 'hot'):
+    from tal.plot.xy import ByAxis, plot_txy_interactive
+    return plot_txy_interactive(data, cmap, ByAxis.T)
+
+
+def tx_interactive(data: _Data,
+                   cmap: str = 'hot'):
+    from tal.plot.xy import ByAxis, plot_txy_interactive
+    return plot_txy_interactive(data, cmap, ByAxis.Y)
+
+
+def ty_interactive(data: _Data,
+                   cmap: str = 'hot'):
+    from tal.plot.xy import ByAxis, plot_txy_interactive
+    return plot_txy_interactive(data, cmap, ByAxis.X)
+
+
 def t_comparison(data_list: _DataList,
                  x: int = None, y: int = None,
                  t_start: int = None, t_end: int = None,
@@ -22,29 +49,20 @@ def t_comparison(data_list: _DataList,
     return plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels)
 
 
-def volume(data: _Data, title: str = '', slider_title: str = 'Time',
-           slider_step: float = 0.1, cmap: str = 'hot',
-           opacity='sigmoid', backgroundcolor=None):
+def txy_interactive(data: _Data,
+                    cmap: str = 'hot', by: ByAxis = ByAxis.T):
+    from tal.plot.xy import plot_txy_interactive
+    return plot_txy_interactive(data, cmap, by)
+
+
+def zxy_interactive(data: _Data,
+                    cmap: str = 'hot', by: ByAxis = ByAxis.Z):
+    from tal.plot.xy import plot_zxy_interactive
+    return plot_zxy_interactive(data, cmap, by)
+
+def volume(data: _Data, title: str = '', slider_title: str = 'Time', 
+           slider_step: float = 0.1, color = 'hot',
+           opacity = 'sigmoid', backgroundcolor = None):
     from tal.plot.plotter3d import plot3d
-    return plot3d(data, title, slider_title, slider_step, cmap, opacity,
-                  backgroundcolor)
-
-
-def xy_interactive(data: _Data, cmap: str = 'hot'):
-    from tal.plot.xy import plot_txy_interactive
-    return plot_txy_interactive(data, cmap, 't')
-
-
-def tx_interactive(data: _Data, cmap: str = 'hot'):
-    from tal.plot.xy import plot_txy_interactive
-    return plot_txy_interactive(data, cmap, 'y')
-
-
-def ty_interactive(data: _Data, cmap: str = 'hot'):
-    from tal.plot.xy import plot_txy_interactive
-    return plot_txy_interactive(data, cmap, 'x')
-
-
-def txy_interactive(data: _Data, cmap: str = 'hot', slice_axis: str = 't'):
-    from tal.plot.xy import plot_txy_interactive
-    return plot_txy_interactive(data, cmap, slice_axis)
+    return plot3d(data, title, slider_title, slider_step, color, opacity, 
+                    backgroundcolor)
