@@ -5,7 +5,6 @@ matplotlib==3.5.1
 nptyping==2.1.1
 numba==0.55.2
 numpy==1.22.0
-pyvista==0.37.0
 PyYAML==6.0
 setuptools==65.5.1
 tqdm==4.64.0
