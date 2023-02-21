@@ -22,6 +22,7 @@ def backproject_pf_single_frequency(H_0, d, t, frequency):
     e = np.exp(-2j * np.pi * t * frequency)
     H_0_w = np.sum(H_0 * e.reshape((nt, 1)), axis=0).reshape((ns, 1))
     # FIXME(diego): implement convolution in frequency domain
+    # will only work with volumes X_Y_3 or X_Y_Z_3 with an extra parallel-plane check
     H_1_w = np.sum(H_0_w * propagator, axis=0)
 
     return H_1_w
@@ -34,6 +35,7 @@ def backproject_pf_multi_frequency(
         wl_mean, wl_sigma, border,
         laser_xyz=None, sensor_xyz=None, progress=False):
     assert H_0.ndim == 2, 'Incorrect H format'
+    # FIXME(diego): also allow X_Y_3 and X_Y_Z_3 and implement parallel-plane check
     assert volume_xyz_n3.ndim == 2 and volume_xyz_n3.shape[1] == 3, \
         'Incorrect volume_xyz format, should be N_3'
     assert laser_grid_xyz.size == 3, 'Only supports one laser position'

@@ -98,6 +98,8 @@ DEFAULT_MEMORY_LIMIT_GB = None
 
 
 class ResourcesConfig:
+    """ See tal.set_resources """
+
     def __init__(self,
                  cpu_processes=DEFAULT_CPU_PROCESSES,
                  max_memory_gb=DEFAULT_MEMORY_LIMIT_GB):
@@ -180,7 +182,6 @@ class ResourcesConfig:
             single_process()
             return
 
-        # NOTE(diego): remove this message? this can be very useful for debugging
         print(f'tal.resources: Using {cpus} processes out of {max_cpu} '
               f'and downscale {downscale}')
 
@@ -230,5 +231,19 @@ def get_resources():
 
 
 def set_resources(cpu_processes=DEFAULT_CPU_PROCESSES, memory_limit_gb=DEFAULT_MEMORY_LIMIT_GB):
+    """
+    Configure Y-TAL to use a specific number of CPU processes and a memory limit.
+
+    Not all functions implemented in Y-TAL support this configuration, mostly the ones
+    in tal.reconstruct (filtering and reconstruction).
+
+    Default configuration is 1 CPU process and no memory limit.
+
+    cpu_processes
+        Can be an integer or 'max' to use all available CPU processes.
+
+    memory_limit_gb
+        Can be an integer or None to use no memory limit.
+    """
     global TAL_RESOURCES_CONFIG
     TAL_RESOURCES_CONFIG = ResourcesConfig(cpu_processes, memory_limit_gb)

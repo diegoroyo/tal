@@ -53,6 +53,7 @@ def read_hdf5(filename: str) -> dict:
                 else:
                     value = key_class(value)
         elif isinstance(value, bytes):
+            # FIXME(diego): not working?
             value = yaml.safe_load(value)
         return value
 
@@ -79,10 +80,70 @@ def write_hdf5(capture_data: dict, filename: str):
 
 
 class NLOSCaptureData:
+    """
+    Contains data for a NLOS capture scene. Typically, a laser illuminates a planar wall with a delta light pulse.
+    An ultrafast camera captures the reflected light at that wall.
 
+    The scene is described by the following parameters:
+
+    H
+        Multi-dimensional (>=2 dimensions) impulse response function.
+        Contains time-resolved illumination for different laser and sensor positions.
+        See H_format for the number of dimensions and what each one contains.
+
+    H_format
+        Enum describing what each dimension contains.
+        e.g. HFormat.T_Lx_Ly_Sx_Sy means that there is temporal (T) data for a 2D grid
+             of laser positions (Lx, Ly) and a 2D grid of sensor positions (Sx, Sy)
+        e.g. HFormat.T_Sx_Sy means that there is temporal (T) data for a 2D grid of sensor positions.
+             In this case, see is_confocal() to differentiate between the case of only one laser point
+             and the case of a 2D grid of laser positions co-located with the sensor positions.
+             You can also check sensor_grid_xyz and laser_grid_xyz, but is_confocal() is easier.
+
+    sensor_xyz, laser_xyz
+        3D coordinates of the sensor and laser positions.
+        Note that it is the origin of the laser itself, and _not_ the point where the laser is focused at.
+
+    sensor_grid_xyz, laser_grid_xyz
+        Positions of laser and sensor points at the wall.
+        See {sensor|laser}_grid_format for the number of dimensions.
+
+    sensor_grid_normals, laser_grid_normals
+        Normal vectors of the laser and sensor points at the wall.
+        See {sensor|laser}_grid_format for the number of dimensions.
+
+    sensor_grid_format, laser_grid_format
+        Enum describing what each dimension of {sensor|laser}_grid_{xyz|normals} contains.
+        See tal.enums.GridFormat for details.
+
+    delta_t
+        Temporal resolution of H i.e. distance between two time bins.
+        Measured in meters (see https://en.wikipedia.org/wiki/Optical_path_length).
+
+    t_start
+        Initial instant of H, used to define a different time origin.
+        Measured in meters (see https://en.wikipedia.org/wiki/Optical_path_length).
+
+    t_accounts_first_and_last_bounces
+        Whether the impulse response accounts for the time-of-flight between
+        the laser origin and the wall (first bounce),
+        and the wall and the sensor origin (last bounce).
+
+    scene_info
+        YAML-encoded string. Contains additional information about the scene. Implemented keys:
+        - 'original_format': str (e.g. 'HDF5_ZNLOS')
+        - 'config': dict (original scene_config.yaml when generated using TAL)
+        - 'args': dict (original args passed when generated using TAL)
+        - 'volume': dict
+            - 'center': Array3 (center of volume)
+            - 'rotation': Array3 (rotation of volume formatted as per Z-NLOS - probably unused for now)
+            - 'size': Array3 (size of volume - length of each XYZ side)
+            - 'xyz': MatrixN3 (if ever volume_format is VolumeFormat.N_3, points will be stored here)
     """
-    Type aliases
-    """
+
+    #
+    # Type aliases
+    #
     Float = np.float32
     TensorTSxSy = NDArray[Shape['T, Sx, Sy'], Float]
     TensorTLxLySxSy = NDArray[Shape['T, Lx, Ly, Sx, Sy'], Float]
@@ -95,11 +156,10 @@ class NLOSCaptureData:
     VolumeXYZType = Union[MatrixN3, TensorXYZ3]
     Array3 = NDArray[Shape['3'], Float]
 
-    """ Capture data start (ignore _start) """
+    #
+    # Actual capture data (ignore _start and _end)
+    #
     _start: None = None  # used in as_dict()
-    """
-    TODO(diego): add docs
-    """
     H: HType = None
     H_format: HFormat = None
     sensor_xyz: Array3 = None
@@ -110,24 +170,10 @@ class NLOSCaptureData:
     laser_grid_xyz: LaserGridType = None
     laser_grid_normals: LaserGridType = None
     laser_grid_format: GridFormat = None
-    # volume_xyz : VolumeXYZType = None  # implemented as a property, see below
-    volume_format: VolumeFormat = None
     delta_t: Float = None
     t_start: Float = None
     t_accounts_first_and_last_bounces: bool = None
     scene_info: dict = None  # additional information
-    """
-    Implemented scene_info keys:
-    - 'original_format': str (e.g. 'HDF5_ZNLOS')
-    - 'config': dict (original scene_config.yaml when generated using TAL)
-    - 'args': dict (original args passed when generated using TAL)
-    - 'volume': dict
-        - 'center': Array3 (center of volume)
-        - 'rotation': Array3 (rotation of volume formatted as per Z-NLOS - probably unused for now)
-        - 'size': Array3 (size of volume - length of each XYZ side)
-        - 'xyz': MatrixN3 (if ever volume_format is VolumeFormat.N_3, points will be stored here)
-    """
-    """ Capture data end (ignore _end) """
     _end: None = None  # used in as_dict()
 
     def __get_dict_keys(self):
@@ -158,27 +204,33 @@ class NLOSCaptureData:
             setattr(self, key, value)
 
     def is_confocal(self):
-        if self.H_format == HFormat.T_Lx_Ly_Sx_Sy:
+        """ Returns True if H contains confocal data (i.e. Sx and Sy represent both laser and sensor coordinates) """
+        if self.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.T_Li_Si]:
             return False
-        elif self.H_format == HFormat.T_Sx_Sy:
+        elif self.H_format in [HFormat.T_Sx_Sy, HFormat.T_Si]:
             return self.laser_grid_xyz.shape == self.sensor_grid_xyz.shape
         else:
             raise AssertionError('Invalid H_format')
 
     def as_dict(self):
+        """ Returns a dict containing all the data in this object """
         dict_keys = self.__get_dict_keys()
         return dict((key, getattr(self, key)) for key in dict_keys)
 
-    @property
-    def volume_xyz(self):
-        try:
-            return self.scene_info['volume']['xyz']
-        except KeyError:
-            pass
+    def downscale(self, downscale: int):
+        """
+        Updates the data in this object to reduce the number of laser and sensor positions by the given factor
 
-        try:
-            # TODO(diego): return (X, Y, Z, 3) tensor using
-            # self.scene_info['volume']['center' | 'rotation' | 'size']
-            raise NotImplementedError('volume_xyz is not implemented yet')
-        except KeyError:
-            return None
+        e.g. Consider data with H_format = (T, Sx, Sy) and H.shape = (4096, 256, 256).
+             Calling with downscale = 2 will reduce H.shape to (4096, 128, 128).
+        """
+        assert downscale > 1, 'downscale must be > 1'
+        assert self.H_format in [HFormat.T_Sx_Sy], \
+            'Only implemented for HFormat.T_Sx_Sy'
+        nt, nsx, nsy = self.H.shape
+        self.H = self.H.reshape(
+            (nt, nsx // downscale, downscale, nsy // downscale, downscale)).sum(axis=(2, 4))
+        self.sensor_grid_xyz = self.sensor_grid_xyz.reshape(
+            (nsx // downscale, downscale, nsy // downscale, downscale, 3)).mean(axis=(1, 3))
+        print(
+            f'Downscaled from {nsx}x{nsy} to {nsx // downscale}x{nsy // downscale}')

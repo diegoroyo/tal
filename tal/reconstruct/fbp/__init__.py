@@ -1,3 +1,12 @@
+"""
+tal.reconstruct.fbp
+===================
+
+Reconstruction using filtered backprojection.
+
+Shortcut to call reconstruct.filter_H (pf filter) and reconstruct.bp.solve (see respective docstrings for details)
+"""
+
 from tal.io.capture_data import NLOSCaptureData
 from tal.enums import VolumeFormat, CameraSystem
 import numpy as np
@@ -8,10 +17,30 @@ def solve(data: NLOSCaptureData,
           wl_sigma: float,
           border: str = 'zero',
           volume_xyz: NLOSCaptureData.VolumeXYZType = None,
-          volume_format: VolumeFormat = None,
-          camera_system: CameraSystem = CameraSystem.STEADY) -> np.array:  # FIXME type
+          volume_format: VolumeFormat = VolumeFormat.UNKNOWN,
+          camera_system: CameraSystem = CameraSystem.DIRECT_LIGHT) -> np.array:  # FIXME(diego) type
     """
-    Shortcut to call reconstruct.filter_H (pf filter) and reconstruct.bp.solve
+    See module description of tal.reconstruct.fbp
+
+    data
+        See tal.io.read_capture
+
+    wl_mean, wl_sigma, border
+        Filter parameters. See tal.reconstruct.filter_H
+
+    volume_xyz
+        Multi-dimensional array with XYZ coordinates of the volume voxels.
+        See tal.enums.VolumeFormat for possible input formats.
+        See e.g. tal.reconstruct.get_volume_min_max_resolution for utilities to generate this array.
+
+    volume_format
+        See tal.enums.VolumeFormat
+
+    camera_system
+        See tal.enums.CameraSystem
+
+    progress
+        If True, shows a progress bar with estimated time remaining.
     """
     from tal.reconstruct import filter_H
     old_H = data.H

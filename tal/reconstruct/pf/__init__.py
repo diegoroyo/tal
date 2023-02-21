@@ -1,3 +1,15 @@
+"""
+tal.reconstruct.pf
+==================
+
+Reconstruction using the phasor fields framework.
+See "Non-Line-of-Sight Imaging using Phasor Field Virtual Wave Optics."
+
+Does _NOT_ attempt to compensate effects caused by attenuation:
+    - cos decay i.e. {sensor|laser}_grid_normals are ignored
+    - 1/d^2 decay
+"""
+
 from tal.io.capture_data import NLOSCaptureData
 from tal.reconstruct.pf.propagator import Propagator
 from typing import Any, Tuple
@@ -35,7 +47,7 @@ def to_Fourier(data: NLOSCaptureData,
         H = np.pad(H, ((t_pad, 0), (0, 0), (0, 0)), 'minimum')
     T = data.delta_t*np.arange(H.shape[0])
     # Calculate the wavelength of the central frequency of the pulse
-    # FIXME: Minimun distance assumes ordered points
+    # FIXME(pablo): Minimun distance assumes ordered points
     reshaped_S = data.sensor_grid_xyz.reshape(-1, 3)
     lambda_c = wavefactor * np.linalg.norm(reshaped_S[0] - reshaped_S[1])
     # Transform to Fourier domain and extract the wavelengths and auxiliary
@@ -129,12 +141,12 @@ def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
         H = np.pad(H, ((t_pad, 0), (0, 0), (0, 0)), 'minimum')
     T = data.delta_t*np.arange(H.shape[0])
 
-    # TODO correct volume
+    # TODO(pablo) correct volume
     V = volume
     S = data.sensor_grid_xyz
     L = np.zeros((1, 3), float)
 
-    # FIXME: Minimun distance assumes ordered points
+    # FIXME(pablo): Minimun distance assumes ordered points
     reshaped_S = S.reshape(-1, 3)
     wavelength = wavefactor*np.linalg.norm(reshaped_S[0] - reshaped_S[1])
 

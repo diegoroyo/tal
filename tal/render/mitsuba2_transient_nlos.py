@@ -182,9 +182,9 @@ def read_mitsuba_streakbitmap(path: str, exr_format='RGB'):
     import numpy as np
     from tqdm import tqdm
 
-    # FIXME(diego): for now this assumes that the EXR that it reads
+    # NOTE(diego): for now this assumes that the EXR that it reads
     # are in RGB format, and returns an image with 3 channels,
-    # in the case of polarized light it should return something else
+    # in the case of polarized light it can return something else
     if exr_format != 'RGB':
         raise NotImplementedError(
             'Formats different from RGB are not implemented')

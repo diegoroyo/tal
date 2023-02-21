@@ -1,7 +1,20 @@
-from tal.reconstruct.bp import *
-from tal.reconstruct.fbp import *
-from tal.reconstruct.pf import *
-from tal.reconstruct.pf_dev import *
+"""
+tal.reconstruct
+===============
+
+Functions to reconstruct of hidden scenes given captured data.
+
+Also contains utilities to help in the process:
+- Filtering functions
+- Volume generation functions
+
+There are multiple implementations of different reconstruction algorithms,
+e.g. backprojection (tal.reconstruct.bp), phasor fields (tal.reconstruct.pf and tal.reconstruct.pf_dev),
+each of those contains a solve function that takes the captured data and returns the reconstructed volume.
+"""
+
+from tal.reconstruct import bp, fbp, pf, pf_dev
+
 from tal.io.capture_data import NLOSCaptureData
 from tal.enums import HFormat
 from typing import Union
@@ -26,19 +39,23 @@ def filter_H(data: _Data,
         * If plot_filter=True, shows a plot of the resulting filter
         * If return_filter=True, returns the filter (K)
           else, returns the filtered signal (H * K)
+
     Available filters and respective arguments:
-    - pf: Filter certain frequencies, weighted using a Gaussian on the frequency domain
+    - filter_name='pf': Filter certain frequencies, weighted using a Gaussian on the frequency domain
         * wl_mean: Mean of the Gaussian in the frequency domain
         * wl_sigma: STD of the Gaussian in the frequency domain
         * delta_t: Time interval, must be non-null if not specified through data
-        FIXME(diego): is this sentence true? vvv probably not
-        e.g. mean = 3, sigma = 0.5 will filter frequencies of ~2-4m
+        e.g. mean = 3, sigma = 0.5 will filter frequencies of around 3m,
+        sigma = 0.5 does not translate to 3 +/- 0.5m, but it is somewhat like that
+        for more info. see tal.reconstruct.pf_dev, which outputs the specific range
+        of frequencies that are filtered given wl_mean and wl_sigma
     """
     from tal.reconstruct.filters import filter_H_impl
     return filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, **kwargs)
 
 
 def get_volume_min_max_resolution(minimal_pos, maximal_pos, resolution):
+    import numpy as np
     assert np.all(maximal_pos > minimal_pos), \
         'maximal_pos must be greater than minimal_pos'
     e = resolution / 2  # half-voxel

@@ -8,6 +8,7 @@ from tal.enums import HFormat
 
 
 def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
+    # FIXME(diego): Make this work with T_Si, T_Li_Si, T_Lx_Ly_Sx_Sy formats, and H containing complex numbers
     if isinstance(data_list, np.ndarray) or isinstance(data_list, NLOSCaptureData):
         data_list = [data_list]
     assert all((isinstance(data, np.ndarray) and data.ndim == 3) or

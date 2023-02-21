@@ -43,8 +43,7 @@ laser_height: 32
 geometry:
 - name: Z
   description: >
-    This is the hidden geometry
-    blah blah blah
+    Hidden geometry of the scene
   mesh:
     type: obj
     filename: /home/droyo/mitsuba-dataset/scenes/meshes/Z.obj

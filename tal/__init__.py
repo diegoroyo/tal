@@ -1,6 +1,7 @@
-from tal.io import *
-from tal.plot import *
-from tal.reconstruct import *
+from __future__ import annotations
+
+from . import io, plot, reconstruct
+from . import enums
 from tal.config import set_resources, ResourcesConfig as resources
 
-__version__ = '0.8.5'
+__version__ = '0.9.0-rc2'

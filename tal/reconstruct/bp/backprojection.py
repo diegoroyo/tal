@@ -9,6 +9,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz,
                 t_start, delta_t,
                 laser_xyz=None, sensor_xyz=None, progress=False):
     # TODO(diego): extend for multiple laser points
+    # TODO(diego): drjit?
     assert H_0.ndim == 2 and laser_grid_xyz.size == 3, \
         'backproject only supports one laser point'
 

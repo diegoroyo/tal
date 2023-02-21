@@ -6,6 +6,8 @@ import numpy as np
 def convert_to_N_3(data: NLOSCaptureData,
                    volume_xyz: NLOSCaptureData.VolumeXYZType,
                    volume_format: VolumeFormat):
+    # TODO(diego): try to infer volume_format from volume_xyz if volume_format is unknown
+
     if data.H_format == HFormat.T_Si:
         H = data.H
     elif data.H_format == HFormat.T_Sx_Sy:
@@ -41,7 +43,8 @@ def convert_to_N_3(data: NLOSCaptureData,
 
 
 def convert_reconstruction_from_N_3(data: NLOSCaptureData,
-                                    reconstructed_volume_n3: np.ndarray,  # FIXME type
+                                    # FIXME(diego) type
+                                    reconstructed_volume_n3: np.ndarray,
                                     volume_xyz: NLOSCaptureData.VolumeXYZType,
                                     volume_format: VolumeFormat,
                                     camera_system: CameraSystem):
