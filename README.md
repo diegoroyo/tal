@@ -6,6 +6,14 @@ Utilities library for our work in the development of non-line-of-sight imaging t
 
 Authors: [Diego Royo](https://github.com/diegoroyo), [Pablo Luesia](https://github.com/p-luesia)
 
+## Requirements
+
+Working with HDF5 files requires the following packages:
+
+```
+sudo apt install libhdf5-dev
+```
+
 ## Installation
 
 Latest published version (recommended):
