@@ -170,6 +170,8 @@ class NLOSCaptureData:
     laser_grid_xyz: LaserGridType = None
     laser_grid_normals: LaserGridType = None
     laser_grid_format: GridFormat = None
+    # volume_xyz : VolumeXYZType = None  # deprecated
+    volume_format: VolumeFormat = None  # deprecated
     delta_t: Float = None
     t_start: Float = None
     t_accounts_first_and_last_bounces: bool = None
