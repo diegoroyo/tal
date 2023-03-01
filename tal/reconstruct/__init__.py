@@ -62,3 +62,25 @@ def get_volume_min_max_resolution(minimal_pos, maximal_pos, resolution):
     return np.moveaxis(np.mgrid[minimal_pos[0]+e:maximal_pos[0]:resolution,
                                 minimal_pos[1]+e:maximal_pos[1]:resolution,
                                 minimal_pos[2]+e:maximal_pos[2]:resolution], 0, -1)
+
+
+def get_volume_project_rw(data: NLOSCaptureData, depths: Union[float, list]):
+    """
+    Generate a volume with the same XY coordinates as the sensor grid,
+    and the Z coordinates specified by depths.
+    """
+    import numpy as np
+    from tal.enums import GridFormat
+
+    if isinstance(depths, (int, float)):
+        depths = [depths]
+    if data.sensor_grid_format == GridFormat.X_Y_3:
+        sx, sy, _ = data.sensor_grid_xyz.shape
+        volume_xyz = np.zeros((sx, sy, len(depths), 3))
+        volume_xyz[..., 0] = data.sensor_grid_xyz[..., 0].reshape((sx, sy, 1))
+        volume_xyz[..., 1] = data.sensor_grid_xyz[..., 1].reshape((sx, sy, 1))
+        volume_xyz[..., 2] = depths
+    else:
+        raise AssertionError('This function only works with GridFormat.X_Y_3')
+
+    return volume_xyz
