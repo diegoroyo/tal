@@ -8,12 +8,21 @@ They can be called from Python, but also can be called using the command line in
 by running tal plot <function_name> <args> <kwargs> (see tal plot -h).
 """
 
+import numpy as np  # FIXME type hints for function below
 from tal.io.capture_data import NLOSCaptureData
 from typing import Union, List
 
 
 _Data = Union[NLOSCaptureData, NLOSCaptureData.HType]
 _DataList = Union[List[_Data], _Data]
+
+
+def amplitude_phase(data: np.ndarray, title: str = ''):
+    """
+    For a 2D array with complex data, plot amplitude/phase
+    """
+    from tal.plot.xy import plot_amplitude_phase
+    return plot_amplitude_phase(data, title)
 
 
 def xy_grid(data: _Data,

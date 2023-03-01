@@ -10,6 +10,19 @@ import numpy as np
 from tqdm import tqdm
 
 
+def plot_amplitude_phase(image: np.ndarray, title: str = ''):  # FIXME: type
+    fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+    mappable = ax[0].imshow(np.abs(image), cmap='hot')
+    fig.colorbar(mappable, ax=ax[0])
+    mappable = ax[1].imshow(np.angle(image), cmap='seismic',
+                            vmin=-np.pi, vmax=np.pi)
+    fig.colorbar(mappable, ax=ax[1])
+    ax[0].set_title('Amplitude')
+    ax[1].set_title('Phase')
+    fig.suptitle(title)
+    plt.show()
+
+
 def plot_xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
                  size_x: int, size_y: int,
                  t_start: int, t_end: int, t_step: int):
