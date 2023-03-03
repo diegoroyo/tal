@@ -32,6 +32,7 @@ def write_capture(capture_data: NLOSCaptureData, filename: str, file_format: Fil
 
     By default it is written in the TAL HDF5 format, see tal.enums.FileFormat for supported file formats.
     """
-    from tal.io import write_hdf5, convert_dict
+    from tal.io.capture_data import write_hdf5
+    from tal.io.format import convert_dict
     write_hdf5(convert_dict(capture_data.as_dict(),
                format_to=file_format), filename)
