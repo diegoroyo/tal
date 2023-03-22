@@ -39,7 +39,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             <boolean name="discard_direct_paths" value="{v('integrator_discard_direct_paths')}"/>
             <boolean name="nlos_laser_sampling" value="{v('integrator_nlos_laser_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling" value="{v('integrator_nlos_hidden_geometry_sampling')}"/>
-            <boolean name="nlos_hidden_geometry_sampling_do_mis" value="{v('integrator_nlos_hidden_geometry_sampling_do_mis')}"/>
+            <boolean name="nlos_hidden_geometry_sampling_do_rroulette" value="{v('integrator_nlos_hidden_geometry_sampling_do_rroulette')}"/>
             <boolean name="nlos_hidden_geometry_sampling_includes_relay_wall" value="{v('integrator_nlos_hidden_geometry_sampling_includes_relay_wall')}"/>
         </integrator>''')
 
