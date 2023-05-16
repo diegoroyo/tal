@@ -212,7 +212,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         for key in material_keys:
             assert key in g('material'), \
                 f'Material {material_id} for geometry {name} must have a value for {key}'
-            shape_material.replace(f'${key}', g('material')[key])
+            shape_material = shape_material.replace(f'${key}', g('material')[key])
 
         shape_transform = fdent(f'''\
             <transform name="to_world">
