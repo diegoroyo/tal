@@ -8,9 +8,9 @@ def _get_setpath_location():
     setpath_ok = False
     while not setpath_ok:
         setpath_location = os.path.join(
-            ask_for_config(Config.MITSUBA2_TRANSIENT_NLOS_FOLDER,
+            ask_for_config(Config.MITSUBA3_TRANSIENT_NLOS_FOLDER,
                            force_ask=force_ask),
-            'setpath.sh')
+            'build', 'setpath.sh')
         if os.path.isfile(setpath_location):
             setpath_ok = True
         else:
@@ -38,23 +38,23 @@ except ModuleNotFoundError:
 
 
 def get_name():
-    return 'mitsuba2-transient-nlos'
+    return 'mitsuba3-transient-nlos'
 
 
 def get_version():
-    return '2.2.1'
+    return '3.3.0'
 
 
 def set_variant(s):
     import mitsuba
-    if not s.startswith('scalar_'):
+    if not (s.startswith('llvm_') or s.startswith('cuda_')):
         raise AssertionError(
-            f'Variant {s} is not supported. It must start with "scalar_"')
+            f'Variant {s} is not supported. It must start with "llvm_" or "cuda_"')
     mitsuba.set_variant(s)
 
 
 def get_hdr_extension():
-    return 'exr'
+    return 'npy'
 
 
 def convert_hdr_to_ldr(hdr_path, ldr_path):
@@ -66,7 +66,9 @@ def convert_hdr_to_ldr(hdr_path, ldr_path):
 
 def partial_laser_path(partial_results_dir, experiment_name, lx, ly):
     import os
-    return os.path.join(partial_results_dir, f'{experiment_name}_L[{lx}][{ly}]'.replace('.', '_')), True
+    filename = os.path.join(
+        partial_results_dir, f'{experiment_name}_L[{lx}][{ly}]'.replace('.', '_'))
+    return f'{filename}.{get_hdr_extension()}', False
 
 
 def read_transient_image(path):
@@ -115,7 +117,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         <integrator type="path"/>''')
 
     integrator_nlos = fdent(f'''\
-        <integrator type="transientpath">
+        <integrator type="transient_nlos_path">
             <integer name="block_size" value="1"/>
             <integer name="max_depth" value="{v('integrator_max_depth')}"/>
             <integer name="filter_depth" value="{v('integrator_filter_depth')}"/>
@@ -124,9 +126,19 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             <boolean name="nlos_hidden_geometry_sampling" value="{v('integrator_nlos_hidden_geometry_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling_do_rroulette" value="{v('integrator_nlos_hidden_geometry_sampling_do_rroulette')}"/>
             <boolean name="nlos_hidden_geometry_sampling_includes_relay_wall" value="{v('integrator_nlos_hidden_geometry_sampling_includes_relay_wall')}"/>
+            <string name="temporal_filter" value="box"/>
         </integrator>''')
 
     if 'polarized' in v('mitsuba_variant'):
+        # TODO(diego): mitsuba3 does not have a transient stokes integrator yet
+        # https://github.com/mitsuba-renderer/mitsuba3/blob/master/src/integrators/stokes.cpp
+        # https://github.com/diegoroyo/mitsuba2-transient-nlos/blob/a270850d1f9b9d863e759f880048df665cd7d2a1/src/integrators/transientstokes.cpp
+        # https://github.com/diegoroyo/mitsuba3-transient-nlos/blob/main/mitransient/integrators/transientnlospath.py
+        # the end goal would be to generate a transient stokes plugin in python (like transient_nlos_path.py)
+        # that implements the functionality of stokes.cpp similar to mitsuba2-transient-nlos's transientstokes.cpp
+        raise NotImplementedError(
+            'Polarized variants are not implemented in mitsuba3 yet')
+
         def add_stokes(s, itype):
             return fdent('''\
                 <integrator type="{itype}">
@@ -198,7 +210,6 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                 <integer name="width" value="512"/>
                 <integer name="height" value="512"/>
                 <rfilter name="rfilter" type="gaussian"/>
-                <boolean name="high_quality_edges" value="false"/>
             </film>
         </sensor>
 
@@ -220,7 +231,6 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                 <integer name="width" value="512"/>
                 <integer name="height" value="512"/>
                 <rfilter name="rfilter" type="gaussian"/>
-                <boolean name="high_quality_edges" value="false"/>
             </film>
         </sensor>''')
 
@@ -231,7 +241,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         raise AssertionError(
             'scan_type should be one of {single|confocal|exhaustive}')
     sensor_nlos = fdent(f'''\
-        <sensor type="nloscapturemeter">
+        <sensor type="nlos_capture_meter">
             <sampler type="independent">
                 <integer name="sample_count" value="{v('sample_count')}"/>
                 <integer name="seed" value="{random_seed}"/>
@@ -247,21 +257,14 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             <point name="sensor_origin" x="{v('sensor_x')}" y="{v('sensor_y')}" z="{v('sensor_z')}"/>
             <point name="laser_origin" x="{v('laser_x')}" y="{v('laser_y')}" z="{v('laser_z')}"/>
             <point name="laser_lookat_pixel" x="$laser_lookat_x" y="$laser_lookat_y" z="0"/>
-            <film type="streakhdrfilm" name="streakfilm">
+            <film type="transient_hdr_film">
                 <integer name="width" value="{v('sensor_width')}"/>
                 <integer name="height" value="{v('sensor_height')}"/>
-                <string name="pixel_format" value="rgb"/>
-                <string name="component_format" value="float32"/>
 
-                <integer name="num_bins" value="{v('num_bins')}"/>
-                <boolean name="auto_detect_bins" value="{v('auto_detect_bins')}"/>
+                <integer name="temporal_bins" value="{v('num_bins')}"/>
+                <!-- <boolean name="auto_detect_bins" value="{v('auto_detect_bins')}"/> -->
                 <float name="bin_width_opl" value="{v('bin_width_opl')}"/>
                 <float name="start_opl" value="{v('start_opl')}"/>
-
-                <rfilter name="rfilter" type="box"/>
-                <!-- NOTE: tfilters are not implemented yet -->
-                <!-- <rfilter name="tfilter" type="box"/>  -->
-                <boolean name="high_quality_edges" value="false"/>
             </film>
         </sensor>''')
 
@@ -383,147 +386,39 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
 def run_mitsuba(scene_xml_path, hdr_path, defines,
                 experiment_name, logfile, args, sensor_index=0):
-    import re
-    import time
-    import subprocess
-    import os
-    from tqdm import tqdm
-    # execute mitsuba command (sourcing setpath.sh before)
-    num_threads = args.threads
-    command = ['mitsuba',
-               '-o', hdr_path,
-               '-s', str(sensor_index),
-               '-t', str(num_threads)]
-    for key, value in defines.items():
-        command += ['-D', f'{key}={value}']
-    command += [scene_xml_path]
+    import mitsuba as mi
+    import mitransient as mitr
+    import numpy as np
+    from mitransient.integrators.common import TransientADIntegrator
+    scene = mi.load_file(scene_xml_path, **defines)
+    integrator = scene.integrator()
 
-    nice = args.nice
-    command = ['nice', '-n', str(nice), " ".join(command)]
+    # FIXME add defines, experiment_name, logfile, args (threads, nice, dry_run, quiet)
 
-    setpath_location = _get_setpath_location()
+    # prepare
+    if isinstance(integrator, TransientADIntegrator):
+        integrator.prepare_transient(scene, sensor_index)
 
-    if args.dry_run:
-        # add extra commas to make it easier to copy-paste
-        command = ['/bin/bash', '-c',
-                   f'"source \\"{setpath_location}\\" && {" ".join(command)}"']
-        print(' '.join(command))
-        return
+    # render
+    if isinstance(integrator, TransientADIntegrator):
+        steady_image, transient_image = integrator.render(scene)
+        result = np.moveaxis(np.array(transient_image), 2, 0)
+        # result has shape (nt, nx, ny, nchannels)
+        if result.ndim == 4:
+            # sum all channels
+            result = np.sum(result, axis=-1)
     else:
-        command = ['/bin/bash', '-c',
-                   f'source "{setpath_location}" && {" ".join(command)}']
+        image = integrator.render(scene, sensor_index)
+        result = np.array(image)
 
-    if args.quiet:
-        # simplified version, block until done rendering
-        mitsuba_process = subprocess.Popen(
-            command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    else:
-        # need to pass the command through stdbuf to be able to read the progress bar
-        command = ['stdbuf', '-o0'] + command
-        mitsuba_process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-        # read the progress bar and pass the info to the user through a tqdm bar
-        # this is totally not overengineering-trust me-this saves so much time
-        progress_re = re.compile(
-            r'Rendering \[(=* *)\] \([\d\.]+\w+, ETA: ([\d\.]+\w+)\)')
-        read_opl = defines.get('auto_detect_bins', False)
-        if read_opl:
-            opl_output = ''
-            opl_re = re.compile(
-                r'limits: \[(\d+\.\d+), \d+\.\d+\] with bin width (\d+\.\d+)')
-        with tqdm(desc=experiment_name, total=100, ascii=True, leave=False,
-                  bar_format='{desc} |{bar}| [{n:.2f}%{postfix}] ') as pbar:
-            output = None
-            while output is None or len(output) > 0:
-                output = mitsuba_process.stdout.read(160)
-                try:
-                    output = output.decode('utf-8')
-                except UnicodeDecodeError:
-                    continue
-                if logfile is not None:
-                    logfile.write(output)
-                    logfile.flush()
-                if read_opl:
-                    opl_output += output
-                    matches = opl_re.findall(opl_output)
-                    if len(matches) > 0:
-                        start_opl, bin_width_opl = matches[-1]
-                        start_opl = float(start_opl)
-                        bin_width_opl = float(bin_width_opl)
-                        print('Auto-detected histogram: '
-                              f'start_opl={start_opl:.4f}, bin_width_opl={bin_width_opl:.6f}')
-                        defines.update(start_opl=start_opl)
-                        defines.update(bin_width_opl=bin_width_opl)
-                        read_opl = False
-                        del opl_output
-                matches = progress_re.findall(output)
-                if len(matches) > 0:
-                    progress, eta = matches[-1]
-                    completed = progress.count('=')
-                    not_completed = progress.count(' ')
-                    progress = 100 * completed / (completed + not_completed)
-                    pbar.update(progress - pbar.n)
-                    pbar.set_postfix_str(f'ETA: {eta}')
-                    if not_completed == 0:
-                        break
-                    time.sleep(1)
-
-    # wait for the process to end
-    mitsuba_process.communicate()
-    assert mitsuba_process.returncode == 0, \
-        f'Mitsuba returned with error code {mitsuba_process.returncode}'
-    if os.path.isdir(hdr_path):
-        # assume transient render
-        n_exr_frames = len(os.listdir(hdr_path))
-        assert n_exr_frames > 0, 'No frames were rendered?'
-    else:
-        # assume steady state render
-        assert os.path.isfile(hdr_path), 'No frames were rendered?'
+    np.save(hdr_path, result)
 
 
 def _read_mitsuba_bitmap(path: str):
-    from mitsuba.core import Bitmap
     import numpy as np
-    return np.array(Bitmap(path), copy=False)
+    return np.load(path)
 
 
 def _read_mitsuba_streakbitmap(path: str, exr_format='RGB'):
-    """
-    Reads all the images x-t that compose the streak image.
-
-    :param dir: path where the images x-t are stored
-    :return: a streak image of shape [time, width, height]
-    """
-    import re
-    import glob
-    import os
     import numpy as np
-    from tqdm import tqdm
-
-    # NOTE(diego): for now this assumes that the EXR that it reads
-    # are in RGB format, and returns an image with 3 channels,
-    # in the case of polarized light it can return something else
-    if exr_format != 'RGB':
-        raise NotImplementedError(
-            'Formats different from RGB are not implemented')
-
-    xtframes = glob.glob(os.path.join(
-        glob.escape(path), f'frame_*.exr'))
-    xtframes = sorted(xtframes,
-                      key=lambda x: int(re.compile(r'\d+').findall(x)[-1]))
-    number_of_xtframes = len(xtframes)
-    first_img = _read_mitsuba_bitmap(xtframes[0])
-    streak_img = np.empty(
-        (number_of_xtframes, *first_img.shape), dtype=first_img.dtype)
-    with tqdm(desc=f'Reading {path}', total=number_of_xtframes, ascii=True) as pbar:
-        for i_xtframe in range(number_of_xtframes):
-            other = _read_mitsuba_bitmap(xtframes[i_xtframe])
-            streak_img[i_xtframe] = np.nan_to_num(other, nan=0.)
-            pbar.update(1)
-
-    # for now streak_img has dimensions (y, x, time, channels)
-    assert streak_img.shape[-1] == 3, \
-        f'Careful, streak_img has shape {streak_img.shape} (i.e. its probably not RGB as we assume, last dimension should be 3)'
-    # and we want it as (time, x, y)
-    return np.sum(np.transpose(streak_img), axis=0)
+    return np.load(path)

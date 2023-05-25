@@ -1,11 +1,13 @@
 import os
 import shutil
 from tal.config import local_file_path
-from tal.render.mitsuba2_transient_nlos import get_material_keys, get_materials
 from tal.util import fdent
 from textwrap import indent
 import tal
 import datetime
+
+from tal.render.util import import_mitsuba_backend
+mitsuba_backend = import_mitsuba_backend()
 
 
 def create_nlos_scene(folder_name, args):
@@ -46,7 +48,7 @@ def create_nlos_scene(folder_name, args):
         key, value = item
 
         material_keys = list(
-            map(lambda s: f'{s}: ${s}', get_material_keys(value)))
+            map(lambda s: f'{s}: ${s}', mitsuba_backend.get_material_keys(value)))
         value = indent(value, '#| ')
 
         if len(material_keys) == 0:
@@ -61,7 +63,7 @@ def create_nlos_scene(folder_name, args):
                 {value}''', key=key, material_keys=material_keys, value=value)
 
     default_material_data = '\n\n'.join(
-        map(print_material, get_materials().items()))
+        map(print_material, mitsuba_backend.get_materials().items()))
 
     with open(config_name, 'w') as f:
         f.write(

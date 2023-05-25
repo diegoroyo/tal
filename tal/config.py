@@ -12,7 +12,21 @@ from tal.util import local_file_path
 
 
 class Config(Enum):
-    MITSUBA2_TRANSIENT_NLOS_FOLDER = 'MITSUBA2_TRANSIENT_NLOS_FOLDER'
+    MITSUBA_VERSION = \
+        ('MITSUBA_VERSION',
+         'Version of Mitsuba to use (2 or 3)',
+         '2',
+         lambda s: s in ['2', '3'])
+    MITSUBA2_TRANSIENT_NLOS_FOLDER = \
+        ('MITSUBA2_TRANSIENT_NLOS_FOLDER',
+         'Location of mitsuba2-transient-nlos installation folder',
+         '',
+         lambda s: os.path.isdir(s))
+    MITSUBA3_TRANSIENT_NLOS_FOLDER = \
+        ('MITSUBA3_TRANSIENT_NLOS_FOLDER',
+         'Location of mitsuba3-transient-nlos installation folder',
+         '',
+         lambda s: os.path.isdir(s))
 
 
 def get_home_path():
@@ -24,19 +38,25 @@ def get_config_filename():
 
 
 def _parse_config(lines):
-    return dict(line.split('=') for line in lines)
+    return dict(line.strip().split('=') for line in lines)
 
 
 def ask_for_config(param_name: Config, force_ask=True):
     """Most useful: ask for a specific key in the config,
     and if it does not exist ask the user for a value"""
     config_dict = read_config()
-    param_name = param_name.value
+    param_name, ask_query, default_value, is_valid = param_name.value
     if force_ask or param_name not in config_dict or len(config_dict[param_name].strip()) == 0:
-        print(f'{param_name} is not specified. Please write a value:')
+        print(f'{param_name} is not specified. Please specify:')
         param_value = ''
-        while len(param_value.strip()) == 0:
-            param_value = input(f'{param_name}=')
+        while len(param_value.strip()) == 0 or not is_valid(param_value):
+            param_value = input(
+                f'{ask_query}{"" if len(default_value) == 0 else f" [default: {default_value}]"}: ')
+            param_value = param_value.strip()
+            if len(param_value) == 0:
+                param_value = default_value
+            if not is_valid(param_value):
+                print('Invalid value.')
         config_dict[param_name] = param_value
         write_config(config_dict)
     return config_dict[param_name]
@@ -59,7 +79,7 @@ def read_config() -> dict:
 def write_config(config_dict):
     config = get_config_filename()
     with open(config, 'w') as f:
-        f.writelines(list(f'{key}={value}'
+        f.writelines(list(f'{key}={value}\n'
                           for key, value in config_dict.items()))
 
 
