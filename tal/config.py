@@ -46,7 +46,17 @@ def ask_for_config(param_name: Config, force_ask=True):
     and if it does not exist ask the user for a value"""
     config_dict = read_config()
     param_name, ask_query, default_value, is_valid = param_name.value
-    if force_ask or param_name not in config_dict or len(config_dict[param_name].strip()) == 0:
+    param_ok = (
+        param_name in config_dict and
+        len(config_dict[param_name].strip()) > 0 and
+        is_valid(config_dict[param_name])
+    )
+    default_value = (
+        config_dict[param_name]
+        if param_ok and len(default_value) == 0
+        else default_value
+    )
+    if force_ask or not param_ok:
         print(f'{param_name} is not specified. Please specify:')
         param_value = ''
         while len(param_value.strip()) == 0 or not is_valid(param_value):
