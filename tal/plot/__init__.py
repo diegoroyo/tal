@@ -46,6 +46,7 @@ def t_comparison(data_list: _DataList,
                  x: int = None, y: int = None,
                  t_start: int = None, t_end: int = None,
                  a_min: float = None, a_max: float = None,
+                 normalize: bool = False,
                  labels: List[str] = None):
     """
     For impulse responses H, do an interactive plot of transient pixels.
@@ -55,7 +56,7 @@ def t_comparison(data_list: _DataList,
     Preferred to call using CLI e.g. tal plot t_comparison <file_1> <file_2>
     """
     from tal.plot.compare import plot_t_comparison
-    return plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels)
+    return plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, normalize, labels)
 
 
 def volume(data: _Data, title: str = '', slider_title: str = 'Time',

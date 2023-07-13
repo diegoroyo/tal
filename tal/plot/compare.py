@@ -7,7 +7,7 @@ from matplotlib.colors import LogNorm
 from tal.enums import HFormat
 
 
-def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
+def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, normalize, labels):
     # FIXME(diego): Make this work with T_Si, T_Li_Si, T_Lx_Ly_Sx_Sy formats, and H containing complex numbers
     if isinstance(data_list, np.ndarray) or isinstance(data_list, NLOSCaptureData):
         data_list = [data_list]
@@ -15,17 +15,18 @@ def plot_t_comparison(data_list, x, y, t_start, t_end, a_min, a_max, labels):
                (isinstance(data, NLOSCaptureData) and data.H_format == HFormat.T_Sx_Sy) for data in data_list), \
         'Incorrect data types or HFormat, this function only works for HFormat = T_Sx_Sy'
 
-    data_real = list(map(
-        lambda x:
-        np.real(x.H) if isinstance(x, NLOSCaptureData)
-        else np.real(x),
-        data_list))
-
     def get_H(data):
         if isinstance(data, NLOSCaptureData):
             return data.H
         else:
             return data
+
+    data_real = list(
+        map(
+            lambda x: x / np.max(x) if normalize else x,
+            map(
+                lambda x: np.real(get_H(x)),
+                data_list)))
 
     nt, ny, nx = get_H(data_real[0]).shape
     for data in data_real[1:]:
