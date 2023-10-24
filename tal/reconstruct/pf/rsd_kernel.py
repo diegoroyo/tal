@@ -85,12 +85,12 @@ class RSD_kernel(object):
         di = self._P[0, 1] - self._P[0, 0]
         dj = self._P[1, 0] - self._P[0, 0]
         # Generate the central row, and from it the matrix
-        K_row = np.linspace(start=-di * (nx - 1),
-                            stop=di * (nx - 1),
-                            num=rx, dtype=np.float64)
-        K_base = np.linspace(start=K_row - dj * (ny - 1),
-                             stop=K_row + dj * (ny - 1),
-                             num=ry, dtype=np.float64)
+        K_row = np.linspace(start=-dj * (ny - 1),
+                            stop=dj * (ny - 1),
+                            num=ry, dtype=np.float64)
+        K_base = np.linspace(start=K_row - di * (nx - 1),
+                             stop=K_row + di * (nx - 1),
+                             num=rx, dtype=np.float64)
         return K_base
 
     # Return an array of vectors from P to the different V planes
