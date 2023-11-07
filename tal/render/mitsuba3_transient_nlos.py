@@ -265,6 +265,9 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                 <!-- <boolean name="auto_detect_bins" value="{v('auto_detect_bins')}"/> -->
                 <float name="bin_width_opl" value="{v('bin_width_opl')}"/>
                 <float name="start_opl" value="{v('start_opl')}"/>
+                <rfilter type="box">
+                    <!-- <float name="radius" value="0.5"/> -->
+                </rfilter>
             </film>
         </sensor>''')
 
@@ -393,7 +396,9 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
     scene = mi.load_file(scene_xml_path, **defines)
     integrator = scene.integrator()
 
-    # FIXME add defines, experiment_name, logfile, args (threads, nice, dry_run, quiet)
+    # FIXME add defines, experiment_name, logfile, args (nice, dry_run, quiet)
+    # threads should be set here
+    mi.Thread.set_thread_count(args.threads)
 
     # prepare
     if isinstance(integrator, TransientADIntegrator):
@@ -402,7 +407,12 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
     # render
     if isinstance(integrator, TransientADIntegrator):
         steady_image, transient_image = integrator.render(scene)
-        result = np.moveaxis(np.array(transient_image), 2, 0)
+        result = np.array(transient_image)
+        if result.ndim == 2:
+            # FIXME confocal case: (nt, nc)
+            nt, nc = result.shape
+            result = result.reshape((nt, 1, 1, nc))
+        result = np.moveaxis(result, 2, 0)
         # result has shape (nt, nx, ny, nchannels)
         if result.ndim == 4:
             # sum all channels
