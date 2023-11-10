@@ -16,6 +16,7 @@ from typing import Union, Tuple
 from tal.reconstruct.pf.propagator import Propagator, RSD_propagator
 from tal.reconstruct.pf.propagator import RSD_parallel_propagator
 
+__epsilon = 1e-5
 
 def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float
           ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -209,7 +210,9 @@ def propagator(P: np.ndarray, V: np.ndarray, wl: np.ndarray) -> Propagator:
         v2 = target_plane[-1, 0] - P[-1, 0]
         v3 = target_plane[0, -1] - P[0, -1]
         v4 = target_plane[-1, -1] - P[-1, -1]
-        if np.allclose(v1, v2) and np.allclose(v3, v2) and np.allclose(v3, v4):
+        if np.linalg.norm(v1-v2) < __epsilon \
+            and np.linalg.norm(v3-v2) < __epsilon \
+            and np.linalg.norm(v4-v3) < __epsilon:
             # Parallel propagator
             return RSD_parallel_propagator(P, V, wl)
 
@@ -379,4 +382,4 @@ def __parallel(S1, S2):
     n2 = np.cross(v1, v2)
 
     # Return similar to 0 with error
-    return np.linalg.norm(np.cross(n1, n2)) <= 1e-3
+    return np.linalg.norm(np.cross(n1, n2)) <= __epsilon
