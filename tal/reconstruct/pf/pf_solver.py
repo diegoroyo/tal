@@ -379,4 +379,4 @@ def __parallel(S1, S2):
     n2 = np.cross(v1, v2)
 
     # Return similar to 0 with error
-    return np.linalg.norm(np.cross(n1, n2)) <= 1e-8
+    return np.linalg.norm(np.cross(n1, n2)) <= 1e-3
