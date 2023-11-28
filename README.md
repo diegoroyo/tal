@@ -2,7 +2,7 @@
 
     bueno el readme ya tal
 
-`y-tal` (or just `tal) is a Python library with many utilities for people who work in the development of non-line-of-sight imaging techniques. This library provides different tools to generate and analyze data and implementations of different non-line-of-sight reconstruction algorithms. Some parts are also accessible through command line for for ease of use.
+`y-tal` (or just `tal`) is a Python library with many utilities for people who work in the development of non-line-of-sight imaging techniques. This library provides different tools to generate and analyze data and implementations of different non-line-of-sight reconstruction algorithms. Some parts are also accessible through command line for for ease of use.
 
 Authors: [Diego Royo](https://github.com/diegoroyo), [Pablo Luesia](https://github.com/p-luesia)
 
@@ -173,6 +173,7 @@ import tal
 
 data = tal.io.read_capture('capture.hdf5')
 # for more info on the parameters: https://github.com/diegoroyo/tal/blob/master/tal/reconstruct/__init__.py#L25
+# NOTE: if you use fbp, pf or pf_dev, you do not need to perform this filtering step
 data.H = tal.reconstruct.filter_H(data, filter_name='pf', wl_mean=0.05, wl_sigma=0.05)
 ```
 
@@ -200,14 +201,41 @@ You can now use `volume_xyz` to specify the reconstruction volume for the `bp`, 
 
 Implementation of the backprojection algorithm [Velten2012].
 
+```python
+# follow steps above to read data and obtain volume_xyz
+
+H_1 = tal.reconstruct.bp.solve(data,
+                               volume_xyz=volume_xyz,
+                               camera_system=tal.enums.CameraSystem.DIRECT_LIGHT)
+# the camera_system parameter specifies the concrete camera implementation in the phasor-field framework
+# by default most papers use the DIRECT_LIGHT equivalent so you probably want to leave it as-is
+
+# visualize your result
+tal.plot.amplitude_phase(H_1)                              
+```
+
 ### `fbp`, `pf_dev`
 
 Filtered backprojection [Velten2012] and the `pf_dev` implementation [Liu2019] of phasor fields accept the same arguments.
 
 ```python
-import tal
+# follow steps above to read data and obtain volume_xyz
 
+# you can switch pf_dev and fbp interchangeably
+H_1 = tal.reconstruct.pf_dev.solve(data,
+                                   wl_mean=0.06, wl_sigma=0.06,
+                                   volume_xyz=volume_xyz,
+                                   camera_system=tal.enums.CameraSystem.DIRECT_LIGHT)
+H_1 = tal.reconstruct.fbp.solve(data,
+                                   wl_mean=0.06, wl_sigma=0.06,
+                                   volume_xyz=volume_xyz,
+                                   camera_system=tal.enums.CameraSystem.DIRECT_LIGHT)
+# the wl_mean and wl_sigma parameters set the band pass filter that is the phasor-field-based filter
+# the camera_system parameter specifies the concrete camera implementation in the phasor-field framework
+# by default most papers use the DIRECT_LIGHT equivalent so you probably want to leave it as-is
 
+# visualize your result
+tal.plot.amplitude_phase(H_1)                              
 ```
 
 ### `pf`
@@ -222,6 +250,23 @@ V = np.moveaxis(np.mgrid[-1:1.1:0.1, -1:1.1:0.1, 0.5:2.6:0.1], 0, -1).reshape(-1
 # Reconstruct the data to the volume V with virtual illumination pulse
 # with central wavefactor 6 and 4 cycles
 reconstruction = tal.reconstruct.pf.solve(data, 6, 4, V, verbose=3, n_threads=1)
+```
+
+### `tal.resources`
+
+The `filter_H`, `bp`, `fbp` and `pf_dev` functions/modules support multi-threading.
+The number of threads can be set using:
+
+```python
+import tal
+
+# Option 1: Scoped
+with tal.resources('max'):  # all CPUs
+  # ...work...
+
+# Option 2: Set
+tal.set_resources(4)  # use 4 CPUs
+# ...work...
 ```
 
 ### References
