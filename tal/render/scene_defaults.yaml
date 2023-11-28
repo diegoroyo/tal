@@ -3,7 +3,7 @@
 ##
 mitsuba_variant: scalar_rgb  # see mitsuba for possible types
 integrator_max_depth: -1
-integrator_filter_depth: -1
+integrator_filter_bounces: -1
 integrator_discard_direct_paths: false
 integrator_nlos_laser_sampling: true
 integrator_nlos_hidden_geometry_sampling: false
@@ -30,7 +30,7 @@ sensor_width: 256
 sensor_height: 256
 # for scan_type=single
 # if set to null, laser points to the center pixel
-# if set to a number, laser points to that pixel (e.g. center = 127.5, 127.5)
+# if set to a number, laser points to that pixel (e.g. center = 128, 128)
 laser_lookat_x: null
 laser_lookat_y: null
 # for scan_type=confocal/exhaustive
@@ -46,7 +46,7 @@ geometry:
     Hidden geometry of the scene
   mesh:
     type: obj
-    filename: /home/droyo/mitsuba-dataset/scenes/meshes/Z.obj
+    filename: ./Z.obj
   displacement_x: 0.0
   displacement_y: 0.0
   displacement_z: 1.0  # using default RW settings this corresponds to depth

@@ -1,0 +1,155 @@
+# TAL v0.10.3 NLOS scene description file: https://github.com/diegoroyo/tal
+# Created on 2023/11/28 with experiment name "nlos-z"
+
+# TAL uses YAML files to configure everything in the NLOS setup:
+# 1) Parameters for the light transport simulation that will be
+#    executed using Transient Mitsuba 3 (see section labeled as "Mitsuba")
+# 2) Laser and sensor position, and where they are pointed towards
+#    (see section labeled as "Laser and sensor")
+# 3) Geometry of the scene (visible or hidden): its location, materials, etc.
+#    (see sections labeled as "Geometry", "Relay wall" and "Materials reference")
+
+# This is the YAML file that you would get if you executed the command
+# "tal render new nlos-z" on your shell.
+
+# Basically, this file specifies different properties under YAML format.
+# For example:
+name: nlos-z
+# this sets the parameter "name" of the scene as "nlos-z"
+
+# Note: when you generate a YAML file, you will see that many parameters
+# are commented. When you see this written:
+#parameter: value
+# It means that the default value for "parameter" is "value", you need
+# to uncomment that line and modify the value if you want to change it.
+
+# Now for sections 1) 2) and 3)
+
+##
+# Mitsuba
+##
+# See https://mitsuba.readthedocs.io/en/latest/src/key_topics/variants.html
+# you should have compiled this variant previously
+# See mitsuba{2|3}-transient-nlos repository for more information
+mitsuba_variant: llvm_rgb
+# Transient Mitsuba's intergator properties
+# See mitsuba{2|3}-transient-nlos' documentation for transient_nlos_path
+integrator_max_depth: -1
+integrator_filter_depth: -1
+integrator_discard_direct_paths: false
+integrator_nlos_laser_sampling: true
+integrator_nlos_hidden_geometry_sampling: true
+integrator_nlos_hidden_geometry_sampling_do_rroulette: false
+integrator_nlos_hidden_geometry_sampling_includes_relay_wall: true
+# Number of samples per pixel (spatial pixel, not time dimension pixel)
+sample_count: 10_000
+# Transient Mitsuba's film properties
+# See mitsuba{2|3}-transient-nlos' documentation for transient_hdr_film
+account_first_and_last_bounces: false
+num_bins: 320
+bin_width_opl: 0.003
+start_opl: 1.95
+auto_detect_bins: false
+
+##
+# Laser and sensor
+##
+# single: The laser illuminates one point in the relay wall,
+#         the sensor captures all points in the relay wall
+# confocal: The laser illuminates one point in the relay wall,
+#           the sensor only captures that same point in the relay wall
+# exhaustive: The laser and sensor illuminate and capture all points
+#             on the relay wall 
+scan_type: single  # single, confocal or exhaustive
+# XYZ coordinates of the laser and sensor devices
+# Note that this is NOT the illuminated or captured points' position
+# on the relay wall.
+sensor_x: -0.5
+sensor_y: 0.0
+sensor_z: 0.25
+laser_x: -0.5
+laser_y: 0.0
+laser_z: 0.25
+# The relay wall is divided into a 2D grid of uniformly sized regions
+# which represent the pixels of the rendered image. This sets the number of
+# subdivisions in the X and Y dimensions.
+# The division depends on the UV coordinates of the mesh. E.g. if sensor_width
+# and sensor_height are set to 2, it will have a grid of 2x2 pixels, where the
+# top-left pixel goes from UV (0, 0) to UV (0.5, 0.5).
+# It is important to use a "rectangle" relay wall for correct UV coordinates. 
+sensor_width: 64
+sensor_height: 64
+# for scan_type=single
+# if set to null, laser points to the center pixel
+# if set to a number, laser points to that pixel
+# (e.g. center = laser_lookat_x,y 128,128 = UV coords 0.5,0.5)
+laser_lookat_x: null
+laser_lookat_y: null
+# for scan_type=confocal/exhaustive, equivalent of sensor_{width|height} for the laser
+laser_width: 32
+laser_height: 32
+
+##
+# Geometry (valid for hidden geometry or relay wall)
+##
+# The geometry YAML parameter should be a list of elements as below
+# Some parameters are optional (displacement, rot_degrees)
+geometry:
+# This is an example to define a geometry element from a OBJ file
+- name: Z
+  description: >
+    Hidden geometry of the scene
+  # mesh type: obj should define the filename of the OBJ
+  # where you specify the full or relative path to that OBJ
+  mesh:
+    type: obj
+    filename: ./Z.obj
+  # Translate, rotate and scale the OBJ before placing it in Mitsuba
+  displacement_x: 0.0
+  displacement_y: 0.0
+  displacement_z: 1.0  # using default RW settings this corresponds to depth
+  rot_degrees_x: 0.0
+  rot_degrees_y: 0.0
+  rot_degrees_z: 0.0
+  scale: 1
+  # Material of the object. See "material reference" below
+  material:
+    id: white
+# This is another example that defines the relay wall as a rectangle
+# you typically want to use exactly this for all your scenes
+- name: relay_wall
+  mesh:
+    type: rectangle
+  scale: 1  # scale = 1: relay wall is 2x2m, scale = 0.5: relay wall is 1x1m
+  # Material of the object. See "material reference" below
+  material:
+    id: white
+
+##
+# Relay walls
+##
+# Define which of the elements in the "geometry" list should act as the relay wall
+# We set the relay wall to the geometry named "relay wall"
+relay_wall: relay_wall  # must correspond to a geometry name above
+
+##
+# Implemented materials reference
+# (variables e.g. $alpha are substituted)
+##
+
+#| id: white
+#| <bsdf type="diffuse">
+#|     <rgb name="reflectance" value="1.0, 1.0, 1.0"/>
+#| </bsdf>
+
+#| id: copper
+#| alpha: $alpha
+#| <bsdf type="roughconductor">
+#|     <string name="material" value="Cu"/>
+#|     <string name="distribution" value="beckmann"/>
+#|     <float name="alpha" value="$alpha"/>
+#| </bsdf>
+
+#| id: custom
+#| text: $text
+#| $text

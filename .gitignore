@@ -4,6 +4,6 @@ build
 dist
 *.egg
 *.egg-info
-test/data
-test/render
-test/debug_notebook.ipynb
+examples/old/test/data
+examples/old/test/render
+examples/old/test/debug_notebook.ipynb

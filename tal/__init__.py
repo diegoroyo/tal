@@ -4,4 +4,4 @@ from . import io, plot, reconstruct
 from . import enums
 from tal.config import set_resources, ResourcesConfig as resources
 
-__version__ = '0.10.4'
+__version__ = '0.11.0'

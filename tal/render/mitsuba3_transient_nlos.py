@@ -120,7 +120,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         <integrator type="transient_nlos_path">
             <integer name="block_size" value="1"/>
             <integer name="max_depth" value="{v('integrator_max_depth')}"/>
-            <integer name="filter_depth" value="{v('integrator_filter_depth')}"/>
+            <integer name="filter_bounces" value="{v('integrator_filter_bounces')}"/>
             <boolean name="discard_direct_paths" value="{v('integrator_discard_direct_paths')}"/>
             <boolean name="nlos_laser_sampling" value="{v('integrator_nlos_laser_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling" value="{v('integrator_nlos_hidden_geometry_sampling')}"/>
