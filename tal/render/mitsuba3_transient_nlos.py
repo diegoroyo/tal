@@ -190,6 +190,8 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             <point name="position" x="0" y="-30" z="30"/>
         </emitter>''')
 
+    pixel_format = 'luminance' if 'mono' in v('mitsuba_variant') else 'rgb'
+
     sensors_steady = fdent(f'''\
         <!-- Sensor 0: back view -->
         <sensor type="perspective">
@@ -209,6 +211,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             <film type="hdrfilm">
                 <integer name="width" value="512"/>
                 <integer name="height" value="512"/>
+                <string name="pixel_format" value="{pixel_format}"/>
                 <rfilter name="rfilter" type="gaussian"/>
             </film>
         </sensor>
@@ -230,6 +233,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             <film type="hdrfilm">
                 <integer name="width" value="512"/>
                 <integer name="height" value="512"/>
+                <string name="pixel_format" value="{pixel_format}"/>
                 <rfilter name="rfilter" type="gaussian"/>
             </film>
         </sensor>''')
@@ -392,6 +396,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
     import mitsuba as mi
     import mitransient as mitr
     import numpy as np
+    from tqdm import tqdm
     from mitransient.integrators.common import TransientADIntegrator
     scene = mi.load_file(scene_xml_path, **defines)
     integrator = scene.integrator()
@@ -406,7 +411,14 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
 
     # render
     if isinstance(integrator, TransientADIntegrator):
-        steady_image, transient_image = integrator.render(scene)
+        progress_bar = tqdm(total=100, desc=experiment_name)
+
+        def update_progress(p):
+            progress_bar.n = int(p * 100)
+            progress_bar.refresh()
+
+        steady_image, transient_image = integrator.render(
+            scene, progress_callback=update_progress)
         result = np.array(transient_image)
         if result.ndim == 2:
             # FIXME confocal case: (nt, nc)

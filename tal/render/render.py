@@ -119,9 +119,9 @@ def render_nlos_scene(config_path, args):
 
         if scan_type == 'single':
             laser_lookat_x = \
-                scene_config['laser_lookat_x'] or (sensor_width - 1) / 2
+                scene_config['laser_lookat_x'] or sensor_width / 2
             laser_lookat_y = \
-                scene_config['laser_lookat_y'] or (sensor_height - 1) / 2
+                scene_config['laser_lookat_y'] or sensor_height / 2
             laser_lookats.append((laser_lookat_x, laser_lookat_y))
         elif scan_type == 'exhaustive' or scan_type == 'confocal':
             assert not (scan_type == 'confocal' and
@@ -158,7 +158,7 @@ def render_nlos_scene(config_path, args):
                     mitsuba_backend.convert_hdr_to_ldr(hdr_path, ldr_path)
 
             render_steady('back_view', 0)
-            render_steady('front_view', 1)
+            render_steady('side_view', 1)
 
         for i, (laser_lookat_x, laser_lookat_y) in tqdm(
                 enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
