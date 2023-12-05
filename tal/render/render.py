@@ -47,18 +47,37 @@ def render_nlos_scene(config_path, args):
         scene_config, random_seed=args.seed, quiet=args.quiet)
 
     try:
-        root_dir = os.path.join(
-            config_dir, datetime.datetime.now().strftime(r'%Y%m%d-%H%M%S'))
+        in_progress = False
+        progress_file = os.path.join(config_dir, 'IN_PROGRESS')
+        if os.path.exists(progress_file):
+            with open(progress_file, 'r') as f:
+                progress_folder = f.read()
+            if os.path.exists(os.path.join(config_dir, progress_folder)) and not args.quiet:
+                in_progress = True
+            else:
+                print('The IN_PROGRESS file is stale, removing it...')
+                os.remove(progress_file)
+        if in_progress and not args.quiet:
+            print(
+                f'Found a render in progress ({progress_folder}), continuing...')
+        if not in_progress:
+            progress_folder = datetime.datetime.now().strftime(r'%Y%m%d-%H%M%S')
+
+        root_dir = os.path.join(config_dir, progress_folder)
         partial_results_dir = os.path.join(root_dir, 'partial')
         steady_dir = os.path.join(root_dir, 'steady')
         log_dir = os.path.join(root_dir, 'logs')
-        os.mkdir(root_dir)
-        os.mkdir(partial_results_dir)
-        os.mkdir(steady_dir)
-        os.mkdir(log_dir)
-        shutil.copy(
-            config_path,
-            os.path.join(root_dir, f'{config_filename}.old'))
+
+        if not in_progress:
+            os.mkdir(root_dir)
+            os.mkdir(partial_results_dir)
+            os.mkdir(steady_dir)
+            os.mkdir(log_dir)
+            shutil.copy(
+                config_path,
+                os.path.join(root_dir, f'{config_filename}.old'))
+        with open(progress_file, 'w') as f:
+            f.write(progress_folder)
     except OSError as exc:
         raise AssertionError(f'Invalid permissions: {exc}') from exc
 
@@ -159,16 +178,29 @@ def render_nlos_scene(config_path, args):
                                         f'{experiment_name}_{render_name}.{hdr_ext}')
                 ldr_path = os.path.join(steady_dir,
                                         f'{experiment_name}_{render_name}.png')
-                logfile = None
-                if args.do_logging and not args.dry_run:
-                    logfile = open(os.path.join(
-                        log_dir, f'{experiment_name}_{render_name}.log'), 'w')
-                mitsuba_backend.run_mitsuba(steady_scene_xml, hdr_path, dict(),
+                if os.path.exists(ldr_path) and not args.quiet:
+                    pass  # skip
+                else:
+                    logfile = None
+                    if args.do_logging and not args.dry_run:
+                        logfile = open(os.path.join(
+                            log_dir, f'{experiment_name}_{render_name}.log'), 'w')
+                    # NOTE: something here has a memory leak (probably Mitsuba-related)
+                    # We run Mitsuba in a separate process to ensure that the leaks do not add up
+                    # as they can fill your RAM in exhaustive scans
+                    run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, steady_scene_xml, hdr_path, dict(),
                                             render_name, logfile, args, sensor_index)
-                if args.do_logging and not args.dry_run:
-                    logfile.close()
-                if not args.dry_run:
-                    mitsuba_backend.convert_hdr_to_ldr(hdr_path, ldr_path)
+                    process = multiprocessing.Process(target=run_mitsuba_f)
+                    try:
+                        process.start()
+                        process.join()
+                    except KeyboardInterrupt:
+                        process.terminate()
+                        raise KeyboardInterrupt
+                    if args.do_logging and not args.dry_run:
+                        logfile.close()
+                    if not args.dry_run:
+                        mitsuba_backend.convert_hdr_to_ldr(hdr_path, ldr_path)
 
             render_steady('back_view', 0)
             render_steady('side_view', 1)
@@ -180,6 +212,8 @@ def render_nlos_scene(config_path, args):
             try:
                 hdr_path, is_dir = mitsuba_backend.partial_laser_path(
                     partial_results_dir, experiment_name, laser_lookat_x, laser_lookat_y)
+                if os.path.exists(hdr_path) and not args.quiet:
+                    continue  # skip
                 if is_dir:
                     os.mkdir(hdr_path)
             except OSError as exc:
@@ -288,6 +322,9 @@ def render_nlos_scene(config_path, args):
 
         if not args.quiet:
             print(f'Stored result in {hdf5_path}')
+
+        # remove IN_PROGRESS file
+        os.remove(progress_file)
 
         if args.keep_partial_results:
             return
