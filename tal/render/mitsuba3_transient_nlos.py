@@ -398,10 +398,15 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
     import numpy as np
     from tqdm import tqdm
     from mitransient.integrators.common import TransientADIntegrator
+    import sys
+
+    sys.stdout = logfile
+    sys.stderr = logfile
+
     scene = mi.load_file(scene_xml_path, **defines)
     integrator = scene.integrator()
 
-    # FIXME add defines, experiment_name, logfile, args (nice, dry_run, quiet)
+    # FIXME add defines, experiment_name, args (nice, dry_run, quiet)
     # threads should be set here
     mi.Thread.set_thread_count(args.threads)
 
@@ -411,7 +416,8 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
 
     # render
     if isinstance(integrator, TransientADIntegrator):
-        progress_bar = tqdm(total=100, desc=experiment_name)
+        progress_bar = tqdm(total=100, desc=experiment_name,
+                            ascii=True, leave=False)
 
         def update_progress(p):
             progress_bar.n = int(p * 100)
@@ -429,11 +435,14 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         if result.ndim == 4:
             # sum all channels
             result = np.sum(result, axis=-1)
+        progress_bar.close()
+        del steady_image, transient_image, progress_bar
     else:
         image = integrator.render(scene, sensor_index)
         result = np.array(image)
 
     np.save(hdr_path, result)
+    del result, scene, integrator
 
 
 def _read_mitsuba_bitmap(path: str):

@@ -8,6 +8,8 @@ from tal.config import local_file_path
 import datetime
 import numpy as np
 from tqdm import tqdm
+import multiprocessing
+from functools import partial
 
 from tal.render.util import import_mitsuba_backend
 mitsuba_backend = import_mitsuba_backend()
@@ -104,19 +106,6 @@ def render_nlos_scene(config_path, args):
             assert len(vec) == 3
             return vec.reshape(1, 1, 3).repeat(x, axis=0).repeat(y, axis=1)
 
-        # FIXME(diego): rotate + translate (asssumes no rot/trans)
-        # or use a more generalist approach that does not need to be rectangular
-        sensor_grid_xyz = get_grid_xyz(
-            sensor_width, sensor_height, relay_wall['scale'])
-        laser_grid_xyz = get_grid_xyz(
-            laser_width, laser_height, relay_wall['scale'])
-        # FIXME(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
-        # or use a more generalist approach
-        sensor_grid_normals = expand(
-            np.array([0, 0, 1]), sensor_width, sensor_height)
-        laser_grid_normals = expand(
-            np.array([0, 0, 1]), laser_width, laser_height)
-
         if scan_type == 'single':
             laser_lookat_x = \
                 scene_config['laser_lookat_x'] or sensor_width / 2
@@ -128,12 +117,36 @@ def render_nlos_scene(config_path, args):
                         (laser_width != sensor_width or
                             laser_height != sensor_height)), \
                 'If using scan_type=confocal, sensor_{width|height} must match laser_{width|height}'
-            for x in range(laser_width):
-                for y in range(laser_height):
-                    laser_lookats.append((x + 0.5, y + 0.5))
+            for y in range(laser_height):
+                for x in range(laser_width):
+                    laser_lookat_x = (x + 0.5) * sensor_width / laser_width
+                    laser_lookat_y = (y + 0.5) * sensor_height / laser_height
+                    laser_lookats.append((laser_lookat_x, laser_lookat_y))
         else:
             raise AssertionError(
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
+
+        # FIXME(diego): rotate + translate (asssumes no rot/trans)
+        # or use a more generalist approach that does not need to be rectangular
+        sensor_grid_xyz = get_grid_xyz(
+            sensor_width, sensor_height, relay_wall['scale'])
+        if scan_type == 'single':
+            px = relay_wall['scale'] * \
+                ((laser_lookat_x / sensor_width) * 2 - 1)
+            py = relay_wall['scale'] * \
+                ((laser_lookat_y / sensor_height) * 2 - 1)
+            laser_grid_xyz = np.array([[
+                [px, py, 0],
+            ]], dtype=np.float32)
+        else:
+            laser_grid_xyz = get_grid_xyz(
+                laser_width, laser_height, relay_wall['scale'])
+        # FIXME(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
+        # or use a more generalist approach
+        sensor_grid_normals = expand(
+            np.array([0, 0, 1]), sensor_width, sensor_height)
+        laser_grid_normals = expand(
+            np.array([0, 0, 1]), laser_width, laser_height)
 
         experiment_name = scene_config['name']
 
@@ -160,9 +173,10 @@ def render_nlos_scene(config_path, args):
             render_steady('back_view', 0)
             render_steady('side_view', 1)
 
-        for i, (laser_lookat_x, laser_lookat_y) in tqdm(
-                enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
-                ascii=True, total=len(laser_lookats)):
+        pbar = tqdm(
+            enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
+            ascii=True, total=len(laser_lookats))
+        for i, (laser_lookat_x, laser_lookat_y) in pbar:
             try:
                 hdr_path, is_dir = mitsuba_backend.partial_laser_path(
                     partial_results_dir, experiment_name, laser_lookat_x, laser_lookat_y)
@@ -179,8 +193,23 @@ def render_nlos_scene(config_path, args):
                 logfile = open(os.path.join(
                     log_dir,
                     f'{experiment_name}_L[{laser_lookat_x}][{laser_lookat_y}].log'), 'w')
-            mitsuba_backend.run_mitsuba(nlos_scene_xml, hdr_path, defines,
-                                        f'Laser {i + 1} of {len(laser_lookats)}', logfile, args)
+            # NOTE: something here has a memory leak (probably Mitsuba-related)
+            # We run Mitsuba in a separate process to ensure that the leaks do not add up
+            # as they can fill your RAM in exhaustive scans
+            run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, nlos_scene_xml, hdr_path, defines,
+                                    f'Laser {i + 1} of {len(laser_lookats)}', logfile, args)
+            process = multiprocessing.Process(target=run_mitsuba_f)
+            try:
+                process.start()
+                process.join()
+            except KeyboardInterrupt:
+                process.terminate()
+                raise KeyboardInterrupt
+            if scan_type == 'exhaustive' and i == 0:
+                size_bytes = os.path.getsize(hdr_path)
+                final_size_gb = size_bytes * len(laser_lookats) / 2**30
+                pbar.set_description(
+                    f'Rendering {experiment_name} ({scan_type}, estimated size: {final_size_gb:.2f} GB)...')
             if args.do_logging and not args.dry_run:
                 logfile.close()
 
@@ -240,14 +269,15 @@ def render_nlos_scene(config_path, args):
             else:
                 raise AssertionError
 
-            for x in range(laser_width):
-                for y in range(laser_height):
-                    hdr_path, _ = mitsuba_backend.partial_laser_path(
-                        partial_results_dir,
-                        experiment_name,
-                        x + 0.5, y + 0.5)
-                    capture_data.H[:, x, y, ...] = np.squeeze(
-                        mitsuba_backend.read_transient_image(hdr_path))
+            for i, (laser_lookat_x, laser_lookat_y) in enumerate(laser_lookats):
+                x = i % laser_width
+                y = i // laser_width
+                hdr_path, _ = mitsuba_backend.partial_laser_path(
+                    partial_results_dir,
+                    experiment_name,
+                    laser_lookat_x, laser_lookat_y)
+                capture_data.H[:, x, y, ...] = np.squeeze(
+                    mitsuba_backend.read_transient_image(hdr_path))
         else:
             raise AssertionError(
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
