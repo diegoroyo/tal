@@ -13,7 +13,6 @@ import multiprocessing
 from functools import partial
 
 from tal.render.util import import_mitsuba_backend
-mitsuba_backend = import_mitsuba_backend()
 
 
 def render_nlos_scene(config_path, args):
@@ -42,8 +41,19 @@ def render_nlos_scene(config_path, args):
             f'Invalid YAML format in TAL config file: {exc}') from exc
     scene_config = {**scene_defaults, **scene_config}
 
+    if scene_config['mitsuba_variant'].startswith('cuda'):
+        assert len(args.gpus) > 0, \
+            'You must specify at least one GPU to use CUDA. Use tal --gpu <id1> <id2> ...'
+        gpu_ids = ','.join(map(str, args.gpus))
+        os.environ['CUDA_VISIBLE_DEVICES'] = gpu_ids
+    else:
+        os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+
+    mitsuba_backend = import_mitsuba_backend()
+
     if not args.dry_run:
         mitsuba_backend.set_variant(scene_config['mitsuba_variant'])
+
     steady_xml, nlos_xml = mitsuba_backend.get_scene_xml(
         scene_config, random_seed=args.seed, quiet=args.quiet)
 

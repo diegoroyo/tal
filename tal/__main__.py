@@ -68,6 +68,9 @@ def main():
     render_parser.add_argument('-q', '--quiet',
                                dest='quiet', action='store_true',
                                help='Disable progress bars and other verbose outputs')
+    render_parser.add_argument('-g', '--gpu',
+                               dest='gpus', nargs='*', type=int, default=[], required=False,
+                               help='Select which GPUs should be used by Mitsuba')
     render_parser.add_argument('-r', '--dry-run',
                                dest='dry_run', action='store_true',
                                help='Do not execute mitsuba, just print out the commands that would be executed')
