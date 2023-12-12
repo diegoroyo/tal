@@ -10,6 +10,7 @@ import datetime
 import numpy as np
 from tqdm import tqdm
 import multiprocessing
+from multiprocessing.queues import Queue
 from functools import partial
 
 from tal.render.util import import_mitsuba_backend
@@ -180,6 +181,14 @@ def render_nlos_scene(config_path, args):
 
         experiment_name = scene_config['name']
 
+        class StdoutQueue(Queue):
+            def __init__(self, *args, **kwargs):
+                ctx = multiprocessing.get_context()
+                super(StdoutQueue, self).__init__(*args, **kwargs, ctx=ctx)
+
+            def write(self, msg):
+                self.put(msg)
+
         if args.do_steady_renders:
             def render_steady(render_name, sensor_index):
                 if not args.quiet:
@@ -199,8 +208,9 @@ def render_nlos_scene(config_path, args):
                     # NOTE: something here has a memory leak (probably Mitsuba-related)
                     # We run Mitsuba in a separate process to ensure that the leaks do not add up
                     # as they can fill your RAM in exhaustive scans
+                    queue = StdoutQueue()
                     run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, steady_scene_xml, hdr_path, dict(),
-                                            render_name, logfile, args, sensor_index)
+                                            render_name, logfile, args, sensor_index, queue)
                     process = multiprocessing.Process(target=run_mitsuba_f)
                     try:
                         process.start()
@@ -209,6 +219,13 @@ def render_nlos_scene(config_path, args):
                         process.terminate()
                         raise KeyboardInterrupt
                     if args.do_logging and not args.dry_run:
+                        while not queue.empty():
+                            e = queue.get()
+                            if isinstance(e, Exception):
+                                raise e
+                            else:
+                                logfile.write(e)
+                        queue.close()
                         logfile.close()
                     if not args.dry_run:
                         mitsuba_backend.convert_hdr_to_ldr(hdr_path, ldr_path)
@@ -238,12 +255,13 @@ def render_nlos_scene(config_path, args):
                 logfile = open(os.path.join(
                     log_dir,
                     f'{experiment_name}_L[{laser_lookat_x}][{laser_lookat_y}].log'), 'w')
+            queue = StdoutQueue()
             render_name = f'Laser {i + 1} of {len(laser_lookats)}'
             # NOTE: something here has a memory leak (probably Mitsuba-related)
             # We run Mitsuba in a separate process to ensure that the leaks do not add up
             # as they can fill your RAM in exhaustive scans
             run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, nlos_scene_xml, hdr_path, defines,
-                                    render_name, sys.stdout, args)
+                                    render_name, sys.stdout, args, queue=queue)
             process = multiprocessing.Process(target=run_mitsuba_f)
             try:
                 process.start()
@@ -257,6 +275,13 @@ def render_nlos_scene(config_path, args):
                 pbar.set_description(
                     f'Rendering {experiment_name} ({scan_type}, estimated size: {final_size_gb:.2f} GB)...')
             if args.do_logging and not args.dry_run:
+                while not queue.empty():
+                    e = queue.get()
+                    if isinstance(e, Exception):
+                        raise e
+                    else:
+                        logfile.write(e)
+                queue.close()
                 logfile.close()
 
         if args.dry_run:

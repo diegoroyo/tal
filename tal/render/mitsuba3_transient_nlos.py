@@ -396,61 +396,64 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
 
 def run_mitsuba(scene_xml_path, hdr_path, defines,
-                experiment_name, logfile, args, sensor_index=0):
-    import mitsuba as mi
-    import mitransient as mitr
-    import numpy as np
-    from tqdm import tqdm
-    from mitransient.integrators.common import TransientADIntegrator
-    import sys
-    import os
+                experiment_name, logfile, args, sensor_index=0, queue=None):
+    try:
+        import mitsuba as mi
+        import mitransient as mitr
+        import numpy as np
+        from tqdm import tqdm
+        from mitransient.integrators.common import TransientADIntegrator
+        import sys
+        import os
 
-    sys.stdout = logfile
-    sys.stderr = logfile
-    os.nice(args.nice)
+        sys.stdout = queue
+        sys.stderr = queue
+        os.nice(args.nice)
 
-    if args.dry_run:
-        return
+        if args.dry_run:
+            return
 
-    scene = mi.load_file(scene_xml_path, **defines)
-    integrator = scene.integrator()
+        scene = mi.load_file(scene_xml_path, **defines)
+        integrator = scene.integrator()
 
-    mi.Thread.set_thread_count(args.threads)
+        mi.Thread.set_thread_count(args.threads)
 
-    # prepare
-    if isinstance(integrator, TransientADIntegrator):
-        integrator.prepare_transient(scene, sensor_index)
+        # prepare
+        if isinstance(integrator, TransientADIntegrator):
+            integrator.prepare_transient(scene, sensor_index)
 
-        progress_bar = None
-        if not args.quiet:
-            progress_bar = tqdm(total=100, desc=experiment_name,
-                                ascii=True, leave=False)
-
-        def update_progress(p):
+            progress_bar = None
             if not args.quiet:
-                progress_bar.n = int(p * 100)
-                progress_bar.refresh()
+                progress_bar = tqdm(total=100, desc=experiment_name,
+                                    ascii=True, leave=False)
 
-        steady_image, transient_image = integrator.render(
-            scene, progress_callback=update_progress)
-        result = np.array(transient_image)
-        if result.ndim == 2:
-            nt, nc = result.shape
-            result = result.reshape((nt, 1, 1, nc))
-        result = np.moveaxis(result, 2, 0)
-        # result has shape (nt, nx, ny, nchannels)
-        if result.ndim == 4:
-            # sum all channels
-            result = np.sum(result, axis=-1)
-        if not args.quiet:
-            progress_bar.close()
-        del steady_image, transient_image, progress_bar
-    else:
-        image = integrator.render(scene, sensor_index)
-        result = np.array(image)
+            def update_progress(p):
+                if not args.quiet:
+                    progress_bar.n = int(p * 100)
+                    progress_bar.refresh()
 
-    np.save(hdr_path, result)
-    del result, scene, integrator
+            steady_image, transient_image = integrator.render(
+                scene, progress_callback=update_progress)
+            result = np.array(transient_image)
+            if result.ndim == 2:
+                nt, nc = result.shape
+                result = result.reshape((nt, 1, 1, nc))
+            result = np.moveaxis(result, 2, 0)
+            # result has shape (nt, nx, ny, nchannels)
+            if result.ndim == 4:
+                # sum all channels
+                result = np.sum(result, axis=-1)
+            if not args.quiet:
+                progress_bar.close()
+            del steady_image, transient_image, progress_bar
+        else:
+            image = integrator.render(scene, sensor_index)
+            result = np.array(image)
+
+        np.save(hdr_path, result)
+        del result, scene, integrator
+    except Exception as e:
+        queue.write(e)
 
 
 def _read_mitsuba_bitmap(path: str):
