@@ -1,7 +1,7 @@
 ##
 # Mitsuba
 ##
-mitsuba_variant: %default_mitsuba_variant%  # see mitsuba for possible types
+mitsuba_variant: $default_mitsuba_variant$  # see mitsuba for possible types
 integrator_max_depth: -1
 integrator_filter_bounces: -1
 integrator_discard_direct_paths: false

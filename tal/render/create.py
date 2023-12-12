@@ -41,7 +41,7 @@ def create_nlos_scene(folder_name, args):
     data_commented, data_uncommented = \
         default_yaml_data[:first_uncomment], default_yaml_data[first_uncomment:]
     data_commented = ''.join(list(
-        map(lambda l: l.replace(r'%default_mitsuba_variant%', mitsuba_backend.get_default_variant()),
+        map(lambda l: l.replace(r'$default_mitsuba_variant$', mitsuba_backend.get_default_variant()),
             map(lambda l: l if len(l.strip()) == 0 or l.startswith('#') else f'#{l}', data_commented))))
     default_yaml_data = ''.join([*data_commented, *data_uncommented])
 
