@@ -1,4 +1,5 @@
 .vscode
+scripts/pypi_publish.sh
 *__pycache__*
 build
 dist
