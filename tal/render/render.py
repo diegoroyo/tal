@@ -16,7 +16,7 @@ from functools import partial
 from tal.render.util import import_mitsuba_backend
 
 
-def render_nlos_scene(config_path, args):
+def render_nlos_scene(config_path, args, num_retries=0):
     config_path = os.path.abspath(config_path)
 
     assert os.path.exists(config_path), \
@@ -350,12 +350,15 @@ def render_nlos_scene(config_path, args):
                         laser_lookat_x, laser_lookat_y)
                     capture_data.H[:, x, y, ...] = np.squeeze(
                         mitsuba_backend.read_transient_image(hdr_path))
-            except ValueError:
+            except Exception:
+                if num_retries >= 5:
+                    raise AssertionError(
+                        f'Failed to read partial results after {num_retries} retries')
                 # FIXME Mitsuba sometimes fails to write some images,
                 # it seems like some sort of race condition
                 # If there is a partial result missing, just re-launch for now
-                print('We missed some partial results, re-launching')
-                return render_nlos_scene(config_path, args)
+                print('We missed some partial results, re-launching...')
+                return render_nlos_scene(config_path, args, num_retries=num_retries + 1)
         else:
             raise AssertionError(
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
