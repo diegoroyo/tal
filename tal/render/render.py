@@ -1,4 +1,5 @@
 import os
+import sys
 import shutil
 import yaml
 import tal
@@ -227,11 +228,12 @@ def render_nlos_scene(config_path, args):
                 logfile = open(os.path.join(
                     log_dir,
                     f'{experiment_name}_L[{laser_lookat_x}][{laser_lookat_y}].log'), 'w')
+            render_name = f'Laser {i + 1} of {len(laser_lookats)}'
             # NOTE: something here has a memory leak (probably Mitsuba-related)
             # We run Mitsuba in a separate process to ensure that the leaks do not add up
             # as they can fill your RAM in exhaustive scans
             run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, nlos_scene_xml, hdr_path, defines,
-                                    f'Laser {i + 1} of {len(laser_lookats)}', logfile, args)
+                                    render_name, sys.stdout, args)
             process = multiprocessing.Process(target=run_mitsuba_f)
             try:
                 process.start()
@@ -303,15 +305,22 @@ def render_nlos_scene(config_path, args):
             else:
                 raise AssertionError
 
-            for i, (laser_lookat_x, laser_lookat_y) in enumerate(laser_lookats):
-                x = i % laser_width
-                y = i // laser_width
-                hdr_path, _ = mitsuba_backend.partial_laser_path(
-                    partial_results_dir,
-                    experiment_name,
-                    laser_lookat_x, laser_lookat_y)
-                capture_data.H[:, x, y, ...] = np.squeeze(
-                    mitsuba_backend.read_transient_image(hdr_path))
+            try:
+                for i, (laser_lookat_x, laser_lookat_y) in enumerate(laser_lookats):
+                    x = i % laser_width
+                    y = i // laser_width
+                    hdr_path, _ = mitsuba_backend.partial_laser_path(
+                        partial_results_dir,
+                        experiment_name,
+                        laser_lookat_x, laser_lookat_y)
+                    capture_data.H[:, x, y, ...] = np.squeeze(
+                        mitsuba_backend.read_transient_image(hdr_path))
+            except ValueError:
+                # FIXME Mitsuba sometimes fails to write some images,
+                # it seems like some sort of race condition
+                # If there is a partial result missing, just re-launch for now
+                print('We missed some partial results, re-launching')
+                return render_nlos_scene(config_path, args)
         else:
             raise AssertionError(
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
@@ -350,3 +359,4 @@ def render_nlos_scene(config_path, args):
                 pass
         if delete:
             shutil.rmtree(root_dir)
+            os.remove(progress_file)

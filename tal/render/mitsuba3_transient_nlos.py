@@ -45,6 +45,10 @@ def get_version():
     return '3.3.0'
 
 
+def get_default_variant():
+    return 'llvm_mono'
+
+
 def set_variant(s):
     import mitsuba
     if not (s.startswith('llvm_') or s.startswith('cuda_')):
@@ -399,35 +403,38 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
     from tqdm import tqdm
     from mitransient.integrators.common import TransientADIntegrator
     import sys
+    import os
 
     sys.stdout = logfile
     sys.stderr = logfile
+    os.nice(args.nice)
+
+    if args.dry_run:
+        return
 
     scene = mi.load_file(scene_xml_path, **defines)
     integrator = scene.integrator()
 
-    # FIXME add defines, experiment_name, args (nice, dry_run, quiet)
-    # threads should be set here
     mi.Thread.set_thread_count(args.threads)
 
     # prepare
     if isinstance(integrator, TransientADIntegrator):
         integrator.prepare_transient(scene, sensor_index)
 
-    # render
-    if isinstance(integrator, TransientADIntegrator):
-        progress_bar = tqdm(total=100, desc=experiment_name,
-                            ascii=True, leave=False)
+        progress_bar = None
+        if not args.quiet:
+            progress_bar = tqdm(total=100, desc=experiment_name,
+                                ascii=True, leave=False)
 
         def update_progress(p):
-            progress_bar.n = int(p * 100)
-            progress_bar.refresh()
+            if not args.quiet:
+                progress_bar.n = int(p * 100)
+                progress_bar.refresh()
 
         steady_image, transient_image = integrator.render(
             scene, progress_callback=update_progress)
         result = np.array(transient_image)
         if result.ndim == 2:
-            # FIXME confocal case: (nt, nc)
             nt, nc = result.shape
             result = result.reshape((nt, 1, 1, nc))
         result = np.moveaxis(result, 2, 0)
@@ -435,7 +442,8 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         if result.ndim == 4:
             # sum all channels
             result = np.sum(result, axis=-1)
-        progress_bar.close()
+        if not args.quiet:
+            progress_bar.close()
         del steady_image, transient_image, progress_bar
     else:
         image = integrator.render(scene, sensor_index)

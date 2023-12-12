@@ -45,6 +45,10 @@ def get_version():
     return '2.2.1'
 
 
+def get_default_variant():
+    return 'scalar_rgb'
+
+
 def set_variant(s):
     import mitsuba
     if not s.startswith('scalar_'):
