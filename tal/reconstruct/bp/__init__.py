@@ -21,6 +21,7 @@ def solve(data: NLOSCaptureData,
           volume_xyz: NLOSCaptureData.VolumeXYZType = None,
           volume_format: VolumeFormat = VolumeFormat.UNKNOWN,
           camera_system: CameraSystem = CameraSystem.DIRECT_LIGHT,
+          projector_focus: NLOSCaptureData.Array3 = None,
           progress: bool = True) -> np.array:  # FIXME(diego): volume type
     """
     See module description of tal.reconstruct.bp
@@ -39,6 +40,9 @@ def solve(data: NLOSCaptureData,
     camera_system
         See tal.enums.CameraSystem
 
+    projector_focus
+        TODO
+
     progress
         If True, shows a progress bar with estimated time remaining.
     """
@@ -51,6 +55,7 @@ def solve(data: NLOSCaptureData,
         H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3,
         camera_system, data.t_accounts_first_and_last_bounces,
         data.t_start, data.delta_t,
+        projector_focus,
         data.laser_xyz, data.sensor_xyz,
         progress=progress)
 

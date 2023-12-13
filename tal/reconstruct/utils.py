@@ -40,10 +40,17 @@ def convert_to_N_3(data: NLOSCaptureData,
 
     if data.H_format == HFormat.T_Si:
         can_optimize_convolutions = False
-        H = data.H
+        nt, ns = data.H.shape
+        H = data.H.reshape(nt, 1, ns)
     elif data.H_format == HFormat.T_Sx_Sy:
         nt, nsx, nsy = data.H.shape
-        H = data.H.reshape(nt, nsx * nsy)
+        H = data.H.reshape(nt, 1, nsx * nsy)
+    elif data.H_format == HFormat.T_Li_Si:
+        nt, nl, ns = data.H.shape
+        H = data.H.reshape(nt, nl, ns)
+    elif data.H_format == HFormat.T_Lx_Ly_Sx_Sy:
+        nt, nlx, nly, nsx, nsy = data.H.shape
+        H = data.H.reshape(nt, nlx * nly, nsx * nsy)
     else:
         raise AssertionError(f'H_format {data.H_format} not implemented')
 
@@ -65,8 +72,26 @@ def convert_to_N_3(data: NLOSCaptureData,
         raise AssertionError(
             f'sensor_grid_format {data.sensor_grid_format} not implemented')
 
-    assert H.shape[1] == sensor_grid_xyz.shape[0], \
-        'H.shape does not match with sensor_grid_xyz.shape. Different number of points than measurements.'
+    if data.laser_grid_format == GridFormat.N_3:
+        can_optimize_convolutions = False
+        laser_grid_xyz = data.laser_grid_xyz
+    elif data.laser_grid_format == GridFormat.X_Y_3:
+        try:
+            assert nlx == data.laser_grid_xyz.shape[0] and nly == data.laser_grid_xyz.shape[1], \
+                'laser_grid_xyz.shape does not match with H.shape'
+        except NameError:
+            # nlx, nly not defined, OK
+            nlx, nly, _ = data.laser_grid_xyz.shape
+            pass
+        laser_grid_xyz = data.laser_grid_xyz.reshape(nlx * nly, 3)
+    else:
+        raise AssertionError(
+            f'laser_grid_format {data.laser_grid_format} not implemented')
+
+    assert H.shape[1] == laser_grid_xyz.shape[0], \
+        'H.shape does not match with laser_grid_xyz.shape.'
+    assert H.shape[2] == sensor_grid_xyz.shape[0], \
+        'H.shape does not match with sensor_grid_xyz.shape.'
 
     assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
     try:
@@ -81,7 +106,7 @@ def convert_to_N_3(data: NLOSCaptureData,
     except AssertionError:
         volume_xyz = volume_xyz.reshape((-1, 3))
 
-    return (H, data.laser_grid_xyz, sensor_grid_xyz, volume_xyz)
+    return (H, laser_grid_xyz, sensor_grid_xyz, volume_xyz)
 
 
 def convert_reconstruction_from_N_3(data: NLOSCaptureData,

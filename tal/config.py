@@ -154,6 +154,8 @@ class ResourcesConfig:
             data_out[:] = f_work(data_in)
 
         if self.force_single_thread:
+            print(
+                f'tal.resources: Estimated memory usage: {f_mem_usage((1, 1)):.1f} GiB')
             single_process()
             return
 
@@ -213,7 +215,7 @@ class ResourcesConfig:
             return
 
         print(f'tal.resources: Using {cpus} processes out of {max_cpu} '
-              f'and downscale {downscale}')
+              f'and downscale {downscale}. Estimated memory usage: {f_mem_usage((downscale, cpus))} GiB')
 
         if in_slice_dim is not None:
             in_shape = np.insert(data_in.shape, in_slice_dim + 1, downscale)

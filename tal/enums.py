@@ -144,17 +144,27 @@ class CameraSystem(Enum):
         Transient camera. Computes a video of the scene (t >= 0).
         The returned reconstruction will have an extra time dimension.
     """
-    DIRECT_LIGHT = 0  # focused light (evaluate confocal time gated at t=0)
+    DIRECT_LIGHT = 0  # evaluate confocal time gated at t=0
     CONFOCAL_TIME_GATED = 1  # pulsed focused light
-    # TRANSIENT_T0 = 2  # NYI (evaluate transient at t=0), also add to functions below
-    # STEADY_STATE = 3  # NYI (integrate transient over time), also add to functions below
+    PROJECTOR_CAMERA = 2  # TODO
+    PROJECTOR_CAMERA_T0 = 3  # TODO
     TRANSIENT = 4  # pulsed point light
-    # PHOTO_CAMERA = 5  # NYI (single-freq imaging), also add to functions below
+    # TRANSIENT_T0 = 5  # NYI (evaluate transient at t=0), also add to functions below
+    # STEADY_STATE = 6  # NYI (integrate transient over time), also add to functions below
+    # PHOTO_CAMERA = 7  # NYI (single-freq imaging), also add to functions below
 
     def bp_accounts_for_d_2(self) -> bool:
-        return self in [CameraSystem.DIRECT_LIGHT, CameraSystem.CONFOCAL_TIME_GATED]
+        return self in [CameraSystem.DIRECT_LIGHT,
+                        CameraSystem.PROJECTOR_CAMERA,
+                        CameraSystem.PROJECTOR_CAMERA_T0,
+                        CameraSystem.CONFOCAL_TIME_GATED]
 
     def is_transient(self) -> bool:
         # NOTE: prob. need to divide into "returns_transient" and "computes_transient"
         # or sth like that
-        return self in [CameraSystem.TRANSIENT, CameraSystem.CONFOCAL_TIME_GATED]
+        return self in [CameraSystem.TRANSIENT,
+                        CameraSystem.CONFOCAL_TIME_GATED,
+                        CameraSystem.PROJECTOR_CAMERA]
+
+    def implements_projector(self) -> bool:
+        return self in [CameraSystem.PROJECTOR_CAMERA, CameraSystem.PROJECTOR_CAMERA_T0]

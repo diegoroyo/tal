@@ -35,22 +35,25 @@ def render_nlos_scene(config_path, args, num_retries=0):
     try:
         scene_config = yaml.safe_load(
             open(config_path, 'r')) or dict()
+
+        if scene_config.get('mitsuba_variant', '').startswith('cuda'):
+            assert len(args.gpus) > 0, \
+                'You must specify at least one GPU to use CUDA. Use tal --gpu <id1> <id2> ...'
+            gpu_ids = ','.join(map(str, args.gpus))
+            os.environ['CUDA_VISIBLE_DEVICES'] = gpu_ids
+        else:
+            os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+
+        mitsuba_backend = import_mitsuba_backend()
+
         scene_defaults = yaml.safe_load(
             open(local_file_path('render/scene_defaults.yaml'), 'r'))
+        scene_defaults['mitsuba_variant'] = mitsuba_backend.get_default_variant()
+
     except yaml.YAMLError as exc:
         raise AssertionError(
             f'Invalid YAML format in TAL config file: {exc}') from exc
     scene_config = {**scene_defaults, **scene_config}
-
-    if scene_config['mitsuba_variant'].startswith('cuda'):
-        assert len(args.gpus) > 0, \
-            'You must specify at least one GPU to use CUDA. Use tal --gpu <id1> <id2> ...'
-        gpu_ids = ','.join(map(str, args.gpus))
-        os.environ['CUDA_VISIBLE_DEVICES'] = gpu_ids
-    else:
-        os.environ.pop('CUDA_VISIBLE_DEVICES', None)
-
-    mitsuba_backend = import_mitsuba_backend()
 
     if not args.dry_run:
         mitsuba_backend.set_variant(scene_config['mitsuba_variant'])
