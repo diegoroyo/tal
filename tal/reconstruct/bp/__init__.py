@@ -52,7 +52,7 @@ def solve(data: NLOSCaptureData,
 
     from tal.reconstruct.bp.backprojection import backproject
     reconstructed_volume_n3 = backproject(
-        H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3,
+        H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3, volume_xyz.shape[:-1],
         camera_system, data.t_accounts_first_and_last_bounces,
         data.t_start, data.delta_t,
         projector_focus,

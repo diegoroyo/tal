@@ -4,6 +4,10 @@ import shutil
 import yaml
 import multiprocessing as mp
 import numpy as np
+import resource
+import psutil
+import gc
+from tqdm import tqdm
 from enum import Enum
 
 from tal.util import local_file_path
@@ -109,10 +113,6 @@ def write_yaml_string(data_dict: dict) -> str:
 """ Utils to read/write to the context configuration (tal.config) """
 
 
-def get_memory_usage(*args):
-    return sum(np.prod(shape) * item_size for shape, item_size in args) / 2 ** 30
-
-
 def _run_dill_encoded(payload):
     fun, args = dill.loads(payload)
     return fun(*args)
@@ -124,7 +124,8 @@ def _apply_async(pool, fun, args, **kwargs):
 
 
 DEFAULT_CPU_PROCESSES = 1
-DEFAULT_MEMORY_LIMIT_GB = None
+DEFAULT_DOWNSCALE = None
+DEFAULT_CALLBACK = None
 
 
 class ResourcesConfig:
@@ -132,10 +133,12 @@ class ResourcesConfig:
 
     def __init__(self,
                  cpu_processes=DEFAULT_CPU_PROCESSES,
-                 max_memory_gb=DEFAULT_MEMORY_LIMIT_GB):
+                 downscale=DEFAULT_DOWNSCALE,
+                 callback=DEFAULT_CALLBACK):
         self.cpu_processes = cpu_processes
-        self.max_memory_gb = max_memory_gb
-        self.force_single_thread = cpu_processes == 1
+        self.downscale = downscale
+        self.callback = callback
+        self.force_single_thread = cpu_processes == 1 and downscale is None
 
     def __enter__(self):
         global TAL_RESOURCES_CONFIG
@@ -148,21 +151,22 @@ class ResourcesConfig:
         del self.old_resources
         return False
 
-    def split_work(self, f_work, data_in, data_out, f_mem_usage, slice_dims):
+    def split_work(self, f_work, data_in, data_out, slice_dims):
+
+        gc.collect()
+        _, hard = resource.getrlimit(resource.RLIMIT_AS)
+        free_memory_bytes = int(psutil.virtual_memory().free * 0.98)
+        free_memory_gb = free_memory_bytes / 2 ** 30
+        print('tal.resources: Setting memory limit to '
+              f'{free_memory_gb:.2f} GiB.')
+        resource.setrlimit(resource.RLIMIT_AS, (free_memory_bytes, hard))
 
         def single_process():
             data_out[:] = f_work(data_in)
 
         if self.force_single_thread:
-            print(
-                f'tal.resources: Estimated memory usage: {f_mem_usage((1, 1)):.1f} GiB')
             single_process()
             return
-
-        max_cpu = min(
-            mp.cpu_count(),
-            999 if self.cpu_processes == 'max' else self.cpu_processes
-        )
 
         in_slice_dim, out_slice_dim = slice_dims
 
@@ -173,49 +177,29 @@ class ResourcesConfig:
                 return False
             return True
 
-        cpus = 1
+        cpus = min(
+            mp.cpu_count(),
+            999 if self.cpu_processes == 'max' else self.cpu_processes
+        )
         downscale = 1
-        done = False
-        DOWNSCALE_LIMIT = 128
-        if self.max_memory_gb is None:
-            data_dim = min((x for x in [
-                           None if in_slice_dim is None else data_in.shape[in_slice_dim],
-                           None if out_slice_dim is None else data_out.shape[out_slice_dim],
-                           ] if x is not None), default=None)
-            if data_dim is not None and data_dim < max_cpu:
-                while check_divisible(downscale * 2) and downscale * 2 <= DOWNSCALE_LIMIT:
-                    downscale *= 2
-                cpus = downscale
-            else:
-                cpus = max_cpu
-                downscale = int(2 ** np.ceil(np.log2(max_cpu)))
-        else:
-            while not done and downscale <= DOWNSCALE_LIMIT:
-                if f_mem_usage((downscale, cpus)) > self.max_memory_gb and check_divisible(downscale * 2):
-                    # computations do not fit in memory
-                    downscale *= 2
-                elif cpus < max_cpu and cpus < downscale and f_mem_usage((downscale, cpus + 1)) < self.max_memory_gb:
-                    # we can use more cpus
-                    cpus += 1
-                elif cpus < max_cpu and f_mem_usage((downscale * 2, cpus + 1)) < self.max_memory_gb and check_divisible(downscale * 2):
-                    # we can use more cpus only if we downscale more
-                    downscale *= 2
-                    cpus += 1
-                else:
-                    # found optimal configuration
-                    done = True
+        max_downscale = min(
+            128,
+            128 if self.downscale is None else self.downscale
+        )
+        while (downscale < max_downscale or downscale < cpus) and check_divisible(downscale * 2):
+            downscale *= 2
 
-        if downscale > DOWNSCALE_LIMIT:
-            print(f'WARNING: Memory usage is too big even with the lowest configuration '
-                  f'({f_mem_usage((downscale, cpus))} GiB used of {self.max_memory_gb} GiB available '
-                  f'by splitting computations in {downscale} chunks).')
+        data_dim = min((x for x in [
+                        None if in_slice_dim is None else data_in.shape[in_slice_dim],
+                        None if out_slice_dim is None else data_out.shape[out_slice_dim],
+                        ] if x is not None), default=None)
 
         if downscale == 1:
             single_process()
             return
 
-        print(f'tal.resources: Using {cpus} processes out of {max_cpu} '
-              f'and downscale {downscale}. Estimated memory usage: {f_mem_usage((downscale, cpus))} GiB')
+        print(f'tal.resources: Using {cpus} CPU processes '
+              f'and downscale {downscale}.')
 
         if in_slice_dim is not None:
             in_shape = np.insert(data_in.shape, in_slice_dim + 1, downscale)
@@ -224,7 +208,7 @@ class ResourcesConfig:
             out_shape = np.insert(data_out.shape, out_slice_dim + 1, downscale)
             out_shape[out_slice_dim] //= downscale
 
-        with mp.Pool(processes=max_cpu) as pool:
+        with mp.Pool(processes=cpus) as pool:
             try:
                 def do_work(din):
                     return _apply_async(pool, f_work, (din,),
@@ -242,13 +226,26 @@ class ResourcesConfig:
                     asyncs.append(do_work(in_slice))
 
                 pool.close()
+                tqdm_kwargs = {
+                    'total': len(asyncs),
+                    'desc': 'tal.resources progress',
+                }
                 if out_slice_dim is None:
-                    for i, async_ in enumerate(asyncs):
+                    for i, async_ in tqdm(enumerate(asyncs), **tqdm_kwargs):
                         data_out += async_.get()
+                        if self.callback is not None:
+                            self.callback(data_out, i, len(asyncs))
                 else:
-                    for i, (async_, out_slice) in enumerate(zip(asyncs, data_out)):
+                    for i, (async_, out_slice) in tqdm(enumerate(zip(asyncs, data_out)), **tqdm_kwargs):
                         out_slice[:] = async_.get()
+                        if self.callback is not None:
+                            self.callback(data_out, i, len(asyncs))
                 pool.join()
+            except MemoryError:
+                pool.terminate()
+                pool.join()
+                raise MemoryError(f'tal.resources: Memory error, {free_memory_gb:.2f} GiB is not enough.'
+                                  ' Either decrease CPU processes, increase downscale, or move to another system.')
             except KeyboardInterrupt:
                 pool.terminate()
                 pool.join()
@@ -262,9 +259,11 @@ def get_resources():
     return TAL_RESOURCES_CONFIG
 
 
-def set_resources(cpu_processes=DEFAULT_CPU_PROCESSES, memory_limit_gb=DEFAULT_MEMORY_LIMIT_GB):
+def set_resources(cpu_processes=DEFAULT_CPU_PROCESSES, downscale=DEFAULT_DOWNSCALE, callback=DEFAULT_CALLBACK):
     """
-    Configure Y-TAL to use a specific number of CPU processes and a memory limit.
+    TODO
+
+    Configure Y-TAL to use a specific number of CPU processes.
 
     Not all functions implemented in Y-TAL support this configuration, mostly the ones
     in tal.reconstruct (filtering and reconstruction).
@@ -274,8 +273,8 @@ def set_resources(cpu_processes=DEFAULT_CPU_PROCESSES, memory_limit_gb=DEFAULT_M
     cpu_processes
         Can be an integer or 'max' to use all available CPU processes.
 
-    memory_limit_gb
-        Can be an integer or None to use no memory limit.
+    downscale
+        Can be an integer or None to use all 
     """
     global TAL_RESOURCES_CONFIG
-    TAL_RESOURCES_CONFIG = ResourcesConfig(cpu_processes, memory_limit_gb)
+    TAL_RESOURCES_CONFIG = ResourcesConfig(cpu_processes, downscale, callback)

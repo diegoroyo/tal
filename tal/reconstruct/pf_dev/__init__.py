@@ -22,6 +22,7 @@ def solve(data: NLOSCaptureData,
           volume_xyz: NLOSCaptureData.VolumeXYZType = None,
           volume_format: VolumeFormat = VolumeFormat.UNKNOWN,
           camera_system: CameraSystem = CameraSystem.DIRECT_LIGHT,
+          projector_focus: NLOSCaptureData.Array3 = None,
           progress: bool = True,
           try_optimize_convolutions: bool = True) -> np.array:  # FIXME(diego) type
     """
@@ -60,9 +61,10 @@ def solve(data: NLOSCaptureData,
 
     from tal.reconstruct.pf_dev.phasor_fields import backproject_pf_multi_frequency
     reconstructed_volume_n3 = backproject_pf_multi_frequency(
-        H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3,
+        H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3, volume_xyz.shape[:-1],
         camera_system, data.t_accounts_first_and_last_bounces,
         data.t_start, data.delta_t,
+        projector_focus,
         wl_mean, wl_sigma, border,
         data.laser_xyz, data.sensor_xyz,
         progress=progress)
