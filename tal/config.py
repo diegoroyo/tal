@@ -153,13 +153,13 @@ class ResourcesConfig:
 
     def split_work(self, f_work, data_in, data_out, slice_dims):
 
-        gc.collect()
-        _, hard = resource.getrlimit(resource.RLIMIT_AS)
-        free_memory_bytes = int(psutil.virtual_memory().free * 0.98)
-        free_memory_gb = free_memory_bytes / 2 ** 30
-        print('tal.resources: Setting memory limit to '
-              f'{free_memory_gb:.2f} GiB.')
-        resource.setrlimit(resource.RLIMIT_AS, (free_memory_bytes, hard))
+        # gc.collect()
+        # _, hard = resource.getrlimit(resource.RLIMIT_AS)
+        # free_memory_bytes = int(psutil.virtual_memory().free * 0.98)
+        # free_memory_gb = free_memory_bytes / 2 ** 30
+        # print('tal.resources: Setting memory limit to '
+        #       f'{free_memory_gb:.2f} GiB.')
+        # resource.setrlimit(resource.RLIMIT_AS, (free_memory_bytes, hard))
 
         def single_process():
             data_out[:] = f_work(data_in)
