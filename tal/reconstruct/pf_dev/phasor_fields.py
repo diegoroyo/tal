@@ -1,6 +1,6 @@
 import numpy as np
 import tal
-from tal.config import get_resources, get_memory_usage
+from tal.config import get_resources
 from tqdm import tqdm
 
 
@@ -256,12 +256,6 @@ def backproject_pf_multi_frequency(
             work_conv,
             data_in=range_z,
             data_out=H_1,
-            f_mem_usage=lambda dc: (
-                lambda downscale, cpus:
-                get_memory_usage(
-                    ((ns, 3), s * (1 + cpus)), ((4 * ns, 3), s * (1 + cpus)),
-                    (H_0.shape, (1 + h0) * cpus), (H_1.shape, 2 * h1))
-            )(*dc),
             slice_dims=(0, H_1.ndim - 1),
         )
 
@@ -314,11 +308,6 @@ def backproject_pf_multi_frequency(
             work_n3,
             data_in=range_v,
             data_out=H_1,
-            f_mem_usage=lambda dc: (
-                lambda downscale, cpus:
-                get_memory_usage(
-                    ((ns, nv, 3), s * (1 + cpus / downscale)), (H_0.shape, (1 + h0) * cpus), (H_1.shape, 2 * h1))
-            )(*dc),
             slice_dims=(0, H_1.ndim - 1),
         )
 

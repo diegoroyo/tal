@@ -1,6 +1,6 @@
 from tal.io.capture_data import NLOSCaptureData
 from tal.enums import HFormat
-from tal.config import get_resources, get_memory_usage
+from tal.config import get_resources
 import numpy as np
 
 
@@ -107,11 +107,6 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         work,
         data_in=H,
         data_out=HoK,
-        f_mem_usage=lambda dc: (
-            lambda downscale, cpus:
-            get_memory_usage(
-                (HoK.shape, s + c), (K.shape, (s + c) * cpus), (HoK.shape, c * 2 * cpus / downscale))
-        )(*dc),
         slice_dims=(1, 1),
     )
 
