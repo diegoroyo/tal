@@ -4,115 +4,39 @@ from tal.config import get_resources
 from tqdm import tqdm
 
 
-def backproject_pf_single_frequency_naive(H_0, d, t, frequency):
-    """
-    H_0: (nt, ns)
-    d: (ns, nv)
-    t: (nt)
-    frequency: scalar, in meters
-    """
-    assert H_0.ndim == 2, 'Incorrect H format'
-
-    ns, nv = d.shape
-    nt, ns_ = H_0.shape
-    assert ns == ns_, 'Incorrect shape'
-
-    propagator = np.exp(2j * np.pi * d * frequency)
-
-    e = np.exp(-2j * np.pi * t * frequency)
-    H_0_w = np.sum(H_0 * e.reshape((nt, 1)), axis=0).reshape((ns, 1))
-    H_1_w = np.sum(H_0_w * propagator, axis=0)
-
-    return H_1_w
-
-
-def backproject_pf_single_frequency_conv(H_0, d_014, d_2, d_3, t, frequency):
-    """
-    Special case where the volume is a slice parallel to the relay wall
-    with the same resolution and XY positions (only Z varies)
-
-    The convolution can be implemented in frequency domain and can be much faster
-
-    H_0: (nt, nsx, nsy)
-    d_014: scalar, in meters
-    d_2: (nsx, nsy)
-    d_3: (rx, ry) where rx = 2 * nsx - 1 and ry = 2 * nsy - 1
-    t: (nt)
-    frequency: scalar, in meters
-    """
-    assert H_0.ndim == 3, 'Incorrect H format'
-
-    rx, ry = d_3.shape
-    nt, nsx, nsy = H_0.shape
-    assert rx == 2 * nsx - 1 and ry == 2 * nsy - 1, 'Incorrect shape'
-
-    rsd_014 = np.exp(2j * np.pi * d_014 * frequency)
-    rsd_3 = np.exp(2j * np.pi * d_3 * frequency)
-
-    e = np.exp(-2j * np.pi * t * frequency)
-    H_0_w = np.sum(H_0 * e.reshape((nt, 1, 1)), axis=0).reshape((nsx, nsy))
-
-    H_0_w *= rsd_014
-
-    H_0_w_fft = np.fft.fft2(H_0_w, s=(rx, ry))
-    rsd_3_fft = np.fft.fft2(np.fft.ifftshift(rsd_3), s=(rx, ry))
-    H_1_w_full_fft = H_0_w_fft * rsd_3_fft
-    H_1_w_full = np.fft.ifft2(H_1_w_full_fft)
-    H_1_w = H_1_w_full[:nsx, :nsy]
-
-    if d_2 is not None:
-        rsd_2 = np.exp(2j * np.pi * d_2 * frequency)
-        H_1_w *= rsd_2
-
-    return H_1_w
-
-
 def backproject_pf_multi_frequency(
-        H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz,
+        H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_shape,
         camera_system, t_accounts_first_and_last_bounces,
         t_start, delta_t,
+        projector_focus,
         wl_mean, wl_sigma, border,
+        optimize_projector_convolutions, optimize_camera_convolutions,
         laser_xyz=None, sensor_xyz=None, progress=False):
-    assert laser_grid_xyz.size == 3, 'Only supports one laser position'
-    assert (not t_accounts_first_and_last_bounces or (laser_xyz is not None and sensor_xyz is not None)), \
-        't_accounts_first_and_last_bounces requires laser_xyz and sensor_xyz'
 
-    nt = H_0.shape[0]
+    if not optimize_projector_convolutions and not optimize_camera_convolutions and not camera_system.is_transient():
+        print('tal.reconstruct.pf_dev: You have specified a time-gated camera system '
+              'with an arbitrary reconstruction volume (that is not parallel to the relay wall). '
+              'This will work, but the tal.reconstruct.bp or tal.reconstruct.fbp implementations '
+              'are better suited for these cases.')
+
+    nt, nl, ns = H_0.shape
     nv = np.prod(volume_xyz.shape[:-1])  # N or X * Y or X * Y * Z
-    ns = np.prod(sensor_grid_xyz.shape[:-1])  # N or X * Y
-
-    try:
-        assert H_0.ndim == 3
-        assert sensor_grid_xyz.ndim == 3
-        assert volume_xyz.ndim == 3 or volume_xyz.ndim == 4
-        assert not t_accounts_first_and_last_bounces
-
-        nt, nsx, nsy = H_0.shape
-        nsx_, nsy_ = sensor_grid_xyz.shape[:2]
-        assert nsx == nsx_ and nsy == nsy_
-        nvx, nvy = volume_xyz.shape[:2]
-        assert nvx == nsx and nvy == nsy
-
-        def check_parallel(xyz_a, xyz_b):
-            return np.allclose(xyz_a[..., 0:2], xyz_b[..., 0:2])
-
+    if optimize_projector_convolutions or optimize_camera_convolutions:
         if volume_xyz.ndim == 3:
-            assert check_parallel(sensor_grid_xyz, volume_xyz)
-        elif volume_xyz.ndim == 4:
-            nvx, nvy, nvz = volume_xyz.shape[:3]
-            for iz in range(nvz):
-                depths = volume_xyz[:, :, iz, 2].reshape(-1)
-                assert np.all(depths == depths[0])
-                assert check_parallel(sensor_grid_xyz, volume_xyz[:, :, iz])
-
-        print('tal.reconstruct.pf_dev: Using convolutions optimization')
-        optimize_slices = True
-    except AssertionError:
-        assert np.prod(H_0.shape[1:]) == ns, 'Incorrect shape'
-        H_0 = H_0.reshape((nt, ns))
-        sensor_grid_xyz = sensor_grid_xyz.reshape((ns, 3))
-        volume_xyz = volume_xyz.reshape((nv, 3))
-        optimize_slices = False
+            nvx, nvy, _ = volume_xyz.shape
+            volume_xyz = volume_xyz.reshape((nvx, nvy, 1, 3))
+        assert volume_xyz.ndim == 4, 'Expecting X_Y_Z_3 format'
+        nvx, nvy, nvz, _ = volume_xyz.shape
+    if optimize_projector_convolutions:
+        assert laser_grid_xyz.ndim == 3, 'Expecting X_Y_3 format'
+        nlx, nly, _ = laser_grid_xyz.shape
+    else:
+        nlx, nly = 1, 1
+    if optimize_camera_convolutions:
+        assert sensor_grid_xyz.ndim == 3, 'Expecting X_Y_3 format'
+        nsx, nsy, _ = sensor_grid_xyz.shape
+    else:
+        nsx, nsy = 1, 1
 
     """ Phasor fields filter """
 
@@ -145,7 +69,7 @@ def backproject_pf_multi_frequency(
     weights = K_fftshift[freq_min_idx:freq_max_idx+1]
     freqs = K_fftfreq[freq_min_idx:freq_max_idx+1]
     print('tal.reconstruct.pf_dev: '
-          f'Using wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
+          f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
     nw = len(weights)
 
     if border == 'zero':
@@ -155,160 +79,266 @@ def backproject_pf_multi_frequency(
     else:
         raise AssertionError('Implemented only for border="zero"')
 
-    """ Propagation of specific frequencies """
+    """ Distance calculation and propagation """
+
+    if camera_system.implements_projector():
+        assert projector_focus is not None, \
+            'projector_focus is required for this camera system'
+        if len(laser_grid_xyz) <= 3:
+            print('tal.reconstruct.pf_dev: You have specified a camera_system with a projector and a projector_focus, '
+                  'but your data only contains one illumination point. Thus, you will not be able to implement the projector '
+                  'i.e. focus the illumination aperture anywhere on the scene.')
+        if len(projector_focus) == 3:
+            projector_focus = np.array(projector_focus).reshape(
+                (1, 1, 1, 3))
+            projector_focus_mode = 'single'
+            optimize_projector_convolutions = False
+            print('tal.reconstruct.pf_dev: When projector_focus is a 3D point, the convolution optimization is not implemented. '
+                  'Falling back to default method.')
+        else:
+            assert np.allclose(projector_focus, volume_xyz), \
+                'projector_focus must be a single 3D point, ' \
+                'or you should pass the same value as volume_xyz.'
+            projector_focus = projector_focus.reshape((1, nv, 1, 3))
+            projector_focus_mode = 'exhaustive'
+    else:
+        assert projector_focus is None, \
+            'projector_focus must not be set for this camera system'
+        projector_focus = volume_xyz.reshape((1, nv, 1, 3))
+        projector_focus_mode = 'confocal'
+    projector_focus = projector_focus.astype(np.float32)
+
+    # reshape everything into (nl, nv, ns, 3)
+    laser_xyz = laser_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
+    sensor_xyz = sensor_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
+    laser_grid_xyz = laser_grid_xyz.reshape((nl, 1, 1, 3)).astype(np.float32)
+    sensor_grid_xyz = sensor_grid_xyz.reshape((1, 1, ns, 3)).astype(np.float32)
+    volume_xyz = volume_xyz.reshape((1, nv, 1, 3)).astype(np.float32)
+
+    def distance(a, b):
+        return np.linalg.norm(b - a, axis=-1)
+
+    # d_0: t_start (moment the sensor starts capturing w.r.t. pulse emission)
+    # d_1: laser origin to laser illuminated point
+    # d_2: laser illuminated point to projector_focus
+    # d_3: x_v (camera_focus) to sensor imaged point
+    # d_4: sensor imaged point to sensor origin
+    d_0 = np.float32(t_start * -1)
+
+    if t_accounts_first_and_last_bounces:
+        d_1 = distance(laser_xyz, laser_grid_xyz).reshape((nl, 1))
+        d_4 = distance(sensor_grid_xyz, sensor_xyz).reshape((1, ns))
+    else:
+        d_1 = np.float32(0.0)
+        d_4 = np.float32(0.0)
+
+    if projector_focus_mode == 'exhaustive':
+        n_projector_points = nv
+    else:
+        n_projector_points = 1
+
+    d_014 = d_0 + d_1 + d_4
+
+    if optimize_projector_convolutions or optimize_camera_convolutions:
+        nvi = nvx * nvy
+        range_z = range(nvz)
+    else:
+        nvi = nv
+        range_z = [0]
+        nvz = 1
+    range_z = enumerate(range_z)
+    if nvz > 1 and progress:
+        range_z = tqdm(
+            range_z, desc='tal.reconstruct.pf_dev Z slices', leave=False)
 
     if camera_system.is_transient():
-        H_1 = np.zeros((nt, nv), dtype=np.complex64)
+        H_1 = np.zeros(
+            (nt, n_projector_points, nvi, nvz),
+            dtype=np.complex64)
     else:
-        H_1 = np.zeros(nv, dtype=np.complex64)
+        H_1 = np.zeros(
+            (n_projector_points, nvi, nvz),
+            dtype=np.complex64)
 
-    d_014 = t_start * -1
-    if t_accounts_first_and_last_bounces:
-        # d_1
-        d_014 += np.linalg.norm(laser_xyz.reshape(3) -
-                                laser_grid_xyz.reshape(3))
-        # d_4
-        d_014 += np.linalg.norm(sensor_xyz.reshape((1, 1, 3)) -
-                                sensor_grid_xyz.reshape((ns, 1, 3)), axis=2)
-
-    t = delta_t * np.linspace(start=0, stop=nf - 1, num=nf)
-
-    h0 = H_0.dtype.itemsize
-    h1 = H_1.dtype.itemsize
-    s = sensor_grid_xyz.dtype.itemsize
-
-    if optimize_slices:
-        # optimized for when the volume is formed
-        # with XY slices parallel to the relay wall
-        if volume_xyz.ndim == 3:
-            nvx, nvy, _ = volume_xyz.shape
-            volume_xyz = volume_xyz.reshape((nvx, nvy, 1, 3))
-        nvx, nvy, nvz, _ = volume_xyz.shape
-
-        old_H_1_shape = H_1.shape
-        if camera_system.is_transient():
-            H_1 = H_1.reshape((nt, nvx, nvy, nvz))
+    for i_z, nvzi in range_z:
+        if optimize_projector_convolutions or optimize_camera_convolutions:
+            projector_focus_i = projector_focus.reshape(
+                (nvx, nvy, nvz, 3))[..., nvzi, :]
+            volume_xyz_i = volume_xyz.reshape(
+                (nvx, nvy, nvz, 3))[..., nvzi, :]
         else:
-            H_1 = H_1.reshape((nvx, nvy, nvz))
+            projector_focus_i = projector_focus
+            volume_xyz_i = volume_xyz
 
-        range_z = np.arange(nvz, dtype=np.int32)
+        if camera_system.bp_accounts_for_d_2():
+            if optimize_projector_convolutions:
+                assert projector_focus_mode in ['exhaustive', 'confocal']
+                rlx = nvx + nlx - 1
+                rly = nvy + nly - 1
+                laser_grid_xyz = laser_grid_xyz.reshape((nlx, nly, 3))
+                l_dx = laser_grid_xyz[1, 0, ...] - \
+                    laser_grid_xyz[0, 0, ...]
+                l_dy = laser_grid_xyz[0, 1, ...] - \
+                    laser_grid_xyz[0, 0, ...]
 
-        dx = volume_xyz[1, 0, 0, 0] - volume_xyz[0, 0, 0, 0]
-        dy = volume_xyz[0, 1, 0, 1] - volume_xyz[0, 0, 0, 1]
-        rx = 2 * nvx - 1
-        ry = 2 * nvy - 1
-        px = np.linspace(start=-dx * (nvx - 1), stop=dx *
-                         (nvx - 1), num=rx, dtype=np.float32)
-        px = np.squeeze(np.stack((px,)*ry, axis=1))
-        py = np.linspace(start=-dy * (nvy - 1), stop=dy *
-                         (nvy - 1), num=ry, dtype=np.float32)
-        py = np.squeeze(np.stack((py,)*rx, axis=0))
+                p0 = projector_focus_i[0, 0, ...] - \
+                    laser_grid_xyz[-1, -1, ...]
 
-        def work_conv(subrange_z):
-            volume_xyz_d = volume_xyz[..., subrange_z, :]
-            nvx, nvy, nvzd, _ = volume_xyz_d.shape
-
-            if camera_system.is_transient():
-                H_1 = np.zeros((nt, nvx, nvy, nvzd), dtype=np.complex64)
+                i_vals, j_vals = np.meshgrid(
+                    np.arange(rlx), np.arange(rly), indexing='ij')
+                i_vals = i_vals.reshape((rlx, rly, 1))
+                j_vals = j_vals.reshape((rlx, rly, 1))
+                p0 = p0.reshape((1, 1, 3))
+                s_dx = s_dx.reshape((1, 1, 3))
+                s_dy = s_dy.reshape((1, 1, 3))
+                d_2 = np.linalg.norm(
+                    p0 + l_dx * i_vals + l_dy * j_vals, axis=-1).astype(np.float32)
+                d_2 = np.fft.ifftshift(d_2)
+            elif projector_focus_mode == 'confocal':
+                d_2 = distance(
+                    laser_grid_xyz, projector_focus_i.reshape((nl, nvi, 1, 3)))
             else:
-                H_1 = np.zeros((nvx, nvy, nvzd), dtype=np.complex64)
+                assert projector_focus_mode == 'single'
+                d_2 = distance(
+                    laser_grid_xyz, projector_focus_i.reshape((nl, 1, 1, 3)))
+        else:
+            d_2 = np.float32(0.0)
 
-            z_list = volume_xyz_d[0, 0, :, 2]
+        if optimize_camera_convolutions:
+            rsx = nvx + nsx - 1
+            rsy = nvy + nsy - 1
+            sensor_grid_xyz = sensor_grid_xyz.reshape((nsx, nsy, 3))
+            s_dx = sensor_grid_xyz[1, 0, ...] - \
+                sensor_grid_xyz[0, 0, ...]
+            s_dy = sensor_grid_xyz[0, 1, ...] - \
+                sensor_grid_xyz[0, 0, ...]
+
+            p0 = volume_xyz_i[0, 0, ...] - \
+                sensor_grid_xyz[-1, -1, ...]
+
+            i_vals, j_vals = np.meshgrid(
+                np.arange(rsx), np.arange(rsy), indexing='ij')
+            i_vals = i_vals.reshape((rsx, rsy, 1))
+            j_vals = j_vals.reshape((rsx, rsy, 1))
+            p0 = p0.reshape((1, 1, 3))
+            s_dx = s_dx.reshape((1, 1, 3))
+            s_dy = s_dy.reshape((1, 1, 3))
+            d_3 = np.linalg.norm(
+                p0 + s_dx * i_vals + s_dy * j_vals, axis=-1).astype(np.float32)
+            d_3 = np.fft.ifftshift(d_3)
+        else:
+            d_3 = distance(volume_xyz_i, sensor_grid_xyz)
+
+        nw_pow2 = 2 ** np.ceil(np.log2(nw)).astype(np.int32)
+        freqs_pad = np.pad(freqs, (0, nw_pow2 - nw), 'constant')
+        weights_pad = np.pad(weights, (0, nw_pow2 - nw), 'constant')
+
+        def work_zslice_freq(range_w):
+            nwi = len(range_w)
+            freqs_i = freqs_pad[range_w]
+            weights_i = weights_pad[range_w]
+            H_1_w = np.zeros((nwi, n_projector_points, nvi),
+                             dtype=np.complex64)
+
+            fw_iterator = enumerate(zip(freqs_i, weights_i))
             if progress:
-                progress_bar = tqdm(leave=False,
-                                    total=len(z_list) * len(freqs))
+                fw_iterator = tqdm(fw_iterator,
+                                   desc='tal.reconstruct.pf_dev propagation (1/2)',
+                                   total=min(len(freqs_i), nw),
+                                   leave=False)
 
-            for iz, pz in enumerate(z_list):
-                progress_bar.set_description(f'Z = {pz:.2f}m')
-                d_2 = None
-                if camera_system.bp_accounts_for_d_2():
-                    d_2 = np.linalg.norm(
-                        volume_xyz_d[:, :, iz, :] -
-                        laser_grid_xyz.reshape((1, 1, 3)),
-                        axis=2)
-                d_3 = np.linalg.norm(
-                    np.stack(
-                        (px, py, np.ones((rx, ry), dtype=np.float32) * pz),
-                        axis=2),
-                    axis=2)
+            for i_w, (frequency, weight) in fw_iterator:
+                if weight == 0.0:
+                    # H_1_w[i_w, ...] = 0
+                    continue
 
-                fw_iterator = zip(freqs, weights)
+                e = np.exp(-2j * np.pi * t * frequency)
+                H_0_w = np.sum(H_0 * e.reshape((nf, 1, 1)),
+                               axis=0).reshape((nl, ns))
 
-                for frequency, weight in fw_iterator:
-                    H_1_w = weight * \
-                        backproject_pf_single_frequency_conv(
-                            H_0, d_014, d_2, d_3, t, frequency)
-                    e = np.exp(2j * np.pi * t * frequency) / nf
-                    H_1_i = H_1_w.reshape((1, nvx, nvy)) * \
-                        e.reshape((nf, 1, 1))
+                rsd_014 = np.exp(2j * np.pi * d_014 * frequency)
+                H_0_w *= rsd_014
+                del rsd_014
 
-                    if camera_system.is_transient():
-                        H_1[..., iz] += H_1_i[padding:-padding, ...]
-                    else:
-                        H_1[..., iz] += H_1_i[padding, ...]
-
-                    if progress:
-                        progress_bar.update(1)
-
-            return H_1
-
-        get_resources().split_work(
-            work_conv,
-            data_in=range_z,
-            data_out=H_1,
-            slice_dims=(0, H_1.ndim - 1),
-        )
-
-        H_1 = H_1.reshape(old_H_1_shape)
-    else:
-        # arbitrary volume
-        range_v = np.arange(nv, dtype=np.int32)
-
-        def work_n3(subrange_v):
-            nvd = len(subrange_v)
-            volume_xyz_d = volume_xyz[subrange_v]
-
-            if camera_system.is_transient():
-                H_1 = np.zeros((nt, nvd), dtype=np.complex64)
-            else:
-                H_1 = np.zeros(nvd, dtype=np.complex64)
-
-            # d_3
-            d = np.linalg.norm(
-                sensor_grid_xyz.reshape((ns, 1, 3)) -
-                volume_xyz_d.reshape((1, nvd, 3)),
-                axis=2)
-            if camera_system.bp_accounts_for_d_2():
-                # d_2
-                d += np.linalg.norm(
-                    laser_grid_xyz.reshape((1, 1, 3)) -
-                    volume_xyz_d.reshape((1, nvd, 3)),
-                    axis=2)
-            d += d_014  # add t_start, d_1 and d_4 terms
-
-            iterator = zip(freqs, weights)
-            if progress:
-                iterator = tqdm(iterator, total=nw, leave=False)
-
-            for frequency, weight in iterator:
-                H_1_w = weight * \
-                    backproject_pf_single_frequency_naive(
-                        H_0, d, t, frequency)
-                e = np.exp(2j * np.pi * t * frequency) / nf
-                H_1_i = H_1_w.reshape((1, nvd)) * e.reshape((nf, 1))
-
-                if camera_system.is_transient():
-                    H_1 += H_1_i[padding: -padding, ...]
+                rsd_3 = np.exp(2j * np.pi * d_3 * frequency)
+                if optimize_camera_convolutions:
+                    H_0_w = H_0_w.reshape((nlx, nly, nsx, nsy))
+                    rsd_3 = rsd_3.reshape((1, 1, rsx, rsy))
+                    H_0_w_fft = np.fft.fft2(
+                        H_0_w, axes=(2, 3), s=(rsx, rsy))
+                    rsd_3_fft = np.fft.fft2(
+                        rsd_3, axes=(2, 3), s=(rsx, rsy))
+                    H_0_w_fft *= rsd_3_fft
+                    H_0_w = np.fft.ifft2(H_0_w_fft, axes=(2, 3))
+                    H_0_w = H_0_w[:, :, :nvx, :nvy]
+                    H_0_w = H_0_w.reshape((nl, nvi))
+                    del rsd_3
                 else:
-                    H_1 += H_1_i[padding]
+                    H_0_w = H_0_w.reshape((nl, 1, ns))
+                    H_0_w = H_0_w * rsd_3.reshape((1, nvi, ns))
+                    H_0_w = H_0_w.sum(axis=2)
 
-            return H_1
+                if camera_system.bp_accounts_for_d_2():
+                    rsd_2 = np.exp(2j * np.pi * d_2 * frequency)
+                    if projector_focus_mode == 'exhaustive':
+                        assert optimize_projector_convolutions, \
+                            'You must use the convolutions optimization when projector_focus=volume_xyz. ' \
+                            'Check the documentation for tal.reconstruct.pf_dev for more information.'
+                        H_0_w = H_0_w.reshape((nlx, nly, nvx, nvy))
+                        rsd_2 = rsd_2.reshape((nlx, nly, nvx, nvy))
+                        H_0_w_fft = np.fft.fft2(
+                            H_0_w, axes=(0, 1), s=(rlx, rly))
+                        rsd_2_fft = np.fft.fft2(
+                            rsd_2, axes=(0, 1), s=(rlx, rly))
+                        H_0_w_fft *= rsd_2_fft
+                        H_0_w = np.fft.ifft2(H_0_w_fft, axes=(0, 1))
+                        H_0_w = H_0_w[:nvx, :nvy, :, :]
+                    else:
+                        assert projector_focus_mode in ['single', 'confocal']
+                        H_0_w = H_0_w.reshape((nl, nvi))
+                        H_0_w *= rsd_2.reshape((nl, nvi))
+                        H_0_w = H_0_w.sum(axis=0)
+                    H_0_w = H_0_w.reshape((n_projector_points, nvi))
+                    del rsd_2
+
+                H_1_w[i_w, ...] = weight * H_0_w
+
+            return H_1_w
+
+        H_1_w = np.zeros((nw_pow2, n_projector_points, nvi),
+                         dtype=np.complex64)
+        range_w = np.arange(nw_pow2, dtype=np.int32)
 
         get_resources().split_work(
-            work_n3,
-            data_in=range_v,
-            data_out=H_1,
-            slice_dims=(0, H_1.ndim - 1),
+            work_zslice_freq,
+            data_in=range_w,
+            data_out=H_1_w,
+            slice_dims=(0, 0),
         )
+
+        # H_1 has shape (n_projector_points, nvi, nvz) or (nt, n_projector_points, nvi, nvz)
+        # H_1_w has shape (nw_pow2, n_projector_points, nvi)
+        f_iterator = enumerate(freqs)
+        if progress:
+            f_iterator = tqdm(f_iterator,
+                              desc='tal.reconstruct.pf_dev ifft (2/2)',
+                              total=nw,
+                              leave=False)
+        for i_w, frequency in f_iterator:
+            e = np.exp(2j * np.pi * t * frequency) / nf
+            H_1_t = (
+                e.reshape((nf, 1, 1))
+                *
+                H_1_w[i_w, ...].reshape((1, n_projector_points, nvi))
+            )
+
+            if camera_system.is_transient():
+                H_1[..., i_z] += H_1_t[padding:-padding, ...]
+            else:
+                H_1[..., i_z] += H_1_t[padding, ...]
+
+    if n_projector_points == 1:
+        # squeeze n_projector_points axis
+        H_1 = H_1.squeeze(axis=-3)
 
     return H_1

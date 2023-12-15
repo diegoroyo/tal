@@ -18,7 +18,9 @@ def solve(data: NLOSCaptureData,
           border: str = 'zero',
           volume_xyz: NLOSCaptureData.VolumeXYZType = None,
           volume_format: VolumeFormat = VolumeFormat.UNKNOWN,
-          camera_system: CameraSystem = CameraSystem.DIRECT_LIGHT) -> np.array:  # FIXME(diego) type
+          camera_system: CameraSystem = CameraSystem.DIRECT_LIGHT,
+          projector_focus: NLOSCaptureData.Array3 = None,
+          progress: bool = True) -> NLOSCaptureData.SingleReconstructionType:
     """
     See module description of tal.reconstruct.fbp
 
@@ -39,6 +41,17 @@ def solve(data: NLOSCaptureData,
     camera_system
         See tal.enums.CameraSystem
 
+    projector_focus
+        Setting that changes how the virtual light is focused onto the hidden volume.
+        'None' focuses the virtual light at the same points as the virtual camera (confocal camera)
+            This is the behaviour of most imaging algorithms,
+            especially the tal.enums.CameraSystem.CONFOCAL_TIME_GATED camera.
+        When projector_focus = [x, y, z] if you have multiple laser points in your data,
+            the illumination will be focused towards the point [x, y, z].
+            This behaviour is especially useful for tal.enums.CameraSystem.PROJECTOR_CAMERA.
+        In the pf_dev module you can set projector_focus = volume_xyz and that will yield
+            a NLOSCaptureData.ExhaustiveReconstructionType with all possible projector_focus points.
+
     progress
         If True, shows a progress bar with estimated time remaining.
     """
@@ -51,6 +64,8 @@ def solve(data: NLOSCaptureData,
     H_1 = bp_solve(data,
                    volume_xyz=volume_xyz,
                    volume_format=volume_format,
-                   camera_system=camera_system)
+                   camera_system=camera_system,
+                   projector_focus=projector_focus,
+                   progress=progress)
     data.H = old_H
     return H_1

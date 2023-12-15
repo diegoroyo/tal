@@ -1,5 +1,6 @@
 from tal.enums import HFormat, GridFormat, VolumeFormat, CameraSystem
 from tal.io.capture_data import NLOSCaptureData
+from typing import Union
 import numpy as np
 
 
@@ -31,21 +32,31 @@ def convert_to_N_3(data: NLOSCaptureData,
                    volume_xyz: NLOSCaptureData.VolumeXYZType,
                    volume_format: VolumeFormat = VolumeFormat.UNKNOWN,
                    try_optimize_convolutions: bool = False):
+    """
+        try_optimize_convolutions performs many checks:
+        - H, {laser|sensor}_grid_xyz and volume_xyz have X, Y components (e.g. they are not N_3)
+        - 
+    """
 
     volume_format = _infer_volume_format(volume_xyz, volume_format, log=True)
 
     # this variable is set to false during the conversion
-    can_optimize_convolutions = \
+    optimize_projector_convolutions = try_optimize_convolutions and \
         volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
+    optimize_camera_convolutions = optimize_projector_convolutions
 
     if data.H_format == HFormat.T_Si:
-        can_optimize_convolutions = False
+        optimize_projector_convolutions = False
+        optimize_camera_convolutions = False
         nt, ns = data.H.shape
         H = data.H.reshape(nt, 1, ns)
     elif data.H_format == HFormat.T_Sx_Sy:
+        optimize_projector_convolutions = False
         nt, nsx, nsy = data.H.shape
         H = data.H.reshape(nt, 1, nsx * nsy)
     elif data.H_format == HFormat.T_Li_Si:
+        optimize_projector_convolutions = False
+        optimize_camera_convolutions = False
         nt, nl, ns = data.H.shape
         H = data.H.reshape(nt, nl, ns)
     elif data.H_format == HFormat.T_Lx_Ly_Sx_Sy:
@@ -54,26 +65,8 @@ def convert_to_N_3(data: NLOSCaptureData,
     else:
         raise AssertionError(f'H_format {data.H_format} not implemented')
 
-    # FIXME(diego) also convert laser data and confocal/exhaustive H measurements
-
-    if data.sensor_grid_format == GridFormat.N_3:
-        can_optimize_convolutions = False
-        sensor_grid_xyz = data.sensor_grid_xyz
-    elif data.sensor_grid_format == GridFormat.X_Y_3:
-        try:
-            assert nsx == data.sensor_grid_xyz.shape[0] and nsy == data.sensor_grid_xyz.shape[1], \
-                'sensor_grid_xyz.shape does not match with H.shape'
-        except NameError:
-            # nsx, nsy not defined, OK
-            nsx, nsy, _ = data.sensor_grid_xyz.shape
-            pass
-        sensor_grid_xyz = data.sensor_grid_xyz.reshape(nsx * nsy, 3)
-    else:
-        raise AssertionError(
-            f'sensor_grid_format {data.sensor_grid_format} not implemented')
-
     if data.laser_grid_format == GridFormat.N_3:
-        can_optimize_convolutions = False
+        optimize_projector_convolutions = False
         laser_grid_xyz = data.laser_grid_xyz
     elif data.laser_grid_format == GridFormat.X_Y_3:
         try:
@@ -84,9 +77,27 @@ def convert_to_N_3(data: NLOSCaptureData,
             nlx, nly, _ = data.laser_grid_xyz.shape
             pass
         laser_grid_xyz = data.laser_grid_xyz.reshape(nlx * nly, 3)
+        optimize_projector_convolutions = optimize_projector_convolutions and nlx > 1 and nly > 1
     else:
         raise AssertionError(
             f'laser_grid_format {data.laser_grid_format} not implemented')
+
+    if data.sensor_grid_format == GridFormat.N_3:
+        optimize_camera_convolutions = False
+        sensor_grid_xyz = data.sensor_grid_xyz
+    elif data.sensor_grid_format == GridFormat.X_Y_3:
+        try:
+            assert nsx == data.sensor_grid_xyz.shape[0] and nsy == data.sensor_grid_xyz.shape[1], \
+                'sensor_grid_xyz.shape does not match with H.shape'
+        except NameError:
+            # nsx, nsy not defined, OK
+            nsx, nsy, _ = data.sensor_grid_xyz.shape
+            pass
+        sensor_grid_xyz = data.sensor_grid_xyz.reshape(nsx * nsy, 3)
+        optimize_camera_convolutions = optimize_camera_convolutions and nsx > 1 and nsy > 1
+    else:
+        raise AssertionError(
+            f'sensor_grid_format {data.sensor_grid_format} not implemented')
 
     assert H.shape[1] == laser_grid_xyz.shape[0], \
         'H.shape does not match with laser_grid_xyz.shape.'
@@ -94,24 +105,79 @@ def convert_to_N_3(data: NLOSCaptureData,
         'H.shape does not match with sensor_grid_xyz.shape.'
 
     assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
+
+    if volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]:
+        # list of (Z, 3) normals of all Z positions in the plane
+        v_a = volume_xyz[0, 0, ..., :]
+        v_b = volume_xyz[-1, 0, ..., :]
+        v_c = volume_xyz[0, -1, ..., :]
+        v_n = np.cross(v_b - v_a, v_c - v_a).reshape((-1, 3))
+        v_n /= np.linalg.norm(v_n, axis=-1, keepdims=True)
+
+        v_dx = np.linalg.norm(
+            volume_xyz[1, 0, ..., :] - volume_xyz[0, 0, ..., :])
+        v_dy = np.linalg.norm(
+            volume_xyz[0, 1, ..., :] - volume_xyz[0, 0, ..., :])
+    else:
+        optimize_projector_convolutions = False
+        optimize_camera_convolutions = False
+
     try:
-        assert try_optimize_convolutions and can_optimize_convolutions
-        nvx, nvy = volume_xyz.shape[:2]
-        assert nvx == nsx and nvy == nsy
-        H = H.reshape((nt, nvx, nvy))
-        sensor_grid_xyz = sensor_grid_xyz.reshape((nvx, nvy, 3))
-        volume_xyz = volume_xyz
-        print('tal.reconstruct.utils: Optimizing for convolutions. '
-              'Other algorithms (e.g. tal.reconstruct.pf_dev) should also log that it is being used.')
+        assert optimize_projector_convolutions
+        assert data.laser_grid_format == GridFormat.X_Y_3
+        laser_grid_xyz = laser_grid_xyz.reshape((nlx, nly, 3))
+        l_a = laser_grid_xyz[0, 0, ..., :]
+        l_b = laser_grid_xyz[-1, 0, ..., :]
+        l_c = laser_grid_xyz[0, -1, ..., :]
+        l_n = np.cross(l_b - l_a, l_c - l_a).reshape((1, 3))
+        l_n /= np.linalg.norm(l_n, axis=-1, keepdims=True)
+
+        l_dx = np.linalg.norm(
+            laser_grid_xyz[1, 0, ..., :] - laser_grid_xyz[0, 0, ..., :])
+        l_dy = np.linalg.norm(
+            laser_grid_xyz[0, 1, ..., :] - laser_grid_xyz[0, 0, ..., :])
+
+        dot_lv = np.sum(l_n * v_n, axis=-1)
+        assert np.allclose(np.abs(dot_lv), 1)
+        assert np.isclose(v_dx, l_dx) and np.isclose(v_dy, l_dy)
+        print('tal.reconstruct.utils: Optimizing for projector convolutions.')
     except AssertionError:
+        optimize_projector_convolutions = False
+        laser_grid_xyz = laser_grid_xyz.reshape((-1, 3))
+
+    try:
+        assert optimize_camera_convolutions
+        assert data.sensor_grid_format == GridFormat.X_Y_3
+        sensor_grid_xyz = sensor_grid_xyz.reshape((nsx, nsy, 3))
+        s_a = sensor_grid_xyz[0, 0, ..., :]
+        s_b = sensor_grid_xyz[-1, 0, ..., :]
+        s_c = sensor_grid_xyz[0, -1, ..., :]
+        s_n = np.cross(s_b - s_a, s_c - s_a).reshape((1, 3))
+        s_n /= np.linalg.norm(s_n, axis=-1, keepdims=True)
+
+        s_dx = np.linalg.norm(
+            sensor_grid_xyz[1, 0, ..., :] - sensor_grid_xyz[0, 0, ..., :])
+        s_dy = np.linalg.norm(
+            sensor_grid_xyz[0, 1, ..., :] - sensor_grid_xyz[0, 0, ..., :])
+
+        dot_sv = np.sum(s_n * v_n, axis=-1)
+        assert np.allclose(np.abs(dot_sv), 1)
+        assert np.isclose(v_dx, s_dx) and np.isclose(v_dy, s_dy)
+        print('tal.reconstruct.utils: Optimizing for camera convolutions.')
+    except AssertionError:
+        optimize_camera_convolutions = False
+        sensor_grid_xyz = sensor_grid_xyz.reshape((-1, 3))
+
+    if not optimize_projector_convolutions and not optimize_camera_convolutions:
         volume_xyz = volume_xyz.reshape((-1, 3))
 
-    return (H, laser_grid_xyz, sensor_grid_xyz, volume_xyz)
+    return (H, laser_grid_xyz, sensor_grid_xyz, volume_xyz,
+            optimize_projector_convolutions, optimize_camera_convolutions)
 
 
 def convert_reconstruction_from_N_3(data: NLOSCaptureData,
-                                    # FIXME(diego) type
-                                    reconstructed_volume_n3: np.ndarray,
+                                    reconstructed_volume_n3: Union[NLOSCaptureData.SingleReconstructionType,
+                                                                   NLOSCaptureData.ExhaustiveReconstructionType],
                                     volume_xyz: NLOSCaptureData.VolumeXYZType,
                                     volume_format: VolumeFormat,
                                     camera_system: CameraSystem):

@@ -160,7 +160,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
             raise AssertionError(
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
 
-        # FIXME(diego): rotate + translate (asssumes no rot/trans)
+        # TODO(diego): rotate + translate (asssumes no rot/trans)
         # or use a more generalist approach that does not need to be rectangular
         sensor_grid_xyz = get_grid_xyz(
             sensor_width, sensor_height, relay_wall['scale'])
@@ -175,7 +175,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
         else:
             laser_grid_xyz = get_grid_xyz(
                 laser_width, laser_height, relay_wall['scale'])
-        # FIXME(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
+        # TODO(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
         # or use a more generalist approach
         sensor_grid_normals = expand(
             np.array([0, 0, 1]), sensor_width, sensor_height)
@@ -357,7 +357,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
                 if num_retries >= 5:
                     raise AssertionError(
                         f'Failed to read partial results after {num_retries} retries')
-                # FIXME Mitsuba sometimes fails to write some images,
+                # TODO Mitsuba sometimes fails to write some images,
                 # it seems like some sort of race condition
                 # If there is a partial result missing, just re-launch for now
                 print('We missed some partial results, re-launching...')

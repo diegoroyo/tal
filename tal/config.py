@@ -153,6 +153,8 @@ class ResourcesConfig:
 
     def split_work(self, f_work, data_in, data_out, slice_dims):
 
+        # FIXME decide what to do with memory management
+        # and also with other parameters' names
         # gc.collect()
         # _, hard = resource.getrlimit(resource.RLIMIT_AS)
         # free_memory_bytes = int(psutil.virtual_memory().free * 0.98)
@@ -241,11 +243,12 @@ class ResourcesConfig:
                         if self.callback is not None:
                             self.callback(data_out, i, len(asyncs))
                 pool.join()
-            except MemoryError:
-                pool.terminate()
-                pool.join()
-                raise MemoryError(f'tal.resources: Memory error, {free_memory_gb:.2f} GiB is not enough.'
-                                  ' Either decrease CPU processes, increase downscale, or move to another system.')
+            # FIXME decide if this should be here
+            # except MemoryError:
+            #     pool.terminate()
+            #     pool.join()
+            #     raise MemoryError(f'tal.resources: Memory error, {free_memory_gb:.2f} GiB is not enough.'
+            #                       ' Either decrease CPU processes, increase downscale, or move to another system.')
             except KeyboardInterrupt:
                 pool.terminate()
                 pool.join()

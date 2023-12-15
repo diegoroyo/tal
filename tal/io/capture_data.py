@@ -153,8 +153,18 @@ class NLOSCaptureData:
     LaserGridType = Union[MatrixN3, TensorXY3]
     SensorGridType = Union[MatrixN3, TensorXY3]
     TensorXYZ3 = NDArray[Shape['X, Y, Z, 3'], Float]
-    VolumeXYZType = Union[MatrixN3, TensorXYZ3]
+    VolumeXYZType = Union[MatrixN3, TensorXY3, TensorXYZ3]
     Array3 = NDArray[Shape['3'], Float]
+
+    # reconstruction types
+    TensorN = NDArray[Shape['N'], Float]
+    TensorXY = NDArray[Shape['X, Y'], Float]
+    TensorXYZ = NDArray[Shape['X, Y, Z'], Float]
+    SingleReconstructionType = Union[TensorN, TensorXY, TensorXYZ]
+    TensorNN = NDArray[Shape['N, N'], Float]
+    TensorXYXY = NDArray[Shape['X, Y, X, Y'], Float]
+    TensorXYZXYZ = NDArray[Shape['X, Y, Z, X, Y, Z'], Float]
+    ExhaustiveReconstructionType = Union[TensorNN, TensorXYXY, TensorXYZXYZ]
 
     #
     # Actual capture data (ignore _start and _end)

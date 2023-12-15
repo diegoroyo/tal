@@ -385,7 +385,6 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     return file_steady, file_nlos
 
 
-# FIXME
 def run_mitsuba(scene_xml_path, hdr_path, defines,
                 experiment_name, logfile, args, sensor_index=0, queue=None):
     import re

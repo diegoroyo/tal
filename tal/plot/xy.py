@@ -10,7 +10,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-def plot_amplitude_phase(image: np.ndarray, title: str = ''):  # FIXME: type
+def plot_amplitude_phase(image: NLOSCaptureData.SingleReconstructionType, title: str = ''):
     fig, ax = plt.subplots(1, 2, figsize=(12, 5))
     mappable = ax[0].imshow(np.abs(image), cmap='hot')
     fig.colorbar(mappable, ax=ax[0])

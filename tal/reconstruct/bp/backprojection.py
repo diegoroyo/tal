@@ -12,8 +12,8 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
 
     if camera_system.is_transient():
         print('tal.reconstruct.bp: You have specified a time-resolved camera_system. '
-              'The tal.reconstruct.bp implementation is better suited for non-time-resolved systems. '
-              'This will work, but you may want ot check out pf_dev for time-resolved reconstructions.')
+              'The tal.reconstruct.bp implementation is better suited for time-gated systems. '
+              'This will work, but you may want to check out tal.reconstruct.pf_dev for time-resolved reconstructions.')
 
     nt, nl, ns = H_0.shape
     nv, _ = volume_xyz.shape
@@ -30,8 +30,15 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
     volume_xyz = volume_xyz.reshape((1, nv, 1, 3)).astype(np.float32)
 
     if camera_system.implements_projector():
-        assert projector_focus is not None and len(projector_focus) == 3, \
-            'projector_focus is required for this camera system, should be a 3D point'
+        assert projector_focus is not None, 'projector_focus is required for this camera system'
+        assert len(projector_focus) == 3, \
+            'When using tal.reconstruct.bp, projector_focus must be a single 3D point. ' \
+            'If you want to focus the illumination aperture at multiple points, ' \
+            'please use tal.reconstruct.pf_dev instead or call tal.reconstruct.bp once per projector_focus.'
+        if len(laser_grid_xyz) <= 3:
+            print('tal.reconstruct.bp: You have specified a camera_system with a projector and a projector_focus, '
+                  'but your data only contains one illumination point. Thus, you will not be able to implement the projector '
+                  'i.e. focus the illumination aperture anywhere on the scene.')
         projector_focus = np.array(projector_focus).reshape(
             (1, 1, 1, 3)).repeat(nv, axis=1)
     else:
@@ -69,7 +76,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
         H_0_i = H_0[:, :, subrange_s]
         sensor_grid_xyz_i = sensor_grid_xyz[:, :, subrange_s, :]
         d_3 = distance(volume_xyz, sensor_grid_xyz_i)
-        idx = t_start + d_1 + d_2 + d_3 + d_4
+        idx = d_1 + d_2 + d_3 + d_4 - t_start
         idx /= delta_t
         idx = idx.astype(np.int32)
 
