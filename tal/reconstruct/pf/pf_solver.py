@@ -11,12 +11,65 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from tqdm import tqdm
-from typing import Union, Tuple
+from typing import Union, Tuple, List
 
 from tal.reconstruct.pf.propagator import Propagator, RSD_propagator
 from tal.reconstruct.pf.propagator import RSD_parallel_propagator
 
 __epsilon = 1e-5
+
+class PF_solver(object):
+    def __init__(obj, propagation: str = 'auto', camera: str = 'confocal', 
+                 timeoutput: str | List[float] | float = 0.0, 
+                 outputfreq: bool = False):
+        """
+        Create a PF_solver object instance
+        @param propagation  : Selects the propagation mode for the RSD 
+                              integration. It can be "single" to propagate 
+                              each point independently and iteratively, or 
+                              "auto" to propagate with parallel convolutions 
+                              if posible. By default is "auto".
+        @param camera       : Selects the camera mode from Phasor Fields. It can
+                              be "confocal" to propagate from sensor and light 
+                              sources, "transient" to only propagate from 
+                              sensors, or "project" to focus the light on a 
+                              point and propagate all the sensors. By default is
+                              "confocal".
+        @param timeoutput:  : Selects the output timestamp for the 
+                              reconstruction. It can be a list of floats 
+                              (picoseconds), a single float (a picosecond), or 
+                              "full" to return all the time domain. By default 
+                              is 0.
+        @param outputfreq   : If true, the output is in frequency domain. It 
+                              makes timeoutput parameter useless. By default is
+                              false.
+        """
+        obj.propagation = propagation
+        obj.camera = camera
+        obj.timeoutput = timeoutput
+        obj.outputfreq = outputfreq
+        obj.set_pulse(central_wavelength = 0.1, width = 0.4)
+        return obj
+
+
+    def set_pulse(obj, central_wavelength: float, width: float):
+        """
+        Sets the virtual illumination pulse for the reconstruction
+        @param central_wavelength    : Central wavelength of the pulse in meters
+        @param width                 : Width of the pulse in meters
+        """
+        obj.central_wavelength = central_wavelength
+        obj.width = width
+
+        # TODO: Set the pulse
+
+
+        return obj
+    
+    def set_target_volume(obj):
+
+        return obj
+
 
 def pulse(delta_t: float, n_w: int, lambda_c: float, cycles: float
           ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
