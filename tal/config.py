@@ -4,11 +4,13 @@ import shutil
 import yaml
 import multiprocessing as mp
 import numpy as np
+from tqdm import tqdm
+from enum import Enum
+
+# FIXME
 import resource
 import psutil
 import gc
-from tqdm import tqdm
-from enum import Enum
 
 from tal.util import local_file_path
 
@@ -183,12 +185,13 @@ class ResourcesConfig:
             mp.cpu_count(),
             999 if self.cpu_processes == 'max' else self.cpu_processes
         )
-        downscale = 1
-        max_downscale = min(
-            128,
-            128 if self.downscale is None else self.downscale
-        )
-        while (downscale < max_downscale or downscale < cpus) and check_divisible(downscale * 2):
+        max_downscale = 128
+        if downscale is None:
+            downscale = 1
+        else:
+            downscale = 2**np.ceil(np.log2(downscale))
+        downscale = min(max_downscale, downscale)
+        while downscale < cpus and downscale < max_downscale and check_divisible(downscale * 2):
             downscale *= 2
 
         data_dim = min((x for x in [
@@ -264,20 +267,30 @@ def get_resources():
 
 def set_resources(cpu_processes=DEFAULT_CPU_PROCESSES, downscale=DEFAULT_DOWNSCALE, callback=DEFAULT_CALLBACK):
     """
-    TODO
-
-    Configure Y-TAL to use a specific number of CPU processes.
+    Configures how Y-TAL should execute your code so you can manage CPU/RAM use.
 
     Not all functions implemented in Y-TAL support this configuration, mostly the ones
     in tal.reconstruct (filtering and reconstruction).
 
-    Default configuration is 1 CPU process and no memory limit.
+    Default configuration is to process all the data simultaneously in 1 CPU process.
 
     cpu_processes
         Can be an integer or 'max' to use all available CPU processes.
 
     downscale
-        Can be an integer or None to use all 
+        Can be an integer or None.
+        If integer, the data will be processed in smaller chunks (e.g. if downscale = 8, the
+            data will be processed 1/8th at a time).
+        If None, all the data will be processed at the same time.
+        In any case, downscale will be increased automatically make sure that all cpu_processes
+            can run at the same time.
+
+    callback
+        A function that will be called after each chunk of data is processed.
+        It will receive (1) the data, (2) the current chunk index and (3) the total number of chunks as arguments.
+        This is useful to show a progress bar, or partial reconstructions for example.
+        See tal.callbacks for some default implementations which may or may not work for your case.
+        e.g. callback=lambda x: `tal.plot.amplitude_phase(x[0], title=f'Chunk {x[1]} of {x[2]}')`
     """
     global TAL_RESOURCES_CONFIG
     TAL_RESOURCES_CONFIG = ResourcesConfig(cpu_processes, downscale, callback)

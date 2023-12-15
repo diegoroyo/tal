@@ -2,6 +2,7 @@ from tal.io.capture_data import NLOSCaptureData
 from tal.enums import HFormat
 from tal.config import get_resources
 import numpy as np
+from tqdm import tqdm
 
 
 def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, **kwargs):
@@ -11,13 +12,13 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         H_format = (data_format
                     if data_format != HFormat.UNKNOWN
                     else None) or data.H_format
-        H = data.H
+        H = data.H.astype(np.float32)
         delta_t = data.delta_t
     else:
         assert data_format is not None and data_format != HFormat.UNKNOWN, \
             'If data is not a NLOSCaptureData object, H format must be specified through the data_format argument'
         H_format = data_format
-        H = data
+        H = data.astype(np.float32)
         delta_t = None
 
     assert border in ['erase', 'zero', 'edge'], \
@@ -53,7 +54,7 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         #   ^^^ Pulse inside the Gaussian envelope (complex exponential)
 
         # center at zero (not in freq. domain but fftshift works)
-        K = np.fft.ifftshift(K)
+        K = np.fft.ifftshift(K).astype(np.float32)
     else:
         raise AssertionError(
             'Unknown filter_name. Check the documentation for available filters')
