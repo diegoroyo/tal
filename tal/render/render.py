@@ -343,8 +343,14 @@ def render_nlos_scene(config_path, args, num_retries=0):
             else:
                 raise AssertionError
 
+            e_laser_lookats = enumerate(laser_lookats)
+            if not args.quiet and len(laser_lookats) > 1:
+                e_laser_lookats = tqdm(
+                    e_laser_lookats, desc='Merging partial results...',
+                    ascii=True, total=len(laser_lookats))
+
             try:
-                for i, (laser_lookat_x, laser_lookat_y) in enumerate(laser_lookats):
+                for i, (laser_lookat_x, laser_lookat_y) in e_laser_lookats:
                     x = i % laser_width
                     y = i // laser_width
                     hdr_path, _ = mitsuba_backend.partial_laser_path(
@@ -354,9 +360,10 @@ def render_nlos_scene(config_path, args, num_retries=0):
                     capture_data.H[:, x, y, ...] = np.squeeze(
                         mitsuba_backend.read_transient_image(hdr_path))
             except Exception:
-                if num_retries >= 5:
+                if num_retries >= 10:
                     raise AssertionError(
                         f'Failed to read partial results after {num_retries} retries')
+                mitsuba_backend.remove_transient_image(hdr_path)
                 # TODO Mitsuba sometimes fails to write some images,
                 # it seems like some sort of race condition
                 # If there is a partial result missing, just re-launch for now
