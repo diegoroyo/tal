@@ -40,9 +40,6 @@ def backproject_pf_multi_frequency(
 
     """ Phasor fields filter """
 
-    # FIXME(diego): obtain filter parameters directly in frequency
-    # domain (avoid conversion from time domain)
-
     t_6sigma = int(np.ceil(6 * wl_sigma / delta_t))
     padding = 2 * t_6sigma
     # FIXME(diego) if we want to convert a circular convolution to linear,
@@ -86,19 +83,24 @@ def backproject_pf_multi_frequency(
             'projector_focus is required for this camera system'
         if len(laser_grid_xyz) <= 3:
             print('tal.reconstruct.pf_dev: You have specified a camera_system with a projector and a projector_focus, '
-                  'but your data only contains one illumination point. Thus, you will not be able to implement the projector '
-                  'i.e. focus the illumination aperture anywhere on the scene.')
+                  'but your data only contains one illumination point. You will get a result, but you probably won\'t get the result you expect. '
+                  'You have to use multiple illumination points for that.')
         if len(projector_focus) == 3:
             projector_focus = np.array(projector_focus).reshape(
                 (1, 1, 1, 3))
             projector_focus_mode = 'single'
+            if optimize_projector_convolutions:
+                print('tal.reconstruct.pf_dev: When projector_focus is a 3D point, the projector convolution optimization is not implemented. '
+                      'Falling back to default method.')
             optimize_projector_convolutions = False
-            print('tal.reconstruct.pf_dev: When projector_focus is a 3D point, the convolution optimization is not implemented. '
-                  'Falling back to default method.')
         else:
-            assert np.allclose(projector_focus, volume_xyz), \
+            assert np.allclose(projector_focus.flatten(), volume_xyz.flatten()), \
                 'projector_focus must be a single 3D point, ' \
                 'or you should pass the same value as volume_xyz.'
+            assert nvz == 1, \
+                'When projector_focus=volume_xyz, the volume must be a single Z slice. ' \
+                f'In your case, your volume has {nvz} Z slices. ' \
+                'You can call this same function for each individual point in the volume.'
             projector_focus = projector_focus.reshape((1, nv, 1, 3))
             projector_focus_mode = 'exhaustive'
     else:
@@ -106,6 +108,13 @@ def backproject_pf_multi_frequency(
             'projector_focus must not be set for this camera system'
         projector_focus = volume_xyz.reshape((1, nv, 1, 3))
         projector_focus_mode = 'confocal'
+        if optimize_projector_convolutions:
+            print('tal.reconstruct.pf_dev: When projector_focus is not set, the projector convolution optimization is not implemented. '
+                  'Falling back to default method.')
+        optimize_projector_convolutions = False
+
+    print('tal.reconstruct.pf_dev: '
+          f'projector_focus_mode={projector_focus_mode}')
     projector_focus = projector_focus.astype(np.float32)
 
     # reshape everything into (nl, nv, ns, 3)
@@ -149,7 +158,7 @@ def backproject_pf_multi_frequency(
     range_z = enumerate(range_z)
     if nvz > 1 and progress:
         range_z = tqdm(
-            range_z, desc='tal.reconstruct.pf_dev Z slices', leave=False)
+            range_z, desc='tal.reconstruct.pf_dev Z slices', total=nvz, leave=False)
 
     if camera_system.is_transient():
         H_1 = np.zeros(
@@ -161,13 +170,15 @@ def backproject_pf_multi_frequency(
             dtype=np.complex64)
 
     for i_z, nvzi in range_z:
-        if optimize_projector_convolutions or optimize_camera_convolutions:
+        if optimize_projector_convolutions:
             projector_focus_i = projector_focus.reshape(
-                (nvx, nvy, nvz, 3))[..., nvzi, :]
-            volume_xyz_i = volume_xyz.reshape(
                 (nvx, nvy, nvz, 3))[..., nvzi, :]
         else:
             projector_focus_i = projector_focus
+        if optimize_camera_convolutions:
+            volume_xyz_i = volume_xyz.reshape(
+                (nvx, nvy, nvz, 3))[..., nvzi, :]
+        else:
             volume_xyz_i = volume_xyz
 
         if camera_system.bp_accounts_for_d_2():
@@ -189,18 +200,18 @@ def backproject_pf_multi_frequency(
                 i_vals = i_vals.reshape((rlx, rly, 1))
                 j_vals = j_vals.reshape((rlx, rly, 1))
                 p0 = p0.reshape((1, 1, 3))
-                s_dx = s_dx.reshape((1, 1, 3))
-                s_dy = s_dy.reshape((1, 1, 3))
+                l_dx = l_dx.reshape((1, 1, 3))
+                l_dy = l_dy.reshape((1, 1, 3))
                 d_2 = np.linalg.norm(
                     p0 + l_dx * i_vals + l_dy * j_vals, axis=-1).astype(np.float32)
                 d_2 = np.fft.ifftshift(d_2)
             elif projector_focus_mode == 'confocal':
                 d_2 = distance(
-                    laser_grid_xyz, projector_focus_i.reshape((nl, nvi, 1, 3)))
+                    laser_grid_xyz, projector_focus_i.reshape((1, nvi, 1, 3)))
             else:
                 assert projector_focus_mode == 'single'
                 d_2 = distance(
-                    laser_grid_xyz, projector_focus_i.reshape((nl, 1, 1, 3)))
+                    laser_grid_xyz, projector_focus_i.reshape((1, 1, 1, 3)).repeat(nvi, axis=1))
         else:
             d_2 = np.float32(0.0)
 
@@ -285,7 +296,7 @@ def backproject_pf_multi_frequency(
                             'You must use the convolutions optimization when projector_focus=volume_xyz. ' \
                             'Check the documentation for tal.reconstruct.pf_dev for more information.'
                         H_0_w = H_0_w.reshape((nlx, nly, nvx, nvy))
-                        rsd_2 = rsd_2.reshape((nlx, nly, nvx, nvy))
+                        rsd_2 = rsd_2.reshape((rlx, rly, 1, 1))
                         H_0_w_fft = np.fft.fft2(
                             H_0_w, axes=(0, 1), s=(rlx, rly))
                         rsd_2_fft = np.fft.fft2(
@@ -302,6 +313,7 @@ def backproject_pf_multi_frequency(
                     del rsd_2
 
                 H_1_w[i_w, ...] = weight * H_0_w
+                del H_0_w
 
             return H_1_w
 

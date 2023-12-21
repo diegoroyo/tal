@@ -7,7 +7,7 @@ See "Recovering three-dimensional shape around a corner using ultrafast time-of-
 
 This implementation is particularly well suited when:
 
-- The 3D volume that you want to reconstruct is not coplanar to the relay wall
+- The 3D volume that you want to reconstruct is *not* coplanar to the relay wall
 and/or
 - You want a time-gated reconstruction, not a time-resolved reconstruction
 and/or
@@ -18,7 +18,8 @@ If that is not your case, you might want to check the tal.reconstruct.pf_dev mod
 Filtered backprojection is available in the fbp submodule, or by pre-filtering (see tal.reconstruct.filter_H).
 
 Does _NOT_ attempt to compensate effects caused by attenuation:
-    - cos decay i.e. {sensor|laser}_grid_normals are ignored
+    - cos decay of {sensor|laser}_grid_normals are ignored
+    - cos decay of hidden geometry is ignored
     - 1/d^2 decay
 """
 
@@ -64,7 +65,7 @@ def solve(data: NLOSCaptureData,
     progress
         If True, shows a progress bar with estimated time remaining.
     """
-    from tal.reconstruct.utils import convert_to_N_3, convert_reconstruction_from_N_3
+    from tal.reconstruct.util import convert_to_N_3, convert_reconstruction_from_N_3
     H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3, _, __ = \
         convert_to_N_3(data, volume_xyz, volume_format)
 

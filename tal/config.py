@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 from enum import Enum
 
-# FIXME
+# FIXME decide if we keep this here or not
 import resource
 import psutil
 import gc
@@ -186,10 +186,10 @@ class ResourcesConfig:
             999 if self.cpu_processes == 'max' else self.cpu_processes
         )
         max_downscale = 128
-        if downscale is None:
+        if self.downscale is None:
             downscale = 1
         else:
-            downscale = 2**np.ceil(np.log2(downscale))
+            downscale = 2**int(np.ceil(np.log2(self.downscale)))
         downscale = min(max_downscale, downscale)
         while downscale < cpus and downscale < max_downscale and check_divisible(downscale * 2):
             downscale *= 2

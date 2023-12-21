@@ -28,6 +28,7 @@ def filter_H(data: _Data,
              border: str = 'zero',
              plot_filter: bool = False,
              return_filter: bool = False,
+             progress: bool = True,
              **kwargs) -> NLOSCaptureData.HType:
     """
     Filter a captured data signal (H) using specified filter_name
@@ -39,6 +40,7 @@ def filter_H(data: _Data,
         * If plot_filter=True, shows a plot of the resulting filter
         * If return_filter=True, returns the filter (K)
           else, returns the filtered signal (H * K)
+        * If progress=True, shows a progress bar with the performed step
 
     Available filters and respective arguments:
     - filter_name='pf': Filter certain frequencies, weighted using a Gaussian on the frequency domain
@@ -51,7 +53,24 @@ def filter_H(data: _Data,
         of frequencies that are filtered given wl_mean and wl_sigma
     """
     from tal.reconstruct.filters import filter_H_impl
-    return filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, **kwargs)
+    return filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, progress, **kwargs)
+
+
+def compensate_laser_cos_dsqr(data: NLOSCaptureData):
+    """
+    Compensate for the cos decay and 1/d^2 decay of the laser signal (operates in place)
+    """
+    import numpy as np
+    assert data.H_format == HFormat.T_Lx_Ly_Sx_Sy, 'data.H_format must be T_Lx_Ly_Sx_Sy. It is not yet implemented for T_Li_Si.'
+    nlx, nly, = data.laser_grid_xyz.shape[:2]
+    for i in range(nlx):
+        for j in range(nly):
+            laser_rw_xyz = data.laser_grid_xyz[i, j, :]
+            w_i = data.laser_xyz - laser_rw_xyz
+            d = np.linalg.norm(w_i)
+            w_i = w_i / d
+            cos_term = np.dot(w_i, data.laser_grid_normals[i, j, :])
+            data.H[:, i, j, :, :] /= cos_term / d ** 2
 
 
 def get_volume_min_max_resolution(minimal_pos, maximal_pos, resolution):

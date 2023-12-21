@@ -133,6 +133,10 @@ class CameraSystem(Enum):
     https://biostat.wisc.edu/~compoptics/phasornlos19/phasor_nlos_19.html
     (section A and Tables S.2 and S.3)
 
+    The projector cameras are implemented as described in "Virtual light
+    transport matrices for non-line-of-sight imaging"
+    https://webdiis.unizar.es/~juliom/pubs/2021ICCV-NLOSvLTM/2021ICCV_NLOSvLTM.pdf
+
     DIRECT_LIGHT
         Confocal camera at t = 0. Most common NLOS reconstruction system.
 
@@ -143,11 +147,19 @@ class CameraSystem(Enum):
     TRANSIENT
         Transient camera. Computes a video of the scene (t >= 0).
         The returned reconstruction will have an extra time dimension.
+
+    PROJECTOR_CAMERA
+        Projector camera. If you have multiple illumination points in your data,
+        this camera system will focus the illumination to a point in the hidden
+        volume.
+
+    PROJECTOR_CAMERA_T0
+        Projector camera at t = 0.
     """
     DIRECT_LIGHT = 0  # evaluate confocal time gated at t=0
     CONFOCAL_TIME_GATED = 1  # pulsed focused light
-    PROJECTOR_CAMERA = 2  # TODO
-    PROJECTOR_CAMERA_T0 = 3  # TODO
+    PROJECTOR_CAMERA = 2  # focus the illumination aperture to a point
+    PROJECTOR_CAMERA_T0 = 3  # evaluate projector camera at t=0
     TRANSIENT = 4  # pulsed point light
     # TRANSIENT_T0 = 5  # NYI (evaluate transient at t=0), also add to functions below
     # STEADY_STATE = 6  # NYI (integrate transient over time), also add to functions below
@@ -160,11 +172,10 @@ class CameraSystem(Enum):
                         CameraSystem.CONFOCAL_TIME_GATED]
 
     def is_transient(self) -> bool:
-        # NOTE: prob. need to divide into "returns_transient" and "computes_transient"
-        # or sth like that
         return self in [CameraSystem.TRANSIENT,
                         CameraSystem.CONFOCAL_TIME_GATED,
                         CameraSystem.PROJECTOR_CAMERA]
 
     def implements_projector(self) -> bool:
-        return self in [CameraSystem.PROJECTOR_CAMERA, CameraSystem.PROJECTOR_CAMERA_T0]
+        return self in [CameraSystem.PROJECTOR_CAMERA,
+                        CameraSystem.PROJECTOR_CAMERA_T0]

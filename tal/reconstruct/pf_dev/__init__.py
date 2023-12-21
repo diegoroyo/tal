@@ -80,7 +80,7 @@ def solve(data: NLOSCaptureData,
         this optimization, tal.reconstruct.pf_dev will fall back to the default implementation.
         You can generate these depth-slices with tal.reconstruct.get_volumeXXX functions.
     """
-    from tal.reconstruct.utils import convert_to_N_3, convert_reconstruction_from_N_3
+    from tal.reconstruct.util import convert_to_N_3, convert_reconstruction_from_N_3
     H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3, \
         optimize_projector_convolutions, optimize_camera_convolutions = \
         convert_to_N_3(data, volume_xyz, volume_format,
@@ -97,6 +97,9 @@ def solve(data: NLOSCaptureData,
         data.laser_xyz, data.sensor_xyz,
         progress=progress)
 
-    # TODO add support for ExhaustiveReconstructionType
+    mutliple_projector_points = \
+        camera_system.implements_projector() \
+        and projector_focus is not None and len(projector_focus) > 3
 
-    return convert_reconstruction_from_N_3(data, reconstructed_volume_n3, volume_xyz, volume_format, camera_system)
+    return convert_reconstruction_from_N_3(data, reconstructed_volume_n3, volume_xyz, volume_format, camera_system,
+                                           is_exhaustive_reconstruction=mutliple_projector_points)

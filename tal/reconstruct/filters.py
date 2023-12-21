@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, **kwargs):
+def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, progress, **kwargs):
     if isinstance(data, NLOSCaptureData):
         assert data.H_format != HFormat.UNKNOWN or data_format is not None, \
             'H format must be specified through the NLOSCaptureData object or the data_format argument'
@@ -32,6 +32,9 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         assert wl_mean is not None, \
             'For the "pf" filter, wl_mean must be specified'
         wl_sigma = kwargs.get('wl_sigma', None)
+        if wl_sigma is None:
+            print('tal.reconstruct.filter_H: '
+                  'wl_sigma not specified, using wl_mean / sqrt(2)')
         wl_sigma = wl_sigma or wl_mean / np.sqrt(2)
         delta_t = kwargs.get('delta_t', None) or delta_t
         assert delta_t is not None, \
@@ -47,6 +50,14 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         t_max = delta_t * (nt_pad - 1)
         t = np.linspace(start=0, stop=t_max, num=nt_pad)
 
+        mean_idx = (nt_pad * delta_t) / wl_mean
+        sigma_idx = (nt_pad * delta_t) / (wl_sigma * 6)
+        freq_min_idx = nt_pad // 2 + int(np.floor(mean_idx - 3 * sigma_idx))
+        freq_max_idx = nt_pad // 2 + int(np.ceil(mean_idx + 3 * sigma_idx))
+        K_fftfreq = np.fft.fftshift(np.fft.fftfreq(nt_pad, d=delta_t))
+        print('tal.reconstruct.filter_H: '
+              f'Using wavelengths from {1 / K_fftfreq[freq_max_idx]:.4f}m to {1 / K_fftfreq[freq_min_idx]:.4f}m')
+
         #   vvv Gaussian envelope (x = t - t_max/2, mu = 0, sigma = wl_sigma)
         gaussian_envelope = np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2)
         K = gaussian_envelope / np.sum(gaussian_envelope) * \
@@ -54,7 +65,7 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         #   ^^^ Pulse inside the Gaussian envelope (complex exponential)
 
         # center at zero (not in freq. domain but fftshift works)
-        K = np.fft.ifftshift(K).astype(np.float32)
+        K = np.fft.ifftshift(K).astype(np.complex64)
     else:
         raise AssertionError(
             'Unknown filter_name. Check the documentation for available filters')
@@ -88,16 +99,32 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
     K_shape = (nt_pad,) + (1,) * (H.ndim - 1)
 
     def work(H):
+        if progress:
+            pbar = tqdm(
+                total=3,
+                desc=f'tal.reconstruct.filter_H ({filter_name}, 1/3)',
+                leave=False)
         H_pad = np.pad(H,
                        ((padding, padding),) +  # first dim (time)
                        ((0, 0),) * (H.ndim - 1),  # other dims
                        mode=mode)
         H_fft = np.fft.fft(H_pad, axis=0)
+        if progress:
+            pbar.set_description(
+                f'tal.reconstruct.filter_H ({filter_name}, 2/3)')
+            pbar.update(1)
         K_fft = np.fft.fft(K)
         H_fft *= K_fft.reshape(K_shape)
         del K_fft
+        if progress:
+            pbar.set_description(
+                f'tal.reconstruct.filter_H ({filter_name}, 3/3)')
+            pbar.update(1)
         HoK = np.fft.ifft(H_fft, axis=0)
         del H_fft
+        if progress:
+            pbar.update(1)
+            pbar.close()
         return HoK
 
     HoK = np.zeros((nt_pad,) + H.shape[1:], dtype=np.complex64)

@@ -35,7 +35,8 @@ def convert_to_N_3(data: NLOSCaptureData,
     """
         try_optimize_convolutions performs many checks:
         - H, {laser|sensor}_grid_xyz and volume_xyz have X, Y components (e.g. they are not N_3)
-        - 
+        - The {laser|sensor}_grid_xyz's slices are parallel to the volume_xyz's slices
+        - The points in the {laser|sensor}_grid_xyz's slices are sampled at the same rate
     """
 
     volume_format = _infer_volume_format(volume_xyz, volume_format, log=True)
@@ -108,16 +109,20 @@ def convert_to_N_3(data: NLOSCaptureData,
 
     if volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]:
         # list of (Z, 3) normals of all Z positions in the plane
-        v_a = volume_xyz[0, 0, ..., :]
-        v_b = volume_xyz[-1, 0, ..., :]
-        v_c = volume_xyz[0, -1, ..., :]
+        if volume_format == VolumeFormat.X_Y_3:
+            z_index = Ellipsis
+        else:
+            z_index = 0
+        v_a = volume_xyz[0, 0, z_index, :]
+        v_b = volume_xyz[-1, 0, z_index, :]
+        v_c = volume_xyz[0, -1, z_index, :]
         v_n = np.cross(v_b - v_a, v_c - v_a).reshape((-1, 3))
         v_n /= np.linalg.norm(v_n, axis=-1, keepdims=True)
 
         v_dx = np.linalg.norm(
-            volume_xyz[1, 0, ..., :] - volume_xyz[0, 0, ..., :])
+            volume_xyz[1, 0, z_index, :] - volume_xyz[0, 0, z_index, :])
         v_dy = np.linalg.norm(
-            volume_xyz[0, 1, ..., :] - volume_xyz[0, 0, ..., :])
+            volume_xyz[0, 1, z_index, :] - volume_xyz[0, 0, z_index, :])
     else:
         optimize_projector_convolutions = False
         optimize_camera_convolutions = False
@@ -180,15 +185,21 @@ def convert_reconstruction_from_N_3(data: NLOSCaptureData,
                                                                    NLOSCaptureData.ExhaustiveReconstructionType],
                                     volume_xyz: NLOSCaptureData.VolumeXYZType,
                                     volume_format: VolumeFormat,
-                                    camera_system: CameraSystem):
+                                    camera_system: CameraSystem,
+                                    is_exhaustive_reconstruction: bool = False):
 
     volume_format = _infer_volume_format(volume_xyz, volume_format, log=False)
 
     if camera_system.is_transient():
-        time_dim = (data.H.shape[data.H_format.time_dim()],)
+        shape = (data.H.shape[data.H_format.time_dim()],)
     else:
-        time_dim = ()
+        shape = ()
 
     assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
-    return reconstructed_volume_n3.reshape(
-        time_dim + volume_xyz.shape[:-1])
+
+    if is_exhaustive_reconstruction:
+        # add an additional shape dimension for the exhaustive reconstruction
+        shape += volume_xyz.shape[:-1]
+    shape += volume_xyz.shape[:-1]
+
+    return reconstructed_volume_n3.reshape(shape)
