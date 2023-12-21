@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_shape,
                 camera_system, t_accounts_first_and_last_bounces,
-                t_start, delta_t,
+                t_start, delta_t, is_confocal,
                 projector_focus=None,
                 laser_xyz=None, sensor_xyz=None, progress=False):
 
@@ -17,7 +17,10 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
 
     nt, nl, ns = H_0.shape
     nv, _ = volume_xyz.shape
-    assert laser_grid_xyz.shape[0] == nl, 'H does not match with laser_grid_xyz'
+    if is_confocal:
+        assert laser_grid_xyz.shape[0] == ns, 'H does not match with laser_grid_xyz'
+    else:
+        assert laser_grid_xyz.shape[0] == nl, 'H does not match with laser_grid_xyz'
     assert sensor_grid_xyz.shape[0] == ns, 'H does not match with sensor_grid_xyz'
     assert (not t_accounts_first_and_last_bounces or (laser_xyz is not None and sensor_xyz is not None)), \
         't_accounts_first_and_last_bounces requires laser_xyz and sensor_xyz'
@@ -25,7 +28,12 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
     # reshape everything into (nl, nv, ns, 3)
     laser_xyz = laser_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
     sensor_xyz = sensor_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
-    laser_grid_xyz = laser_grid_xyz.reshape((nl, 1, 1, 3)).astype(np.float32)
+    if is_confocal:
+        laser_grid_xyz = laser_grid_xyz.reshape(
+            (1, 1, ns, 3)).astype(np.float32)
+    else:
+        laser_grid_xyz = laser_grid_xyz.reshape(
+            (nl, 1, 1, 3)).astype(np.float32)
     sensor_grid_xyz = sensor_grid_xyz.reshape((1, 1, ns, 3)).astype(np.float32)
     volume_xyz = volume_xyz.reshape((1, nv, 1, 3)).astype(np.float32)
 
@@ -74,9 +82,13 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
     def backproject_i(subrange_s):
         nsi = len(subrange_s)
         H_0_i = H_0[:, :, subrange_s]
+        if is_confocal:
+            d_2_i = d_2[:, :, subrange_s]
+        else:
+            d_2_i = d_2
         sensor_grid_xyz_i = sensor_grid_xyz[:, :, subrange_s, :]
         d_3 = distance(volume_xyz, sensor_grid_xyz_i)
-        idx = d_1 + d_2 + d_3 + d_4 - t_start
+        idx = d_1 + d_2_i + d_3 + d_4 - t_start
         idx /= delta_t
         idx = idx.astype(np.int32)
 

@@ -220,7 +220,7 @@ class NLOSCaptureData:
         if self.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.T_Li_Si]:
             return False
         elif self.H_format in [HFormat.T_Sx_Sy, HFormat.T_Si]:
-            return self.laser_grid_xyz.shape == self.sensor_grid_xyz.shape
+            return np.allclose(self.sensor_grid_xyz, self.laser_grid_xyz)
         else:
             raise AssertionError('Invalid H_format')
 

@@ -1,10 +1,6 @@
 # TAL v0.11.0 NLOS scene description file: https://github.com/diegoroyo/tal
-# Created on 2023/12/01 17:16 with experiment name "goal1-vm"
-#
-# All commented variables show their default value
-# To render the scene with this configuration, execute:
-#   [python3 -m] tal render /media/pleiades/vault/projects/202310-cascaded/data/v3/3d/goal1-vm/goal1-vm.yaml
-name: goal0-test
+# Created on 2023/12/21 17:16 with experiment name "confocal-scene"
+name: confocal-scene
 
 ##
 # Mitsuba
@@ -27,7 +23,7 @@ start_opl: 0.0
 ##
 # Laser and sensor
 ##
-scan_type: exhaustive  # single, confocal or exhaustive
+scan_type: confocal  # single, confocal or exhaustive
 #sensor_x: -0.5
 #sensor_y: 0.0
 #sensor_z: 0.25
@@ -52,7 +48,7 @@ geometry:
 - name: T
   mesh:
     type: obj
-    filename: /media/raid/droyo/code-cascadedcamera/v3-exhaustive/wall-2m-z0.obj
+    filename: ./wall-2m-z0.obj
   displacement_x: 0.0
   displacement_y: 0.0
   displacement_z: 1.0

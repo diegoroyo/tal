@@ -61,16 +61,50 @@ def compensate_laser_cos_dsqr(data: NLOSCaptureData):
     Compensate for the cos decay and 1/d^2 decay of the laser signal (operates in place)
     """
     import numpy as np
-    assert data.H_format == HFormat.T_Lx_Ly_Sx_Sy, 'data.H_format must be T_Lx_Ly_Sx_Sy. It is not yet implemented for T_Li_Si.'
-    nlx, nly, = data.laser_grid_xyz.shape[:2]
-    for i in range(nlx):
-        for j in range(nly):
-            laser_rw_xyz = data.laser_grid_xyz[i, j, :]
-            w_i = data.laser_xyz - laser_rw_xyz
-            d = np.linalg.norm(w_i)
-            w_i = w_i / d
-            cos_term = np.dot(w_i, data.laser_grid_normals[i, j, :])
-            data.H[:, i, j, :, :] /= cos_term / d ** 2
+
+    def compensate(H, rw_xyz, rw_n):
+        w_i = data.laser_xyz - rw_xyz
+        d = np.linalg.norm(w_i)
+        w_i = w_i / d
+        cos_term = np.dot(w_i, rw_n)
+        H /= cos_term / d ** 2
+
+    def compensate_i(nl):
+        for i in range(nl):
+            compensate(data.H[:, i, ...],
+                       data.laser_grid_xyz[i, :],
+                       data.laser_grid_normals[i, :])
+
+    def compensate_i_j(nlx, nly):
+        for i in range(nlx):
+            for j in range(nly):
+                compensate(data.H[:, i, j, ...],
+                           data.laser_grid_xyz[i, j, :],
+                           data.laser_grid_normals[i, j, :])
+
+    if data.H_format == HFormat.T_Lx_Ly_Sx_Sy:
+        compensate_i_j(*data.laser_grid_xyz.shape[:2])
+    elif data.H_format == HFormat.T_Sx_Sy:
+        if data.is_confocal():
+            compensate_i_j(*data.sensor_grid_xyz.shape[:2])
+        else:
+            assert len(data.laser_grid_xyz) == 3
+            compensate(data.H,
+                       data.laser_grid_xyz.reshape(3),
+                       data.laser_grid_normals.reshape(3))
+    elif data.H_format == HFormat.T_Li_Si:
+        compensate_i(data.laser_grid_xyz.shape[0])
+    elif data.H_format == HFormat.T_Si:
+        if data.is_confocal():
+            compensate_i(data.sensor_grid_xyz.shape[0])
+        else:
+            assert len(data.laser_grid_xyz) == 3
+            compensate(data.H,
+                       data.laser_grid_xyz.reshape(3),
+                       data.laser_grid_normals.reshape(3))
+    else:
+        raise ValueError(
+            f'This function is not implemented for H_format={data.H_format}')
 
 
 def get_volume_min_max_resolution(minimal_pos, maximal_pos, resolution):

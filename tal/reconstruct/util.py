@@ -46,14 +46,20 @@ def convert_to_N_3(data: NLOSCaptureData,
         volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
     optimize_camera_convolutions = optimize_projector_convolutions
 
+    is_confocal = data.is_confocal()
+
     if data.H_format == HFormat.T_Si:
         optimize_projector_convolutions = False
         optimize_camera_convolutions = False
         nt, ns = data.H.shape
+        if is_confocal:
+            nl = ns
         H = data.H.reshape(nt, 1, ns)
     elif data.H_format == HFormat.T_Sx_Sy:
         optimize_projector_convolutions = False
         nt, nsx, nsy = data.H.shape
+        if is_confocal:
+            nlx, nly = nsx, nsy
         H = data.H.reshape(nt, 1, nsx * nsy)
     elif data.H_format == HFormat.T_Li_Si:
         optimize_projector_convolutions = False
@@ -100,8 +106,12 @@ def convert_to_N_3(data: NLOSCaptureData,
         raise AssertionError(
             f'sensor_grid_format {data.sensor_grid_format} not implemented')
 
-    assert H.shape[1] == laser_grid_xyz.shape[0], \
-        'H.shape does not match with laser_grid_xyz.shape.'
+    if is_confocal:
+        assert H.shape[1] == 1 and H.shape[2] == laser_grid_xyz.shape[0], \
+            'H.shape does not match with laser_grid_xyz.shape.'
+    else:
+        assert H.shape[1] == laser_grid_xyz.shape[0], \
+            'H.shape does not match with laser_grid_xyz.shape.'
     assert H.shape[2] == sensor_grid_xyz.shape[0], \
         'H.shape does not match with sensor_grid_xyz.shape.'
 

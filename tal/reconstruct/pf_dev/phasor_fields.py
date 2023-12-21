@@ -7,11 +7,14 @@ from tqdm import tqdm
 def backproject_pf_multi_frequency(
         H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_shape,
         camera_system, t_accounts_first_and_last_bounces,
-        t_start, delta_t,
+        t_start, delta_t, is_confocal,
         projector_focus,
         wl_mean, wl_sigma, border,
         optimize_projector_convolutions, optimize_camera_convolutions,
         laser_xyz=None, sensor_xyz=None, progress=False):
+
+    assert not is_confocal, 'tal.reconstruct.pf_dev does not support confocal captures. ' \
+        'Please use tal.reconstruct.bp or tal.reconstruct.fbp instead.'
 
     if not optimize_projector_convolutions and not optimize_camera_convolutions and not camera_system.is_transient():
         print('tal.reconstruct.pf_dev: You have specified a time-gated camera system '
