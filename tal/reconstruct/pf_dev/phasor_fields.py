@@ -121,8 +121,10 @@ def backproject_pf_multi_frequency(
     projector_focus = projector_focus.astype(np.float32)
 
     # reshape everything into (nl, nv, ns, 3)
-    laser_xyz = laser_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
-    sensor_xyz = sensor_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
+    if laser_xyz is not None:
+        laser_xyz = laser_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
+    if sensor_xyz is not None:
+        sensor_xyz = sensor_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
     laser_grid_xyz = laser_grid_xyz.reshape((nl, 1, 1, 3)).astype(np.float32)
     sensor_grid_xyz = sensor_grid_xyz.reshape((1, 1, ns, 3)).astype(np.float32)
     volume_xyz = volume_xyz.reshape((1, nv, 1, 3)).astype(np.float32)

@@ -26,8 +26,10 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
         't_accounts_first_and_last_bounces requires laser_xyz and sensor_xyz'
 
     # reshape everything into (nl, nv, ns, 3)
-    laser_xyz = laser_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
-    sensor_xyz = sensor_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
+    if laser_xyz is not None:
+        laser_xyz = laser_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
+    if sensor_xyz is not None:
+        sensor_xyz = sensor_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
     if is_confocal:
         laser_grid_xyz = laser_grid_xyz.reshape(
             (1, 1, ns, 3)).astype(np.float32)
