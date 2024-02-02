@@ -1,88 +1,129 @@
 from tal.enums import HFormat, GridFormat
-from tal.config import get_memory_usage, get_resources
+from tal.config import get_resources
 import numpy as np
 from tqdm import tqdm
 
 
-def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz,
+def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_shape,
                 camera_system, t_accounts_first_and_last_bounces,
-                t_start, delta_t,
+                t_start, delta_t, is_confocal,
+                projector_focus=None,
                 laser_xyz=None, sensor_xyz=None, progress=False):
-    # TODO(diego): extend for multiple laser points
-    # TODO(diego): drjit?
-    assert H_0.ndim == 2 and laser_grid_xyz.size == 3, \
-        'backproject only supports one laser point'
 
-    nt, ns = H_0.shape
+    if camera_system.is_transient():
+        print('tal.reconstruct.bp: You have specified a time-resolved camera_system. '
+              'The tal.reconstruct.bp implementation is better suited for time-gated systems. '
+              'This will work, but you may want to check out tal.reconstruct.pf_dev for time-resolved reconstructions.')
+
+    nt, nl, ns = H_0.shape
+    nv, _ = volume_xyz.shape
+    if is_confocal:
+        assert laser_grid_xyz.shape[0] == ns, 'H does not match with laser_grid_xyz'
+    else:
+        assert laser_grid_xyz.shape[0] == nl, 'H does not match with laser_grid_xyz'
     assert sensor_grid_xyz.shape[0] == ns, 'H does not match with sensor_grid_xyz'
     assert (not t_accounts_first_and_last_bounces or (laser_xyz is not None and sensor_xyz is not None)), \
         't_accounts_first_and_last_bounces requires laser_xyz and sensor_xyz'
-    ns, _ = sensor_grid_xyz.shape
-    nv, _ = volume_xyz.shape
+
+    # reshape everything into (nl, nv, ns, 3)
+    if laser_xyz is not None:
+        laser_xyz = laser_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
+    if sensor_xyz is not None:
+        sensor_xyz = sensor_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
+    if is_confocal:
+        laser_grid_xyz = laser_grid_xyz.reshape(
+            (1, 1, ns, 3)).astype(np.float32)
+    else:
+        laser_grid_xyz = laser_grid_xyz.reshape(
+            (nl, 1, 1, 3)).astype(np.float32)
+    sensor_grid_xyz = sensor_grid_xyz.reshape((1, 1, ns, 3)).astype(np.float32)
+    volume_xyz = volume_xyz.reshape((1, nv, 1, 3)).astype(np.float32)
+
+    if camera_system.implements_projector():
+        assert projector_focus is not None, 'projector_focus is required for this camera system'
+        assert len(projector_focus) == 3, \
+            'When using tal.reconstruct.bp, projector_focus must be a single 3D point. ' \
+            'If you want to focus the illumination aperture at multiple points, ' \
+            'please use tal.reconstruct.pf_dev instead or call tal.reconstruct.bp once per projector_focus.'
+        if len(laser_grid_xyz) <= 3:
+            print('tal.reconstruct.bp: You have specified a camera_system with a projector and a projector_focus, '
+                  'but your data only contains one illumination point. Thus, you will not be able to implement the projector '
+                  'i.e. focus the illumination aperture anywhere on the scene.')
+        projector_focus = np.array(projector_focus).reshape(
+            (1, 1, 1, 3)).repeat(nv, axis=1)
+    else:
+        assert projector_focus is None, \
+            'projector_focus must not be set for this camera system'
+        projector_focus = volume_xyz.reshape((1, nv, 1, 3))
+    projector_focus = projector_focus.astype(np.float32)
+
+    def distance(a, b):
+        return np.linalg.norm(b - a, axis=-1)
 
     if camera_system.is_transient():
-        H_1 = np.zeros((nt, nv), dtype=H_0.dtype)
+        H_1 = np.zeros((nt, *volume_xyz_shape), dtype=H_0.dtype)
     else:
-        H_1 = np.zeros(nv, dtype=H_0.dtype)
+        H_1 = np.zeros(volume_xyz_shape, dtype=H_0.dtype)
 
     # d_1: laser origin to laser illuminated point
-    # d_2: laser illuminated point to x_v
-    # d_3: x_v to sensor imaged point
+    # d_2: laser illuminated point to projector_focus
+    # d_3: x_v (camera_focus) to sensor imaged point
     # d_4: sensor imaged point to sensor origin
-    x_l = laser_grid_xyz.reshape(3)
     if t_accounts_first_and_last_bounces:
-        d_1 = np.linalg.norm(laser_xyz - x_l)
+        d_1 = distance(laser_xyz, laser_grid_xyz)
+        d_4 = distance(sensor_grid_xyz, sensor_xyz)
     else:
-        d_1 = 0.0
+        d_1 = np.float32(0.0)
+        d_4 = np.float32(0.0)
 
-    def work(subrange_s):
-        if camera_system.is_transient():
-            H_1 = np.zeros((nt, nv), dtype=H_0.dtype)
+    if camera_system.bp_accounts_for_d_2():
+        d_2 = distance(laser_grid_xyz, projector_focus)
+    else:
+        d_2 = np.float32(0.0)
+
+    def backproject_i(subrange_s):
+        nsi = len(subrange_s)
+        H_0_i = H_0[:, :, subrange_s]
+        if is_confocal:
+            d_2_i = d_2[:, :, subrange_s]
         else:
-            H_1 = np.zeros(nv, dtype=H_0.dtype)
+            d_2_i = d_2
+        sensor_grid_xyz_i = sensor_grid_xyz[:, :, subrange_s, :]
+        d_3 = distance(volume_xyz, sensor_grid_xyz_i)
+        idx = d_1 + d_2_i + d_3 + d_4 - t_start
+        idx /= delta_t
+        idx = idx.astype(np.int32)
 
-        if progress:
-            subrange_s = tqdm(subrange_s, leave=False)
+        t_range = nt if camera_system.is_transient() else 1
+        t_range = np.arange(t_range, dtype=np.int32)
+        if progress and len(t_range) > 1:
+            t_range = tqdm(t_range,
+                           desc='tal.reconstruct.bp time bins', leave=False)
 
-        for s_i in subrange_s:
-            x_s = sensor_grid_xyz[s_i, :]
-            if t_accounts_first_and_last_bounces:
-                d_4 = np.linalg.norm(x_s - sensor_xyz)
-            else:
-                d_4 = 0.0
-            for i_v, x_v in enumerate(volume_xyz):
-                if camera_system.bp_accounts_for_d_2():
-                    d_2 = np.linalg.norm(x_l - x_v)
-                else:
-                    d_2 = 0.0
-                d_3 = np.linalg.norm(x_v - x_s)
-                t_i = int((d_1 + d_2 + d_3 + d_4 - t_start) / delta_t)
-                if camera_system.is_transient():
-                    p = np.copy(H_0[:, s_i])
-                    if t_i > 0:
-                        p[:t_i] = 0.0
-                    elif t_i < 0:
-                        p[t_i+nt-1:] = 0.0
-                    H_1[:, i_v] += np.roll(p, -t_i)
-                else:
-                    if t_i >= 0 and t_i < nt:
-                        H_1[i_v] += H_0[t_i, s_i]
-        return H_1
+        H_1_i = np.zeros((len(t_range), nv), dtype=H_0.dtype)
+        i_v, i_s = np.ogrid[:nv, :nsi]
+        for i_t in t_range:
+            for i_l in range(nl):
+                idx_i = idx[i_l, ...] + i_t
+                good = np.logical_and(idx_i >= 0, idx_i < nt)
+                idx_i[~good] = 0
+                H_1_raw = H_0_i[idx_i[i_v, i_s], i_l, i_s]
+                H_1_raw[~good] = 0.0
+                H_1_i[i_t, :] += H_1_raw.sum(axis=1)
 
+        if camera_system.is_transient():
+            return H_1_i.reshape(volume_xyz_shape)
+        else:
+            return H_1_i[0].reshape(volume_xyz_shape)
+
+    range_s = np.arange(ns, dtype=np.int32)
     h = H_0.dtype.itemsize
     s = sensor_grid_xyz.dtype.itemsize
 
-    range_s = np.arange(ns, dtype=np.int32)
-
     get_resources().split_work(
-        work,
+        backproject_i,
         data_in=range_s,
         data_out=H_1,
-        f_mem_usage=lambda dc: (
-            lambda _, cpus:
-            get_memory_usage(
-                (sensor_grid_xyz.shape, s * cpus), (H_0.shape, (1 + h) * cpus), (H_1.shape, (1 + h) * cpus))
-        )(*dc),
         slice_dims=(0, None),
     )
 

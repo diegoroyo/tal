@@ -153,8 +153,18 @@ class NLOSCaptureData:
     LaserGridType = Union[MatrixN3, TensorXY3]
     SensorGridType = Union[MatrixN3, TensorXY3]
     TensorXYZ3 = NDArray[Shape['X, Y, Z, 3'], Float]
-    VolumeXYZType = Union[MatrixN3, TensorXYZ3]
+    VolumeXYZType = Union[MatrixN3, TensorXY3, TensorXYZ3]
     Array3 = NDArray[Shape['3'], Float]
+
+    # reconstruction types
+    TensorN = NDArray[Shape['N'], Float]
+    TensorXY = NDArray[Shape['X, Y'], Float]
+    TensorXYZ = NDArray[Shape['X, Y, Z'], Float]
+    SingleReconstructionType = Union[TensorN, TensorXY, TensorXYZ]
+    TensorNN = NDArray[Shape['N, N'], Float]
+    TensorXYXY = NDArray[Shape['X, Y, X, Y'], Float]
+    TensorXYZXYZ = NDArray[Shape['X, Y, Z, X, Y, Z'], Float]
+    ExhaustiveReconstructionType = Union[TensorNN, TensorXYXY, TensorXYZXYZ]
 
     #
     # Actual capture data (ignore _start and _end)
@@ -210,7 +220,7 @@ class NLOSCaptureData:
         if self.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.T_Li_Si]:
             return False
         elif self.H_format in [HFormat.T_Sx_Sy, HFormat.T_Si]:
-            return self.laser_grid_xyz.shape == self.sensor_grid_xyz.shape
+            return np.allclose(self.sensor_grid_xyz, self.laser_grid_xyz)
         else:
             raise AssertionError('Invalid H_format')
 

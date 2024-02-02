@@ -79,6 +79,12 @@ def read_transient_image(path):
     return _read_mitsuba_streakbitmap(path)
 
 
+def remove_transient_image(path):
+    import os
+    if os.path.exists(path):
+        os.remove(path)
+
+
 def get_material_keys(s):
     import re
     return list(map(lambda e: e[1:],

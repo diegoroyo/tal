@@ -35,22 +35,25 @@ def render_nlos_scene(config_path, args, num_retries=0):
     try:
         scene_config = yaml.safe_load(
             open(config_path, 'r')) or dict()
+
+        if scene_config.get('mitsuba_variant', '').startswith('cuda'):
+            assert len(args.gpus) > 0, \
+                'You must specify at least one GPU to use CUDA. Use tal --gpu <id1> <id2> ...'
+            gpu_ids = ','.join(map(str, args.gpus))
+            os.environ['CUDA_VISIBLE_DEVICES'] = gpu_ids
+        else:
+            os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+
+        mitsuba_backend = import_mitsuba_backend()
+
         scene_defaults = yaml.safe_load(
             open(local_file_path('render/scene_defaults.yaml'), 'r'))
+        scene_defaults['mitsuba_variant'] = mitsuba_backend.get_default_variant()
+
     except yaml.YAMLError as exc:
         raise AssertionError(
             f'Invalid YAML format in TAL config file: {exc}') from exc
     scene_config = {**scene_defaults, **scene_config}
-
-    if scene_config['mitsuba_variant'].startswith('cuda'):
-        assert len(args.gpus) > 0, \
-            'You must specify at least one GPU to use CUDA. Use tal --gpu <id1> <id2> ...'
-        gpu_ids = ','.join(map(str, args.gpus))
-        os.environ['CUDA_VISIBLE_DEVICES'] = gpu_ids
-    else:
-        os.environ.pop('CUDA_VISIBLE_DEVICES', None)
-
-    mitsuba_backend = import_mitsuba_backend()
 
     if not args.dry_run:
         mitsuba_backend.set_variant(scene_config['mitsuba_variant'])
@@ -157,7 +160,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
             raise AssertionError(
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
 
-        # FIXME(diego): rotate + translate (asssumes no rot/trans)
+        # TODO(diego): rotate + translate (asssumes no rot/trans)
         # or use a more generalist approach that does not need to be rectangular
         sensor_grid_xyz = get_grid_xyz(
             sensor_width, sensor_height, relay_wall['scale'])
@@ -172,7 +175,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
         else:
             laser_grid_xyz = get_grid_xyz(
                 laser_width, laser_height, relay_wall['scale'])
-        # FIXME(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
+        # TODO(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
         # or use a more generalist approach
         sensor_grid_normals = expand(
             np.array([0, 0, 1]), sensor_width, sensor_height)
@@ -348,8 +351,14 @@ def render_nlos_scene(config_path, args, num_retries=0):
             else:
                 raise AssertionError
 
+            e_laser_lookats = enumerate(laser_lookats)
+            if not args.quiet and len(laser_lookats) > 1:
+                e_laser_lookats = tqdm(
+                    e_laser_lookats, desc='Merging partial results...',
+                    ascii=True, total=len(laser_lookats))
+
             try:
-                for i, (laser_lookat_x, laser_lookat_y) in enumerate(laser_lookats):
+                for i, (laser_lookat_x, laser_lookat_y) in e_laser_lookats:
                     x = i % laser_width
                     y = i // laser_width
                     hdr_path, _ = mitsuba_backend.partial_laser_path(
@@ -359,10 +368,11 @@ def render_nlos_scene(config_path, args, num_retries=0):
                     capture_data.H[:, x, y, ...] = np.squeeze(
                         mitsuba_backend.read_transient_image(hdr_path))
             except Exception:
-                if num_retries >= 5:
+                if num_retries >= 10:
                     raise AssertionError(
                         f'Failed to read partial results after {num_retries} retries')
-                # FIXME Mitsuba sometimes fails to write some images,
+                mitsuba_backend.remove_transient_image(hdr_path)
+                # TODO Mitsuba sometimes fails to write some images,
                 # it seems like some sort of race condition
                 # If there is a partial result missing, just re-launch for now
                 print('We missed some partial results, re-launching...')

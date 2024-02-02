@@ -1,0 +1,95 @@
+# TAL v0.11.0 NLOS scene description file: https://github.com/diegoroyo/tal
+# Created on 2023/12/21 17:16 with experiment name "exhaustive-scene"
+name: exhaustive-scene
+
+##
+# Mitsuba
+##
+mitsuba_variant: llvm_mono  # see mitsuba for possible types
+#integrator_max_depth: -1
+#integrator_filter_bounces: -1
+#integrator_discard_direct_paths: false
+#integrator_nlos_laser_sampling: true
+integrator_nlos_hidden_geometry_sampling: true
+#integrator_nlos_hidden_geometry_sampling_do_rroulette: false
+integrator_nlos_hidden_geometry_sampling_includes_relay_wall: false
+sample_count: 100_000
+#account_first_and_last_bounces: false
+num_bins: 2048
+#bin_width_opl: 0.003
+start_opl: 0.0
+#auto_detect_bins: false
+
+##
+# Laser and sensor
+##
+scan_type: exhaustive  # single, confocal or exhaustive
+#sensor_x: -0.5
+#sensor_y: 0.0
+#sensor_z: 0.25
+#laser_x: -0.5
+#laser_y: 0.0
+#laser_z: 0.25
+sensor_width: 16
+sensor_height: 16
+# for scan_type=single
+# if set to null, laser points to the center pixel
+# if set to a number, laser points to that pixel (e.g. center = 128, 128)
+#laser_lookat_x: null
+#laser_lookat_y: null
+# for scan_type=confocal/exhaustive
+laser_width: 16
+laser_height: 16
+
+##
+# Geometry (valid for hidden geometry or relay wall)
+##
+geometry:
+- name: T
+  mesh:
+    type: obj
+    filename: ./wall-2m-z0.obj
+  displacement_x: 0.0
+  displacement_y: 0.0
+  displacement_z: 1.0
+  rot_degrees_x: 0.0
+  rot_degrees_y: 0.0
+  rot_degrees_z: 0.0
+  scale: 1
+  material:
+    id: white
+- name: relay_wall
+  mesh:
+    type: rectangle
+  # Relay wall displacement and rotation is NYI (see tal.render.render.py)
+  # as an alternative, you can displace/rotate the rest of the scene
+  scale: 1  # 1: relay wall is 2x2, 0.5: relay wall is 1x1
+  material:
+    id: white
+
+##
+# Relay walls
+##
+relay_wall: relay_wall  # must correspond to a geometry name above
+
+##
+# Implemented materials reference
+# (variables e.g. $alpha are substituted)
+##
+
+#| id: white
+#| <bsdf type="diffuse">
+#|     <rgb name="reflectance" value="1.0, 1.0, 1.0"/>
+#| </bsdf>
+
+#| id: copper
+#| alpha: $alpha
+#| <bsdf type="roughconductor">
+#|     <string name="material" value="Cu"/>
+#|     <string name="distribution" value="beckmann"/>
+#|     <float name="alpha" value="$alpha"/>
+#| </bsdf>
+
+#| id: custom
+#| text: $text
+#| $text

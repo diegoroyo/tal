@@ -28,6 +28,7 @@ def filter_H(data: _Data,
              border: str = 'zero',
              plot_filter: bool = False,
              return_filter: bool = False,
+             progress: bool = True,
              **kwargs) -> NLOSCaptureData.HType:
     """
     Filter a captured data signal (H) using specified filter_name
@@ -39,6 +40,7 @@ def filter_H(data: _Data,
         * If plot_filter=True, shows a plot of the resulting filter
         * If return_filter=True, returns the filter (K)
           else, returns the filtered signal (H * K)
+        * If progress=True, shows a progress bar with the performed step
 
     Available filters and respective arguments:
     - filter_name='pf': Filter certain frequencies, weighted using a Gaussian on the frequency domain
@@ -51,7 +53,58 @@ def filter_H(data: _Data,
         of frequencies that are filtered given wl_mean and wl_sigma
     """
     from tal.reconstruct.filters import filter_H_impl
-    return filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, **kwargs)
+    return filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, progress, **kwargs)
+
+
+def compensate_laser_cos_dsqr(data: NLOSCaptureData):
+    """
+    Compensate for the cos decay and 1/d^2 decay of the laser signal (operates in place)
+    """
+    import numpy as np
+
+    def compensate(H, rw_xyz, rw_n):
+        w_i = data.laser_xyz - rw_xyz
+        d = np.linalg.norm(w_i)
+        w_i = w_i / d
+        cos_term = np.dot(w_i, rw_n)
+        H /= cos_term / d ** 2
+
+    def compensate_i(nl):
+        for i in range(nl):
+            compensate(data.H[:, i, ...],
+                       data.laser_grid_xyz[i, :],
+                       data.laser_grid_normals[i, :])
+
+    def compensate_i_j(nlx, nly):
+        for i in range(nlx):
+            for j in range(nly):
+                compensate(data.H[:, i, j, ...],
+                           data.laser_grid_xyz[i, j, :],
+                           data.laser_grid_normals[i, j, :])
+
+    if data.H_format == HFormat.T_Lx_Ly_Sx_Sy:
+        compensate_i_j(*data.laser_grid_xyz.shape[:2])
+    elif data.H_format == HFormat.T_Sx_Sy:
+        if data.is_confocal():
+            compensate_i_j(*data.sensor_grid_xyz.shape[:2])
+        else:
+            assert len(data.laser_grid_xyz) == 3
+            compensate(data.H,
+                       data.laser_grid_xyz.reshape(3),
+                       data.laser_grid_normals.reshape(3))
+    elif data.H_format == HFormat.T_Li_Si:
+        compensate_i(data.laser_grid_xyz.shape[0])
+    elif data.H_format == HFormat.T_Si:
+        if data.is_confocal():
+            compensate_i(data.sensor_grid_xyz.shape[0])
+        else:
+            assert len(data.laser_grid_xyz) == 3
+            compensate(data.H,
+                       data.laser_grid_xyz.reshape(3),
+                       data.laser_grid_normals.reshape(3))
+    else:
+        raise ValueError(
+            f'This function is not implemented for H_format={data.H_format}')
 
 
 def get_volume_min_max_resolution(minimal_pos, maximal_pos, resolution):

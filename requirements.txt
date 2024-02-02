@@ -5,6 +5,7 @@ Pillow==9.5.0
 matplotlib>=3.7.0
 nptyping>=2.5.0
 numpy>=1.24.2
+numba>=0.54.1
 PyYAML>=6.0
 setuptools>=67.3.3
 tqdm>=4.64.1

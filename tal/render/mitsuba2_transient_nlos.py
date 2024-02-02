@@ -77,6 +77,11 @@ def read_transient_image(path):
     return _read_mitsuba_streakbitmap(path)
 
 
+def remove_transient_image(path):
+    print(f'Skipping the removal of {path}')
+    return
+
+
 def get_material_keys(s):
     import re
     return list(map(lambda e: e[1:],
@@ -385,7 +390,6 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     return file_steady, file_nlos
 
 
-# FIXME
 def run_mitsuba(scene_xml_path, hdr_path, defines,
                 experiment_name, logfile, args, sensor_index=0, queue=None):
     import re
