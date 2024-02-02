@@ -211,13 +211,17 @@ def render_nlos_scene(config_path, args, num_retries=0):
                     queue = StdoutQueue()
                     run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, steady_scene_xml, hdr_path, dict(),
                                             render_name, logfile, args, sensor_index, queue)
-                    process = multiprocessing.Process(target=run_mitsuba_f)
-                    try:
-                        process.start()
-                        process.join()
-                    except KeyboardInterrupt:
-                        process.terminate()
-                        raise KeyboardInterrupt
+                    if os.name == 'nt':
+                        # NOTE: Windows does not support multiprocessing
+                        run_mitsuba_f()
+                    else:
+                        process = multiprocessing.Process(target=run_mitsuba_f)
+                        try:
+                            process.start()
+                            process.join()
+                        except KeyboardInterrupt:
+                            process.terminate()
+                            raise KeyboardInterrupt
                     if args.do_logging and not args.dry_run:
                         while not queue.empty():
                             e = queue.get()
@@ -262,13 +266,17 @@ def render_nlos_scene(config_path, args, num_retries=0):
             # as they can fill your RAM in exhaustive scans
             run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, nlos_scene_xml, hdr_path, defines,
                                     render_name, sys.stdout, args, queue=queue)
-            process = multiprocessing.Process(target=run_mitsuba_f)
-            try:
-                process.start()
-                process.join()
-            except KeyboardInterrupt:
-                process.terminate()
-                raise KeyboardInterrupt
+            if os.name == 'nt':
+                # NOTE: Windows does not support multiprocessing
+                run_mitsuba_f()
+            else:
+                process = multiprocessing.Process(target=run_mitsuba_f)
+                try:
+                    process.start()
+                    process.join()
+                except KeyboardInterrupt:
+                    process.terminate()
+                    raise KeyboardInterrupt
             if scan_type == 'exhaustive' and i == 0:
                 size_bytes = os.path.getsize(hdr_path)
                 final_size_gb = size_bytes * len(laser_lookats) / 2**30

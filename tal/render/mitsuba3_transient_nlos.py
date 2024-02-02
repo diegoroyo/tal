@@ -408,7 +408,9 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
 
         sys.stdout = queue
         sys.stderr = queue
-        os.nice(args.nice)
+        if os.name == 'posix':
+            # Nice only available in posix systems
+            os.nice(args.nice)
 
         if args.dry_run:
             return
@@ -454,6 +456,9 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         del result, scene, integrator
     except Exception as e:
         queue.write(e)
+
+    sys.stdout = sys.__stdout__
+    sys.stderr = sys.__stderr__
 
 
 def _read_mitsuba_bitmap(path: str):
