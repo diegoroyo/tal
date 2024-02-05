@@ -66,8 +66,8 @@ def backproject_pf_multi_frequency(
     K_fftshift = np.fft.fftshift(np.fft.fft(K))
     K_fftfreq = np.fft.fftshift(np.fft.fftfreq(nf, d=delta_t))
 
-    weights = K_fftshift[freq_min_idx:freq_max_idx+1]
-    freqs = K_fftfreq[freq_min_idx:freq_max_idx+1]
+    weights = K_fftshift[freq_min_idx:freq_max_idx+1].astype(np.complex64)
+    freqs = K_fftfreq[freq_min_idx:freq_max_idx+1].astype(np.float32)
     print('tal.reconstruct.pf_dev: '
           f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
     nw = len(weights)
@@ -268,15 +268,15 @@ def backproject_pf_multi_frequency(
                     # H_1_w[i_w, ...] = 0
                     continue
 
-                e = np.exp(-2j * np.pi * t * frequency)
+                e = np.exp(np.complex64(-2j * np.pi) * t * frequency)
                 H_0_w = np.sum(H_0 * e.reshape((nf, 1, 1)),
                                axis=0).reshape((nl, ns))
 
-                rsd_014 = np.exp(2j * np.pi * d_014 * frequency)
+                rsd_014 = np.exp(np.complex64(2j * np.pi) * d_014 * frequency)
                 H_0_w *= rsd_014
                 del rsd_014
 
-                rsd_3 = np.exp(2j * np.pi * d_3 * frequency)
+                rsd_3 = np.exp(np.complex64(2j * np.pi) * d_3 * frequency)
                 if optimize_camera_convolutions:
                     H_0_w = H_0_w.reshape((nlx, nly, nsx, nsy))
                     rsd_3 = rsd_3.reshape((1, 1, rsx, rsy))
@@ -295,7 +295,7 @@ def backproject_pf_multi_frequency(
                     H_0_w = H_0_w.sum(axis=2)
 
                 if camera_system.bp_accounts_for_d_2():
-                    rsd_2 = np.exp(2j * np.pi * d_2 * frequency)
+                    rsd_2 = np.exp(np.complex64(2j * np.pi) * d_2 * frequency)
                     if projector_focus_mode == 'exhaustive':
                         assert optimize_projector_convolutions, \
                             'You must use the convolutions optimization when projector_focus=volume_xyz. ' \
@@ -342,7 +342,7 @@ def backproject_pf_multi_frequency(
                               total=nw,
                               leave=False)
         for i_w, frequency in f_iterator:
-            e = np.exp(2j * np.pi * t * frequency) / nf
+            e = np.exp(np.complex64(2j * np.pi) * t * frequency) / nf
             H_1_t = (
                 e.reshape((nf, 1, 1))
                 *
