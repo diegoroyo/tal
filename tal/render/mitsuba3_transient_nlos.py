@@ -212,7 +212,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             <transform name="to_world">
                 <lookat origin="0, 0, 5"
                         target="0, 0, 0"
-                            up="0, 1, 0"/>
+                            up="0, -1, 0"/>
             </transform>
             <sampler type="independent">
                 <integer name="sample_count" value="512"/>
@@ -235,7 +235,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             <transform name="to_world">
                 <lookat origin="5, 0, 1.5"
                         target="0, 0, 1.5"
-                            up="0, 1, 0"/>
+                            up="0, -1, 0"/>
             </transform>
             <sampler type="independent">
                 <integer name="sample_count" value="512"/>

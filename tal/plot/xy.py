@@ -11,14 +11,21 @@ from tqdm import tqdm
 
 
 def plot_amplitude_phase(image: NLOSCaptureData.SingleReconstructionType, title: str = ''):
+    if image.squeeze().ndim != 2:
+        raise AssertionError('Image must be 2D')
+    image_show = image.squeeze().T
     fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-    mappable = ax[0].imshow(np.abs(image), cmap='hot')
+    mappable = ax[0].imshow(np.abs(image_show), cmap='hot')
     fig.colorbar(mappable, ax=ax[0])
-    mappable = ax[1].imshow(np.angle(image), cmap='seismic',
+    mappable = ax[1].imshow(np.angle(image_show), cmap='seismic',
                             vmin=-np.pi, vmax=np.pi)
     fig.colorbar(mappable, ax=ax[1])
     ax[0].set_title('Amplitude')
+    ax[0].set_xlabel('x')
+    ax[0].set_ylabel('y')
     ax[1].set_title('Phase')
+    ax[1].set_xlabel('x')
+    ax[1].set_ylabel('y')
     fig.suptitle(title)
     plt.show()
 
