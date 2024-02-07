@@ -365,9 +365,9 @@ def render_nlos_scene(config_path, args, num_retries=0):
                         partial_results_dir,
                         experiment_name,
                         laser_lookat_x, laser_lookat_y)
-                    capture_data.H[:, x, y, ...] = np.squeeze(
-                        mitsuba_backend.read_transient_image(hdr_path))
-            except Exception:
+                    capture_data.H[:, x, y, ...] = \
+                        mitsuba_backend.read_transient_image(hdr_path)
+            except Exception as exc:
                 if num_retries >= 10:
                     raise AssertionError(
                         f'Failed to read partial results after {num_retries} retries')
@@ -375,7 +375,8 @@ def render_nlos_scene(config_path, args, num_retries=0):
                 # TODO Mitsuba sometimes fails to write some images,
                 # it seems like some sort of race condition
                 # If there is a partial result missing, just re-launch for now
-                print('We missed some partial results, re-launching...')
+                print(
+                    f'We missed some partial results (iteration {i} failed because: {exc}), re-launching...')
                 return render_nlos_scene(config_path, args, num_retries=num_retries + 1)
         else:
             raise AssertionError(
