@@ -33,6 +33,7 @@ def solve(data: NLOSCaptureData,
           volume_format: VolumeFormat = VolumeFormat.UNKNOWN,
           camera_system: CameraSystem = CameraSystem.DIRECT_LIGHT,
           projector_focus: NLOSCaptureData.Array3 = None,
+          compensate_invsq: bool = False,
           progress: bool = True) -> NLOSCaptureData.SingleReconstructionType:
     """
     See module description of tal.reconstruct.bp
@@ -62,6 +63,9 @@ def solve(data: NLOSCaptureData,
         In the pf_dev module you can set projector_focus = volume_xyz and that will yield
             a NLOSCaptureData.ExhaustiveReconstructionType with all possible projector_focus points.
 
+    compensate_invsq
+        If True, the inverse square falloff of light is compensated for.
+
     progress
         If True, shows a progress bar with estimated time remaining.
     """
@@ -76,6 +80,7 @@ def solve(data: NLOSCaptureData,
         data.t_start, data.delta_t, data.is_confocal(),
         projector_focus,
         data.laser_xyz, data.sensor_xyz,
+        compensate_invsq=compensate_invsq,
         progress=progress)
 
     return convert_reconstruction_from_N_3(data, reconstructed_volume_n3, volume_xyz, volume_format, camera_system)

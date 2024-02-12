@@ -8,7 +8,8 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
                 camera_system, t_accounts_first_and_last_bounces,
                 t_start, delta_t, is_confocal,
                 projector_focus=None,
-                laser_xyz=None, sensor_xyz=None, progress=False):
+                laser_xyz=None, sensor_xyz=None,
+                compensate_invsq=False, progress=False):
 
     if camera_system.is_transient():
         print('tal.reconstruct.bp: You have specified a time-resolved camera_system. '
@@ -90,6 +91,17 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
             d_2_i = d_2
         sensor_grid_xyz_i = sensor_grid_xyz[:, :, subrange_s, :]
         d_3 = distance(volume_xyz, sensor_grid_xyz_i)
+
+        invsq = 1
+        if compensate_invsq:
+            def c(d):
+                term = np.ones_like(d)
+                epsilon = 1e-4
+                term[d > epsilon] = d[d > epsilon] ** 2
+                return term
+
+            invsq = c(d_1) * c(d_2_i) * c(d_3) * c(d_4)
+
         idx = d_1 + d_2_i + d_3 + d_4 - t_start
         idx /= delta_t
         idx = idx.astype(np.int32)
@@ -108,6 +120,8 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
                 good = np.logical_and(idx_i >= 0, idx_i < nt)
                 idx_i[~good] = 0
                 H_1_raw = H_0_i[idx_i[i_v, i_s], i_l, i_s]
+                if compensate_invsq:
+                    H_1_raw *= invsq[i_l]
                 H_1_raw[~good] = 0.0
                 H_1_i[i_t, :] += H_1_raw.sum(axis=1)
 
