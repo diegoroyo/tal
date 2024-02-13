@@ -51,7 +51,7 @@ def backproject_pf_multi_frequency(
     nf = nt + 2 * padding
 
     t_max = delta_t * (nf - 1)
-    t = np.linspace(start=0, stop=t_max, num=nf)
+    t = np.linspace(start=0, stop=t_max, num=nf, dtype=np.float32)
 
     gaussian_envelope = np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2)
     K = gaussian_envelope / np.sum(gaussian_envelope) * \
