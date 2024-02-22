@@ -365,8 +365,14 @@ def render_nlos_scene(config_path, args, num_retries=0):
                         partial_results_dir,
                         experiment_name,
                         laser_lookat_x, laser_lookat_y)
-                    capture_data.H[:, x, y, ...] = \
-                        mitsuba_backend.read_transient_image(hdr_path)
+                    if scan_type == 'confocal':
+                        capture_data.H[:, x:x+1, y:y+1, ...] = \
+                            mitsuba_backend.read_transient_image(hdr_path)
+                    elif scan_type == 'exhaustive':
+                        capture_data.H[:, x, y, ...] = \
+                            mitsuba_backend.read_transient_image(hdr_path)
+                    else:
+                        raise AssertionError
             except Exception as exc:
                 if num_retries >= 10:
                     raise AssertionError(
