@@ -117,7 +117,11 @@ def convert_to_N_3(data: NLOSCaptureData,
 
     assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
 
-    if volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]:
+    try:
+        assert volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
+        nvx, nvy = volume_xyz.shape[:2]
+        assert nvx > 1 and nvy > 1
+
         # list of (Z, 3) normals of all Z positions in the plane
         if volume_format == VolumeFormat.X_Y_3:
             z_index = Ellipsis
@@ -128,12 +132,11 @@ def convert_to_N_3(data: NLOSCaptureData,
         v_c = volume_xyz[0, -1, z_index, :]
         v_n = np.cross(v_b - v_a, v_c - v_a).reshape((-1, 3))
         v_n /= np.linalg.norm(v_n, axis=-1, keepdims=True)
-
         v_dx = np.linalg.norm(
             volume_xyz[1, 0, z_index, :] - volume_xyz[0, 0, z_index, :])
         v_dy = np.linalg.norm(
             volume_xyz[0, 1, z_index, :] - volume_xyz[0, 0, z_index, :])
-    else:
+    except AssertionError:
         optimize_projector_convolutions = False
         optimize_camera_convolutions = False
 
