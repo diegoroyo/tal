@@ -42,7 +42,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
             gpu_ids = ','.join(map(str, args.gpus))
             os.environ['CUDA_VISIBLE_DEVICES'] = gpu_ids
         else:
-            os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+            os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
         mitsuba_backend = import_mitsuba_backend()
 

@@ -421,6 +421,16 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         if args.dry_run:
             return
 
+        # set the CUDA_VISIBLE_DEVICES again
+        # don't know if it's necessary but does not hurt
+        if mi.variant().startswith('cuda'):
+            assert len(args.gpus) > 0, \
+                'You must specify at least one GPU to use CUDA. Use tal --gpu <id1> <id2> ...'
+            gpu_ids = ','.join(map(str, args.gpus))
+            os.environ['CUDA_VISIBLE_DEVICES'] = gpu_ids
+        else:
+            os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
         scene = mi.load_file(scene_xml_path, **defines)
         integrator = scene.integrator()
 
