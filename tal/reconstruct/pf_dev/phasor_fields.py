@@ -30,6 +30,8 @@ def backproject_pf_multi_frequency(
             volume_xyz = volume_xyz.reshape((nvx, nvy, 1, 3))
         assert volume_xyz.ndim == 4, 'Expecting X_Y_Z_3 format'
         nvx, nvy, nvz, _ = volume_xyz.shape
+    else:
+        nvz = 1
     if optimize_projector_convolutions:
         assert laser_grid_xyz.ndim == 3, 'Expecting X_Y_3 format'
         nlx, nly, _ = laser_grid_xyz.shape
