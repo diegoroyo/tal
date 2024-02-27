@@ -12,13 +12,13 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         H_format = (data_format
                     if data_format != HFormat.UNKNOWN
                     else None) or data.H_format
-        H = data.H.astype(np.float32)
+        H = data.H
         delta_t = data.delta_t
     else:
         assert data_format is not None and data_format != HFormat.UNKNOWN, \
             'If data is not a NLOSCaptureData object, H format must be specified through the data_format argument'
         H_format = data_format
-        H = data.astype(np.float32)
+        H = data
         delta_t = None
 
     assert border in ['erase', 'zero', 'edge'], \
@@ -48,7 +48,7 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         else:
             nt_pad = nt + 2 * (t_6sigma - 1)
         t_max = delta_t * (nt_pad - 1)
-        t = np.linspace(start=0, stop=t_max, num=nt_pad)
+        t = np.linspace(start=0, stop=t_max, num=nt_pad, dtype=np.float32)
 
         mean_idx = (nt_pad * delta_t) / wl_mean
         sigma_idx = (nt_pad * delta_t) / (wl_sigma * 6)
@@ -108,7 +108,7 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
                        ((padding, padding),) +  # first dim (time)
                        ((0, 0),) * (H.ndim - 1),  # other dims
                        mode=mode)
-        H_fft = np.fft.fft(H_pad, axis=0)
+        H_fft = np.fft.fft(H_pad, axis=0).astype(np.complex64)
         if progress:
             pbar.set_description(
                 f'tal.reconstruct.filter_H ({filter_name}, 2/3)')
@@ -120,7 +120,7 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
             pbar.set_description(
                 f'tal.reconstruct.filter_H ({filter_name}, 3/3)')
             pbar.update(1)
-        HoK = np.fft.ifft(H_fft, axis=0)
+        HoK = np.fft.ifft(H_fft, axis=0).astype(np.complex64)
         del H_fft
         if progress:
             pbar.update(1)
