@@ -64,7 +64,8 @@ def solve(data: NLOSCaptureData,
             a NLOSCaptureData.ExhaustiveReconstructionType with all possible projector_focus points.
 
     compensate_invsq
-        If True, the inverse square falloff of light is compensated for.
+        If True, the inverse square falloff of light is compensated for, i.e., objects further away
+        from the relay wall will appear brighter in the reconstruction.
 
     progress
         If True, shows a progress bar with estimated time remaining.

@@ -11,7 +11,9 @@ def backproject_pf_multi_frequency(
         projector_focus,
         wl_mean, wl_sigma, border,
         optimize_projector_convolutions, optimize_camera_convolutions,
-        laser_xyz=None, sensor_xyz=None, progress=False):
+        laser_xyz=None, sensor_xyz=None,
+        compensate_invsq=False,
+        progress=False):
 
     assert not is_confocal, 'tal.reconstruct.pf_dev does not support confocal captures. ' \
         'Please use tal.reconstruct.bp or tal.reconstruct.fbp instead.'
@@ -134,6 +136,12 @@ def backproject_pf_multi_frequency(
     def distance(a, b):
         return np.linalg.norm(b - a, axis=-1)
 
+    def invsq(d):
+        term = np.ones_like(d)
+        epsilon = 1e-4
+        term[d > epsilon] = d[d > epsilon] ** 2
+        return term
+
     # d_0: t_start (moment the sensor starts capturing w.r.t. pulse emission)
     # d_1: laser origin to laser illuminated point
     # d_2: laser illuminated point to projector_focus
@@ -154,6 +162,9 @@ def backproject_pf_multi_frequency(
         n_projector_points = 1
 
     d_014 = d_0 + d_1 + d_4
+    invsq_14 = 1
+    if compensate_invsq:
+        invsq_14 = invsq(d_1) * invsq(d_4)
 
     if optimize_projector_convolutions or optimize_camera_convolutions:
         nvi = nvx * nvy
@@ -247,6 +258,12 @@ def backproject_pf_multi_frequency(
         else:
             d_3 = distance(volume_xyz_i, sensor_grid_xyz)
 
+        invsq_2 = 1
+        invsq_3 = 1
+        if compensate_invsq:
+            invsq_2 = invsq(d_2)
+            invsq_3 = invsq(d_3)
+
         nw_pow2 = 2 ** np.ceil(np.log2(nw)).astype(np.int32)
         freqs_pad = np.pad(freqs, (0, nw_pow2 - nw), 'constant')
         weights_pad = np.pad(weights, (0, nw_pow2 - nw), 'constant')
@@ -275,10 +292,12 @@ def backproject_pf_multi_frequency(
                                axis=0).reshape((nl, ns))
 
                 rsd_014 = np.exp(np.complex64(2j * np.pi) * d_014 * frequency)
+                rsd_014 *= invsq_14
                 H_0_w *= rsd_014
                 del rsd_014
 
                 rsd_3 = np.exp(np.complex64(2j * np.pi) * d_3 * frequency)
+                rsd_3 *= invsq_3
                 if optimize_camera_convolutions:
                     H_0_w = H_0_w.reshape((nlx, nly, nsx, nsy))
                     rsd_3 = rsd_3.reshape((1, 1, rsx, rsy))
@@ -298,6 +317,7 @@ def backproject_pf_multi_frequency(
 
                 if camera_system.bp_accounts_for_d_2():
                     rsd_2 = np.exp(np.complex64(2j * np.pi) * d_2 * frequency)
+                    rsd_2 *= invsq_2
                     if projector_focus_mode == 'exhaustive':
                         assert optimize_projector_convolutions, \
                             'You must use the convolutions optimization when projector_focus=volume_xyz. ' \

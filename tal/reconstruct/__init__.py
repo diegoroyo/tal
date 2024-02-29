@@ -58,7 +58,10 @@ def filter_H(data: _Data,
 
 def compensate_laser_cos_dsqr(data: NLOSCaptureData):
     """
-    Compensate for the cos decay and 1/d^2 decay of the laser signal (operates in place)
+    Compensate for the cos decay and 1/d^2 decay of the laser, from the physical
+    laser device to each illuminated point in the relay wall.
+
+    (Operates in place)
     """
     import numpy as np
 

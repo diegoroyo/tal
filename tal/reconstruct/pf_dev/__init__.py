@@ -36,6 +36,7 @@ def solve(data: NLOSCaptureData,
           projector_focus: Union[NLOSCaptureData.Array3,
                                  NLOSCaptureData.VolumeXYZType] = None,
           progress: bool = True,
+          compensate_invsq: bool = False,
           try_optimize_convolutions: bool = True) -> Union[NLOSCaptureData.SingleReconstructionType,
                                                            NLOSCaptureData.ExhaustiveReconstructionType]:
     """
@@ -69,6 +70,10 @@ def solve(data: NLOSCaptureData,
         When projector_focus = volume_xyz, this will yield
             a NLOSCaptureData.ExhaustiveReconstructionType with all possible projector_focus points.
 
+    compensate_invsq
+        If True, the inverse square falloff of light is compensated for, i.e., objects further away
+        from the relay wall will appear brighter in the reconstruction.
+
     progress
         If True, shows a progress bar with estimated time remaining.
 
@@ -96,6 +101,7 @@ def solve(data: NLOSCaptureData,
         wl_mean, wl_sigma, border,
         optimize_projector_convolutions, optimize_camera_convolutions,
         data.laser_xyz, data.sensor_xyz,
+        compensate_invsq=compensate_invsq,
         progress=progress)
 
     mutliple_projector_points = \
