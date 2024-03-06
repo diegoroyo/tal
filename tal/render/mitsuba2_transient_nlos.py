@@ -1,3 +1,5 @@
+from tal.log import log, LogLevel, TQDMLogRedirect
+
 # pyright: reportMissingImports=false
 
 
@@ -15,8 +17,8 @@ def _get_setpath_location():
             setpath_ok = True
         else:
             force_ask = True
-            print(f'setpath.sh cannot be found in {setpath_location}.')
-            print()
+            log(LogLevel.ERROR,
+                f'setpath.sh cannot be found in {setpath_location}.', end='\n\n')
     return setpath_location
 
 
@@ -78,7 +80,7 @@ def read_transient_image(path):
 
 
 def remove_transient_image(path):
-    print(f'Skipping the removal of {path}')
+    log(LogLevel.WARNING, f'Skipping the removal of {path}')
     return
 
 
@@ -284,9 +286,9 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         name = g('name')
         is_relay_wall = name == relay_wall_name
         if is_relay_wall and g('mesh')['type'] != 'rectangle' and not quiet:
-            print('WARNING: Relay wall does not work well with meshes that are '
-                  'not of type "rectangle" because of wrong UV mapping. '
-                  'Please make sure that you know what you are doing')
+            log(LogLevel.WARNING, 'Relay wall does not work well with meshes that are '
+                'not of type "rectangle" because of wrong UV mapping. '
+                'Please make sure that you know what you are doing')
         shape_name = f'<!-- {name}{" (RELAY WALL)" if is_relay_wall else ""} -->'
         description = g('description')
         if description is not None and len(description.strip()) > 0:
@@ -416,7 +418,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         # add extra commas to make it easier to copy-paste
         command = ['/bin/bash', '-c',
                    f'"source \\"{setpath_location}\\" && {" ".join(command)}"']
-        print(' '.join(command))
+        log(LogLevel.PROMPT, ' '.join(command))
         return
     else:
         command = ['/bin/bash', '-c',
@@ -442,6 +444,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             opl_re = re.compile(
                 r'limits: \[(\d+\.\d+), \d+\.\d+\] with bin width (\d+\.\d+)')
         with tqdm(desc=experiment_name, total=100, ascii=True, leave=False,
+                  file=TQDMLogRedirect(),
                   bar_format='{desc} |{bar}| [{n:.2f}%{postfix}] ') as pbar:
             output = None
             while output is None or len(output) > 0:
@@ -460,8 +463,8 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
                         start_opl, bin_width_opl = matches[-1]
                         start_opl = float(start_opl)
                         bin_width_opl = float(bin_width_opl)
-                        print('Auto-detected histogram: '
-                              f'start_opl={start_opl:.4f}, bin_width_opl={bin_width_opl:.6f}')
+                        log(LogLevel.INFO, 'Auto-detected histogram: '
+                            f'start_opl={start_opl:.4f}, bin_width_opl={bin_width_opl:.6f}')
                         defines.update(start_opl=start_opl)
                         defines.update(bin_width_opl=bin_width_opl)
                         read_opl = False
@@ -525,7 +528,7 @@ def _read_mitsuba_streakbitmap(path: str, exr_format='RGB'):
     first_img = _read_mitsuba_bitmap(xtframes[0])
     streak_img = np.empty(
         (number_of_xtframes, *first_img.shape), dtype=first_img.dtype)
-    with tqdm(desc=f'Reading {path}', total=number_of_xtframes, ascii=True) as pbar:
+    with tqdm(desc=f'Reading {path}', total=number_of_xtframes, file=TQDMLogRedirect(), ascii=True) as pbar:
         for i_xtframe in range(number_of_xtframes):
             other = _read_mitsuba_bitmap(xtframes[i_xtframe])
             streak_img[i_xtframe] = np.nan_to_num(other, nan=0.)

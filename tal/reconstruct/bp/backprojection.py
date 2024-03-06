@@ -1,5 +1,6 @@
 from tal.enums import HFormat, GridFormat
 from tal.config import get_resources
+from tal.log import log, LogLevel, TQDMLogRedirect
 import numpy as np
 from tqdm import tqdm
 
@@ -12,9 +13,9 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
                 compensate_invsq=False, progress=False):
 
     if camera_system.is_transient():
-        print('tal.reconstruct.bp: You have specified a time-resolved camera_system. '
-              'The tal.reconstruct.bp implementation is better suited for time-gated systems. '
-              'This will work, but you may want to check out tal.reconstruct.pf_dev for time-resolved reconstructions.')
+        log(LogLevel.WARNING, 'tal.reconstruct.bp: You have specified a time-resolved camera_system. '
+            'The tal.reconstruct.bp implementation is better suited for time-gated systems. '
+            'This will work, but you may want to check out tal.reconstruct.pf_dev for time-resolved reconstructions.')
 
     nt, nl, ns = H_0.shape
     nv, _ = volume_xyz.shape
@@ -46,10 +47,6 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
             'When using tal.reconstruct.bp, projector_focus must be a single 3D point. ' \
             'If you want to focus the illumination aperture at multiple points, ' \
             'please use tal.reconstruct.pf_dev instead or call tal.reconstruct.bp once per projector_focus.'
-        if len(laser_grid_xyz) <= 3:
-            print('tal.reconstruct.bp: You have specified a camera_system with a projector and a projector_focus, '
-                  'but your data only contains one illumination point. Thus, you will not be able to implement the projector '
-                  'i.e. focus the illumination aperture anywhere on the scene.')
         projector_focus = np.array(projector_focus).reshape(
             (1, 1, 1, 3)).repeat(nv, axis=1)
     else:
@@ -109,7 +106,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
         t_range = nt if camera_system.is_transient() else 1
         t_range = np.arange(t_range, dtype=np.int32)
         if progress and len(t_range) > 1:
-            t_range = tqdm(t_range,
+            t_range = tqdm(t_range, file=TQDMLogRedirect(),
                            desc='tal.reconstruct.bp time bins', leave=False)
 
         H_1_i = np.zeros((len(t_range), nv), dtype=H_0.dtype)

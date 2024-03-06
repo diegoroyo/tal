@@ -1,6 +1,7 @@
 from tal.io.capture_data import NLOSCaptureData
 from tal.enums import HFormat
 from tal.util import SPEED_OF_LIGHT
+from tal.log import TQDMLogRedirect
 from typing import Union
 from nptyping import NDArray, Shape
 import matplotlib.pyplot as plt
@@ -54,7 +55,7 @@ def plot_xy_grid(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
     txy_min, txy_max = np.min(txy), np.max(txy)
     fig, axs = plt.subplots(size_y, size_x)
 
-    for i in tqdm(range(plot_size)):
+    for i in tqdm(range(plot_size), file=TQDMLogRedirect()):
         t_bin = i * step
         image = txy[t_bin]
         row = i // size_x

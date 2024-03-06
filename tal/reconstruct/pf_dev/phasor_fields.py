@@ -1,6 +1,7 @@
 import numpy as np
 import tal
 from tal.config import get_resources
+from tal.log import log, LogLevel, TQDMLogRedirect
 from tqdm import tqdm
 
 
@@ -19,10 +20,10 @@ def backproject_pf_multi_frequency(
         'Please use tal.reconstruct.bp or tal.reconstruct.fbp instead.'
 
     if not optimize_projector_convolutions and not optimize_camera_convolutions and not camera_system.is_transient():
-        print('tal.reconstruct.pf_dev: You have specified a time-gated camera system '
-              'with an arbitrary reconstruction volume (that is not parallel to the relay wall). '
-              'This will work, but the tal.reconstruct.bp or tal.reconstruct.fbp implementations '
-              'are better suited for these cases.')
+        log(LogLevel.WARNING, 'tal.reconstruct.pf_dev: You have specified a time-gated camera system '
+            'with an arbitrary reconstruction volume (that is not parallel to the relay wall). '
+            'This will work, but the tal.reconstruct.bp or tal.reconstruct.fbp implementations '
+            'are better suited for these cases.')
 
     nt, nl, ns = H_0.shape
     nv = np.prod(volume_xyz.shape[:-1])  # N or X * Y or X * Y * Z
@@ -72,8 +73,8 @@ def backproject_pf_multi_frequency(
 
     weights = K_fftshift[freq_min_idx:freq_max_idx+1].astype(np.complex64)
     freqs = K_fftfreq[freq_min_idx:freq_max_idx+1].astype(np.float32)
-    print('tal.reconstruct.pf_dev: '
-          f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
+    log(LogLevel.INFO, 'tal.reconstruct.pf_dev: '
+        f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
     nw = len(weights)
 
     if border == 'zero':
@@ -88,17 +89,13 @@ def backproject_pf_multi_frequency(
     if camera_system.implements_projector():
         assert projector_focus is not None, \
             'projector_focus is required for this camera system'
-        if len(laser_grid_xyz) <= 3:
-            print('tal.reconstruct.pf_dev: You have specified a camera_system with a projector and a projector_focus, '
-                  'but your data only contains one illumination point. You will get a result, but you probably won\'t get the result you expect. '
-                  'You have to use multiple illumination points for that.')
         if len(projector_focus) == 3:
             projector_focus = np.array(projector_focus).reshape(
                 (1, 1, 1, 3))
             projector_focus_mode = 'single'
             if optimize_projector_convolutions:
-                print('tal.reconstruct.pf_dev: When projector_focus is a 3D point, the projector convolution optimization is not implemented. '
-                      'Falling back to default method.')
+                log(LogLevel.INFO, 'tal.reconstruct.pf_dev: When projector_focus is a 3D point, the projector convolution optimization is not implemented. '
+                    'Falling back to default method.')
             optimize_projector_convolutions = False
         else:
             assert np.allclose(projector_focus.flatten(), volume_xyz.flatten()), \
@@ -116,12 +113,12 @@ def backproject_pf_multi_frequency(
         projector_focus = volume_xyz.reshape((1, nv, 1, 3))
         projector_focus_mode = 'confocal'
         if optimize_projector_convolutions:
-            print('tal.reconstruct.pf_dev: When projector_focus is not set, the projector convolution optimization is not implemented. '
-                  'Falling back to default method.')
+            log(LogLevel.INFO, 'tal.reconstruct.pf_dev: When projector_focus is not set, the projector convolution optimization is not implemented. '
+                'Falling back to default method.')
         optimize_projector_convolutions = False
 
-    print('tal.reconstruct.pf_dev: '
-          f'projector_focus_mode={projector_focus_mode}')
+    log(LogLevel.INFO, 'tal.reconstruct.pf_dev: '
+        f'projector_focus_mode={projector_focus_mode}')
     projector_focus = projector_focus.astype(np.float32)
 
     # reshape everything into (nl, nv, ns, 3)
@@ -176,7 +173,11 @@ def backproject_pf_multi_frequency(
     range_z = enumerate(range_z)
     if nvz > 1 and progress:
         range_z = tqdm(
-            range_z, desc='tal.reconstruct.pf_dev Z slices', total=nvz, leave=False)
+            range_z,
+            desc='tal.reconstruct.pf_dev Z slices',
+            total=nvz,
+            file=TQDMLogRedirect(),
+            leave=False)
 
     if camera_system.is_transient():
         H_1 = np.zeros(
@@ -279,6 +280,7 @@ def backproject_pf_multi_frequency(
             if progress:
                 fw_iterator = tqdm(fw_iterator,
                                    desc='tal.reconstruct.pf_dev propagation (1/2)',
+                                   file=TQDMLogRedirect(),
                                    total=min(len(freqs_i), nw),
                                    leave=False)
 
@@ -361,6 +363,7 @@ def backproject_pf_multi_frequency(
         if progress:
             f_iterator = tqdm(f_iterator,
                               desc='tal.reconstruct.pf_dev ifft (2/2)',
+                              file=TQDMLogRedirect(),
                               total=nw,
                               leave=False)
         for i_w, frequency in f_iterator:

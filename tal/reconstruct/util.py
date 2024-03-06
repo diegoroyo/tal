@@ -1,25 +1,29 @@
 from tal.enums import HFormat, GridFormat, VolumeFormat, CameraSystem
 from tal.io.capture_data import NLOSCaptureData
+from tal.log import log, LogLevel
 from typing import Union
 import numpy as np
 
 
-def _infer_volume_format(volume_xyz, volume_format, log=True):
+def _infer_volume_format(volume_xyz, volume_format, do_log=True):
     # infer volume_format if it is unknown
     if volume_format == VolumeFormat.UNKNOWN:
         assert volume_xyz.shape[-1] == 3, \
             'Could not infer volume_format. Please specify it manually.'
         if volume_xyz.ndim == 2:
-            if log:
-                print('tal.reconstruct.utils: Assuming that volume_xyz is N_3')
+            if do_log:
+                log(LogLevel.INFO,
+                    'tal.reconstruct.utils: Assuming that volume_xyz is N_3')
             volume_format = VolumeFormat.N_3
         elif volume_xyz.ndim == 3:
-            if log:
-                print('tal.reconstruct.utils: Assuming that volume_xyz is X_Y_3')
+            if do_log:
+                log(LogLevel.INFO,
+                    'tal.reconstruct.utils: Assuming that volume_xyz is X_Y_3')
             volume_format = VolumeFormat.X_Y_3
         elif volume_xyz.ndim == 4:
-            if log:
-                print('tal.reconstruct.utils: Assuming that volume_xyz is X_Y_Z_3')
+            if do_log:
+                log(LogLevel.INFO,
+                    'tal.reconstruct.utils: Assuming that volume_xyz is X_Y_Z_3')
             volume_format = VolumeFormat.X_Y_Z_3
         else:
             raise AssertionError(
@@ -39,7 +43,8 @@ def convert_to_N_3(data: NLOSCaptureData,
         - The points in the {laser|sensor}_grid_xyz's slices are sampled at the same rate
     """
 
-    volume_format = _infer_volume_format(volume_xyz, volume_format, log=True)
+    volume_format = _infer_volume_format(
+        volume_xyz, volume_format, do_log=True)
 
     # this variable is set to false during the conversion
     optimize_projector_convolutions = try_optimize_convolutions and \
@@ -158,7 +163,7 @@ def convert_to_N_3(data: NLOSCaptureData,
         dot_lv = np.sum(l_n * v_n, axis=-1)
         assert np.allclose(np.abs(dot_lv), 1)
         assert np.isclose(v_dx, l_dx) and np.isclose(v_dy, l_dy)
-        print('tal.reconstruct.utils: Optimizing for projector convolutions.')
+        log(LogLevel.INFO, 'tal.reconstruct.utils: Optimizing for projector convolutions.')
     except AssertionError:
         optimize_projector_convolutions = False
         laser_grid_xyz = laser_grid_xyz.reshape((-1, 3))
@@ -181,7 +186,7 @@ def convert_to_N_3(data: NLOSCaptureData,
         dot_sv = np.sum(s_n * v_n, axis=-1)
         assert np.allclose(np.abs(dot_sv), 1)
         assert np.isclose(v_dx, s_dx) and np.isclose(v_dy, s_dy)
-        print('tal.reconstruct.utils: Optimizing for camera convolutions.')
+        log(LogLevel.INFO, 'tal.reconstruct.utils: Optimizing for camera convolutions.')
     except AssertionError:
         optimize_camera_convolutions = False
         sensor_grid_xyz = sensor_grid_xyz.reshape((-1, 3))
@@ -201,7 +206,8 @@ def convert_reconstruction_from_N_3(data: NLOSCaptureData,
                                     camera_system: CameraSystem,
                                     is_exhaustive_reconstruction: bool = False):
 
-    volume_format = _infer_volume_format(volume_xyz, volume_format, log=False)
+    volume_format = _infer_volume_format(
+        volume_xyz, volume_format, do_log=False)
 
     if camera_system.is_transient():
         shape = (data.H.shape[data.H_format.time_dim()],)

@@ -13,6 +13,7 @@ import psutil
 import gc
 
 from tal.util import local_file_path
+from tal.log import log, LogLevel, TQDMLogRedirect
 
 """ Utils to read/write to persistent config file """
 
@@ -33,6 +34,11 @@ class Config(Enum):
          'Location of mitsuba3-transient-nlos installation folder',
          '',
          lambda s: os.path.isdir(s))
+    LOG_LEVEL = \
+        ('LOG_LEVEL',
+         f'Logging level ({", ".join(LogLevel.__members__)})',
+         'INFO',
+         lambda s: s in LogLevel.__members__)
 
 
 def get_home_path():
@@ -63,16 +69,17 @@ def ask_for_config(param_name: Config, force_ask=True):
         else default_value
     )
     if force_ask or not param_ok:
-        print(f'{param_name} is not specified. Please specify:')
+        log(LogLevel.PROMPT, f'{param_name} is not specified. Please specify:')
         param_value = ''
         while len(param_value.strip()) == 0 or not is_valid(param_value):
-            param_value = input(
-                f'{ask_query}{"" if len(default_value) == 0 else f" [default: {default_value}]"}: ')
+            log(LogLevel.PROMPT,
+                f'{ask_query}{"" if len(default_value) == 0 else f" [default: {default_value}]"}: ', end='')
+            param_value = input()
             param_value = param_value.strip()
             if len(param_value) == 0:
                 param_value = default_value
             if not is_valid(param_value):
-                print('Invalid value.')
+                log(LogLevel.PROMPT, 'Invalid value.')
         config_dict[param_name] = param_value
         write_config(config_dict)
     return config_dict[param_name]
@@ -81,12 +88,13 @@ def ask_for_config(param_name: Config, force_ask=True):
 def read_config() -> dict:
     config = get_config_filename()
     if not os.path.isfile(config):
-        print('TAL configuration file not found. '
-              f'Creating a new one in {config}...')
+        log(LogLevel.INFO, 'TAL configuration file not found. '
+            f'Creating a new one in {config}...')
         try:
             shutil.copy(local_file_path('.tal.conf.example'), config)
         except Exception as exc:
-            print(f'/!\\ Unknown error when creating config file: {exc}')
+            log(LogLevel.ERROR,
+                f'/!\\ Unknown error when creating config file: {exc}')
 
     with open(config, 'r') as f:
         return _parse_config(f.readlines())
@@ -161,7 +169,7 @@ class ResourcesConfig:
         # _, hard = resource.getrlimit(resource.RLIMIT_AS)
         # free_memory_bytes = int(psutil.virtual_memory().free * 0.98)
         # free_memory_gb = free_memory_bytes / 2 ** 30
-        # print('tal.resources: Setting memory limit to '
+        # log(LogLevel.INFO, 'tal.resources: Setting memory limit to '
         #       f'{free_memory_gb:.2f} GiB.')
         # resource.setrlimit(resource.RLIMIT_AS, (free_memory_bytes, hard))
 
@@ -203,8 +211,8 @@ class ResourcesConfig:
             single_process()
             return
 
-        print(f'tal.resources: Using {cpus} CPU processes '
-              f'and downscale {downscale}.')
+        log(LogLevel.INFO, f'tal.resources: Using {cpus} CPU processes '
+            f'and downscale {downscale}.')
 
         if in_slice_dim is not None:
             in_shape = np.insert(data_in.shape, in_slice_dim + 1, downscale)
@@ -217,7 +225,7 @@ class ResourcesConfig:
             try:
                 def do_work(din):
                     return _apply_async(pool, f_work, (din,),
-                                        error_callback=lambda exc: print(f'/!\ Process found an exception: {exc}'))
+                                        error_callback=lambda exc: log(LogLevel.ERROR, f'/!\ Process found an exception: {exc}'))
 
                 if in_slice_dim is not None:
                     data_in = np.moveaxis(
@@ -234,6 +242,7 @@ class ResourcesConfig:
                 tqdm_kwargs = {
                     'total': len(asyncs),
                     'desc': 'tal.resources progress',
+                    'file': TQDMLogRedirect(),
                 }
                 if out_slice_dim is None:
                     for i, async_ in tqdm(enumerate(asyncs), **tqdm_kwargs):

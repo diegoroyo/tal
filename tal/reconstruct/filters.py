@@ -1,6 +1,7 @@
 from tal.io.capture_data import NLOSCaptureData
 from tal.enums import HFormat
 from tal.config import get_resources
+from tal.log import log, LogLevel, TQDMLogRedirect
 import numpy as np
 from tqdm import tqdm
 
@@ -33,8 +34,8 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
             'For the "pf" filter, wl_mean must be specified'
         wl_sigma = kwargs.get('wl_sigma', None)
         if wl_sigma is None:
-            print('tal.reconstruct.filter_H: '
-                  'wl_sigma not specified, using wl_mean / sqrt(2)')
+            log(LogLevel.INFO, 'tal.reconstruct.filter_H: '
+                'wl_sigma not specified, using wl_mean / sqrt(2)')
         wl_sigma = wl_sigma or wl_mean / np.sqrt(2)
         delta_t = kwargs.get('delta_t', None) or delta_t
         assert delta_t is not None, \
@@ -55,8 +56,8 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         freq_min_idx = nt_pad // 2 + int(np.floor(mean_idx - 3 * sigma_idx))
         freq_max_idx = nt_pad // 2 + int(np.ceil(mean_idx + 3 * sigma_idx))
         K_fftfreq = np.fft.fftshift(np.fft.fftfreq(nt_pad, d=delta_t))
-        print('tal.reconstruct.filter_H: '
-              f'Using wavelengths from {1 / K_fftfreq[freq_max_idx]:.4f}m to {1 / K_fftfreq[freq_min_idx]:.4f}m')
+        log(LogLevel.INFO, 'tal.reconstruct.filter_H: '
+            f'Using wavelengths from {1 / K_fftfreq[freq_max_idx]:.4f}m to {1 / K_fftfreq[freq_min_idx]:.4f}m')
 
         #   vvv Gaussian envelope (x = t - t_max/2, mu = 0, sigma = wl_sigma)
         gaussian_envelope = np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2)
@@ -103,6 +104,7 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
             pbar = tqdm(
                 total=3,
                 desc=f'tal.reconstruct.filter_H ({filter_name}, 1/3)',
+                file=TQDMLogRedirect(),
                 leave=False)
         H_pad = np.pad(H,
                        ((padding, padding),) +  # first dim (time)

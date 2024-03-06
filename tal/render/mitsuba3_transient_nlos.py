@@ -1,3 +1,5 @@
+from tal.log import log, LogLevel, TQDMLogRedirect
+
 # pyright: reportMissingImports=false
 
 
@@ -15,8 +17,8 @@ def _get_setpath_location():
             setpath_ok = True
         else:
             force_ask = True
-            print(f'setpath.sh cannot be found in {setpath_location}.')
-            print()
+            log(LogLevel.ERROR,
+                f'setpath.sh cannot be found in {setpath_location}.', end='\n\n')
     return setpath_location
 
 
@@ -295,9 +297,9 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         name = g('name')
         is_relay_wall = name == relay_wall_name
         if is_relay_wall and g('mesh')['type'] != 'rectangle' and not quiet:
-            print('WARNING: Relay wall does not work well with meshes that are '
-                  'not of type "rectangle" because of wrong UV mapping. '
-                  'Please make sure that you know what you are doing')
+            log(LogLevel.WARNING, 'Relay wall does not work well with meshes that are '
+                'not of type "rectangle" because of wrong UV mapping. '
+                'Please make sure that you know what you are doing')
         shape_name = f'<!-- {name}{" (RELAY WALL)" if is_relay_wall else ""} -->'
         description = g('description')
         if description is not None and len(description.strip()) > 0:
@@ -443,6 +445,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             progress_bar = None
             if not args.quiet:
                 progress_bar = tqdm(total=100, desc=experiment_name,
+                                    file=TQDMLogRedirect(),
                                     ascii=True, leave=False)
 
             def update_progress(p):

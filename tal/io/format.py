@@ -1,4 +1,5 @@
 from tal.enums import FileFormat, GridFormat, HFormat, VolumeFormat
+from tal.log import log, LogLevel
 import numpy as np
 
 
@@ -92,9 +93,9 @@ def __convert_dict_dirac_to_tal(capture_data: dict) -> dict:
         assert len(vec) == 3
         return vec.reshape(1, 1, 3).repeat(x, axis=0).repeat(y, axis=1)
 
-    print('Warning: converting from HDF5_NLOS_DIRAC does some assumptions '
-          'on the positions of the laser and sensor. If your data has '
-          't_accounts_first_and_last_bounces = True, it has a chance to be wrong.')
+    log(LogLevel.WARNING, 'Converting from HDF5_NLOS_DIRAC does some assumptions '
+        'on the positions of the laser and sensor. If your data has '
+        't_accounts_first_and_last_bounces = True, it has a chance to be wrong.')
 
     return {
         'H': capture_data['data_t'],

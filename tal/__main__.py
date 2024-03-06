@@ -2,6 +2,7 @@ import argparse
 import os
 from tal import __version__ as tal_version
 from tal.util import fdent
+from tal.log import log, LogLevel
 
 
 class SmartFormatter(argparse.HelpFormatter):
@@ -37,6 +38,9 @@ def get_plot_functions():
 
 
 def main():
+    from tal.log import _set_default_log_level
+    _set_default_log_level()
+
     parser = argparse.ArgumentParser(
         description=f'Y-TAL - (Your) Transient Auxiliary Library - v{tal_version}', formatter_class=SmartFormatter)
     parser.add_argument('-v', '--version', action='version',
@@ -101,9 +105,9 @@ def main():
 
     if args.command == 'config':
         from tal.config import get_config_filename
-        print('TAL configuration file is located at {l}'.format(
+        log(LogLevel.INFO, 'TAL configuration file is located at {l}'.format(
             l=get_config_filename()))
-        print('Updating render backend configuration...')
+        log(LogLevel.INFO, 'Updating render backend configuration...')
         from tal.config import ask_for_config, Config
         version = ask_for_config(Config.MITSUBA_VERSION, force_ask=True)
         if version == '2':
@@ -115,7 +119,7 @@ def main():
         else:
             raise AssertionError(
                 f'Invalid MITSUBA_VERSION={version}, must be one of (2, 3)')
-        print('Done.')
+        log(LogLevel.INFO, 'Done.')
     elif args.command == 'render':
         config_file = args.config_file
         assert len(config_file) != 1 or config_file[0] != 'new', \
@@ -140,7 +144,7 @@ def main():
         data = list()
         labels = []
         for capture_file in args.capture_files:
-            print(f'Reading {capture_file}...')
+            log(LogLevel.INFO, f'Reading {capture_file}...')
             labels.append(capture_file)
             data.append(read_capture(capture_file))
         if len(data) == 1:

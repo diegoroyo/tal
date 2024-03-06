@@ -1,0 +1,53 @@
+from enum import Enum
+
+
+class LogLevel(Enum):
+    """
+    LogLevel, from more verbosity to less verbosity.
+    """
+    TRACE = 0  # extra debug
+    DEBUG = 1
+    INFO = 2
+    PROGRESS = 3  # progress bars
+    WARNING = 4
+    ERROR = 5
+    PROMPT = 6  # only input() required by the user
+    NONE = 7  # no log
+
+
+_log_level = LogLevel.TRACE
+
+
+def _set_default_log_level():
+    from tal.config import ask_for_config, Config
+    global _log_level
+    _log_level = LogLevel[ask_for_config(Config.LOG_LEVEL, force_ask=False)]
+
+
+def set_log_level(level: LogLevel):
+    global _log_level
+    _log_level = level
+
+
+def log(level: LogLevel, message: str, **kwargs):
+    """
+    Logs a message to the console.
+    """
+    if level.value >= _log_level.value:
+        # TODO add pretty colors (see libcpp-common) :^)
+        print(message, **kwargs)
+
+
+class TQDMLogRedirect:
+    def __init__(self):
+        self.buffer = ""
+
+    def write(self, text):
+        self.buffer += text
+
+    def flush(self):
+        log(LogLevel.PROGRESS, self.buffer)
+        self.buffer = ""
+
+    def getvalue(self):
+        return self.buffer

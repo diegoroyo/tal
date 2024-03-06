@@ -8,6 +8,7 @@ from typing import Union, get_type_hints
 from nptyping import NDArray, Shape
 from tal.io.format import convert_dict, detect_dict_format
 from tal.enums import FileFormat, HFormat, GridFormat, VolumeFormat
+from tal.log import log, LogLevel
 
 
 class LazyDataset:
@@ -244,7 +245,7 @@ class NLOSCaptureData:
             (nt, nsx // downscale, downscale, nsy // downscale, downscale)).sum(axis=(2, 4))
         self.sensor_grid_xyz = self.sensor_grid_xyz.reshape(
             (nsx // downscale, downscale, nsy // downscale, downscale, 3)).mean(axis=(1, 3))
-        print(
+        log(LogLevel.INFO,
             f'Downscaled from {nsx}x{nsy} to {nsx // downscale}x{nsy // downscale}')
 
     def get_single_subdata_from_laser_point(self, *args):

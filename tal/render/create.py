@@ -2,6 +2,7 @@ import os
 import shutil
 from tal.config import local_file_path
 from tal.util import fdent
+from tal.log import log, LogLevel
 from textwrap import indent
 import tal
 import datetime
@@ -19,12 +20,13 @@ def create_nlos_scene(folder_name, args):
         answer = None
         num_files = sum(map(lambda e: len(e[2]), os.walk(folder_name)))
         while answer is None:
-            answer = input(
+            log(LogLevel.PROMPT,
                 f'WARNING: {folder_name} already exists and contains {num_files} file{"" if num_files == 1 else "s"}.\n'
-                f'Erase ALL and replace? (y/N): ')
-        print()
+                f'Erase ALL and replace? (y/N): ', end='')
+            answer = input()
+        log(LogLevel.INFO, '')
         if answer.lower() != 'y' and answer.lower() != 'yes':
-            print('Operation cancelled.')
+            log(LogLevel.INFO, 'Operation cancelled.')
             exit()
         else:
             shutil.rmtree(folder_name)
@@ -83,6 +85,6 @@ def create_nlos_scene(folder_name, args):
         f.write(default_material_data)
 
     if not args.quiet:
-        print(f'Success! Now:\n'
-              f'1) Edit the configuration file in {config_name}\n'
-              f'2) Render with tal render {config_name}')
+        log(LogLevel.INFO, f'Success! Now:\n'
+            f'1) Edit the configuration file in {config_name}\n'
+            f'2) Render with tal render {config_name}')

@@ -6,6 +6,7 @@ import tal
 from tal.io.capture_data import NLOSCaptureData
 from tal.enums import FileFormat, GridFormat, HFormat
 from tal.config import local_file_path
+from tal.log import log, LogLevel, TQDMLogRedirect
 import datetime
 import numpy as np
 from tqdm import tqdm
@@ -70,10 +71,10 @@ def render_nlos_scene(config_path, args, num_retries=0):
             if os.path.exists(os.path.join(config_dir, progress_folder)) and not args.quiet:
                 in_progress = True
             else:
-                print('The IN_PROGRESS file is stale, removing it...')
+                log(LogLevel.INFO, 'The IN_PROGRESS file is stale, removing it...')
                 os.remove(progress_file)
         if in_progress and not args.quiet:
-            print(
+            log(LogLevel.INFO,
                 f'Found a render in progress ({progress_folder}), continuing...')
         if not in_progress:
             progress_folder = datetime.datetime.now().strftime(r'%Y%m%d-%H%M%S')
@@ -195,7 +196,8 @@ def render_nlos_scene(config_path, args, num_retries=0):
         if args.do_steady_renders:
             def render_steady(render_name, sensor_index):
                 if not args.quiet:
-                    print(f'{render_name} for {experiment_name} steady render...')
+                    log(LogLevel.INFO,
+                        f'{render_name} for {experiment_name} steady render...')
                 hdr_ext = mitsuba_backend.get_hdr_extension()
                 hdr_path = os.path.join(partial_results_dir,
                                         f'{experiment_name}_{render_name}.{hdr_ext}')
@@ -242,7 +244,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
 
         pbar = tqdm(
             enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
-            ascii=True, total=len(laser_lookats))
+            file=TQDMLogRedirect(), ascii=True, total=len(laser_lookats))
         for i, (laser_lookat_x, laser_lookat_y) in pbar:
             try:
                 hdr_path, is_dir = mitsuba_backend.partial_laser_path(
@@ -299,7 +301,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
             return
 
         if not args.quiet:
-            print('Merging partial results...')
+            log(LogLevel.INFO, 'Merging partial results...')
 
         capture_data = NLOSCaptureData()
         capture_data.sensor_xyz = np.array([
@@ -355,8 +357,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
             if not args.quiet and len(laser_lookats) > 1:
                 e_laser_lookats = tqdm(
                     e_laser_lookats, desc='Merging partial results...',
-                    ascii=True, total=len(laser_lookats))
-
+                    file=TQDMLogRedirect(), ascii=True, total=len(laser_lookats))
             try:
                 for i, (laser_lookat_x, laser_lookat_y) in e_laser_lookats:
                     x = i % laser_width
@@ -381,7 +382,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
                 # TODO Mitsuba sometimes fails to write some images,
                 # it seems like some sort of race condition
                 # If there is a partial result missing, just re-launch for now
-                print(
+                log(LogLevel.INFO,
                     f'We missed some partial results (iteration {i} failed because: {exc}), re-launching...')
                 return render_nlos_scene(config_path, args, num_retries=num_retries + 1)
         else:
@@ -393,7 +394,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
                              file_format=FileFormat.HDF5_TAL)
 
         if not args.quiet:
-            print(f'Stored result in {hdf5_path}')
+            log(LogLevel.INFO, f'Stored result in {hdf5_path}')
 
         # remove IN_PROGRESS file
         os.remove(progress_file)
@@ -402,18 +403,21 @@ def render_nlos_scene(config_path, args, num_retries=0):
             return
 
         if not args.quiet:
-            print(f'Cleaning partial results in {partial_results_dir}...')
+            log(LogLevel.INFO,
+                f'Cleaning partial results in {partial_results_dir}...')
 
         shutil.rmtree(partial_results_dir)
 
         if not args.quiet:
-            print(f'All clean.')
+            log(LogLevel.INFO, f'All clean.')
     except KeyboardInterrupt:
         delete = None
         while delete is None:
             try:
-                answer = input(f'Render cancelled. '
-                               f'Delete the directory {root_dir}? (y/n): ')
+                log(LogLevel.PROMPT,
+                    f'Render cancelled. '
+                    f'Delete the directory {root_dir}? (y/n): ', end='')
+                answer = input()
                 if answer.lower() == 'y':
                     delete = True
                 elif answer.lower() == 'n':
