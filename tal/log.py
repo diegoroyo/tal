@@ -27,6 +27,10 @@ def _set_default_log_level():
 def set_log_level(level: LogLevel):
     global _log_level
     _log_level = level
+    from tal.config import Config, read_config, write_config
+    config = read_config()
+    config[Config.LOG_LEVEL.value[0]] = level.name
+    write_config(config)
 
 
 def log(level: LogLevel, message: str, **kwargs):
@@ -46,7 +50,7 @@ class TQDMLogRedirect:
         self.buffer += text
 
     def flush(self):
-        log(LogLevel.PROGRESS, self.buffer)
+        log(LogLevel.PROGRESS, self.buffer, end='\r')
         self.buffer = ""
 
     def getvalue(self):
