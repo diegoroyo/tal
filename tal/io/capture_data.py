@@ -246,3 +246,48 @@ class NLOSCaptureData:
             (nsx // downscale, downscale, nsy // downscale, downscale, 3)).mean(axis=(1, 3))
         print(
             f'Downscaled from {nsx}x{nsy} to {nsx // downscale}x{nsy // downscale}')
+
+    def get_single_subdata_from_laser_point(self, *args):
+        """
+        If your data has more than one illumination point, you can use this function
+        to obtain the data for a single illumination point.
+
+        The args specify the indices of the laser point in the same format as
+        the impulse response H or the laser positions laser_grid_xyz.
+
+        e.g. If H_format = (T, Lx, Ly, Sx, Sy), then args = (5, 10) will return
+             the impulse response at (T, 5, 10, Sx, Sy).
+        """
+        n_indices = len(args)
+
+        if n_indices == 1:
+            assert self.H_format == HFormat.T_Li_Si and self.laser_grid_format == GridFormat.N_3, \
+                'Number of indices must match H_format and laser_grid_format'
+            il = args[0]
+            assert 0 <= il and \
+                il < self.laser_grid_xyz.shape[0] and \
+                il < self.laser_grid_normals.shape[0] and \
+                il < self.H.shape[1], \
+                'Index out of bounds'
+            slices = np.index_exp[il:il+1]
+        elif n_indices == 2:
+            assert self.H_format == HFormat.T_Lx_Ly_Sx_Sy and self.laser_grid_format == GridFormat.X_Y_3, \
+                'Number of indices must match H_format and laser_grid_format'
+            ilx, ily = args
+            assert 0 <= ilx and 0 <= ily and \
+                ilx < self.laser_grid_xyz.shape[0] and \
+                ily < self.laser_grid_xyz.shape[1] and \
+                ilx < self.laser_grid_normals.shape[0] and \
+                ily < self.laser_grid_normals.shape[1] and \
+                ilx < self.H.shape[1] and \
+                ily < self.H.shape[2], \
+                'Index out of bounds'
+            slices = np.index_exp[ilx:ilx+1, ily:ily+1]
+
+        from copy import deepcopy
+        data_out = deepcopy(self)
+        data_out.H = data_out.H[:, *slices, ...]
+        data_out.laser_grid_xyz = data_out.laser_grid_xyz[*slices, ...]
+        data_out.laser_grid_normals = data_out.laser_grid_normals[*slices, ...]
+
+        return data_out
