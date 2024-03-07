@@ -189,7 +189,7 @@ def backproject_pf_multi_frequency(
             dtype=np.complex64)
 
     for i_z, nvzi in range_z:
-        if optimize_projector_convolutions:
+        if optimize_projector_convolutions or nl == 1:
             projector_focus_i = projector_focus.reshape(
                 (nvx, nvy, nvz, 3))[..., nvzi, :]
         else:
