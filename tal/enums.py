@@ -161,7 +161,7 @@ class CameraSystem(Enum):
     PROJECTOR_CAMERA = 2  # focus the illumination aperture to a point
     PROJECTOR_CAMERA_T0 = 3  # evaluate projector camera at t=0
     TRANSIENT = 4  # pulsed point light
-    # TRANSIENT_T0 = 5  # NYI (evaluate transient at t=0), also add to functions below
+    TRANSIENT_T0 = 5  # evaluate transient at t=0
     # STEADY_STATE = 6  # NYI (integrate transient over time), also add to functions below
     # PHOTO_CAMERA = 7  # NYI (single-freq imaging), also add to functions below
 
