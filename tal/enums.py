@@ -21,12 +21,17 @@ class FileFormat(Enum):
     MAT_PHASOR_FIELDS
         MAT format used in the work "Non-Line-of-Sight Imaging using Phasor Field Virtual Wave Optics"
         https://biostat.wisc.edu/~compoptics/phasornlos19/phasor_nlos_19.html
+
+    MAT_PHASOR_FIELD_DIFFRACTION
+        MAT format used in the work "Phasor Field Diffraction Based Reconstruction for Fast Non-Line-of-Sight Imaging Systems"
+        https://biostat.wisc.edu/~compoptics/phasornlos20/fastnlos.html
     """
     AUTODETECT = 0
     HDF5_ZNLOS = 1
     HDF5_NLOS_DIRAC = 2
     HDF5_TAL = 3
     MAT_PHASOR_FIELDS = 4
+    MAT_PHASOR_FIELD_DIFFRACTION = 5
 
 
 class HFormat(Enum):

@@ -1,5 +1,6 @@
 from tal.enums import FileFormat, GridFormat, HFormat, VolumeFormat
 from tal.log import log, LogLevel
+from tal.util import SPEED_OF_LIGHT
 import numpy as np
 
 
@@ -175,6 +176,47 @@ def __convert_dict_pfmat_to_tal(capture_data: dict) -> dict:
     }
 
 
+def __convert_dict_pfdiffmat_to_tal(capture_data: dict) -> dict:
+    H = capture_data['rect_data']
+
+    _, nsx, nsy = H.shape
+    sampling_grid_spacing = np.array(
+        capture_data['sampling_spacing']).item()
+    delta_t = np.array(capture_data['ts']).item()
+    delta_t *= SPEED_OF_LIGHT
+    spad_x, spad_y = np.array(
+        capture_data['SPAD_index'], dtype=np.int32).flatten()
+
+    grid_x = (np.arange(nsx) - nsx / 2) * sampling_grid_spacing
+    grid_y = (np.arange(nsy) - nsy / 2) * sampling_grid_spacing
+    sensor_grid_xyz = np.stack(np.meshgrid(
+        grid_x, grid_y, [0], indexing='ij'), axis=-1)
+    sensor_grid_xyz = sensor_grid_xyz.squeeze()
+
+    return {
+        'H': H,
+        'H_format': HFormat.T_Sx_Sy,
+        'sensor_xyz': None,
+        'sensor_grid_xyz': sensor_grid_xyz,
+        'sensor_grid_normals': None,
+        'sensor_grid_format': GridFormat.X_Y_3,
+        'laser_xyz': None,
+        'laser_grid_xyz': sensor_grid_xyz[spad_x:spad_x+1, spad_y:spad_y+1],
+        'laser_grid_normals': None,
+        'laser_grid_format': GridFormat.X_Y_3,
+        'volume_format': VolumeFormat.X_Y_Z_3,
+        'delta_t': delta_t,
+        't_start': 0,
+        't_accounts_first_and_last_bounces': False,
+        'scene_info': {
+            'original_format': 'MAT_PHASOR_FIELD_DIFFRACTION',
+            'volume': {
+                'sampling_grid_spacing': capture_data['sampling_spacing'],
+            }
+        },
+    }
+
+
 def __convert_dict_tal_to_znlos(capture_data: dict) -> dict:
     raise NotImplementedError('Conversion to HDF5_ZNLOS not implemented')
 
@@ -188,6 +230,11 @@ def __convert_dict_tal_to_pfmat(capture_data: dict) -> dict:
         'Conversion to MAT_PHASOR_FIELDS not implemented')
 
 
+def __convert_dict_tal_to_pfdiffmat(capture_data: dict) -> dict:
+    raise NotImplementedError(
+        'Conversion to MAT_PHASOR_FIELD_DIFFRACTION not implemented')
+
+
 def detect_dict_format(raw_data: dict) -> FileFormat:
     if 'data' in raw_data:
         return FileFormat.HDF5_ZNLOS
@@ -197,6 +244,8 @@ def detect_dict_format(raw_data: dict) -> FileFormat:
         return FileFormat.HDF5_TAL
     elif 'dataset' in raw_data:
         return FileFormat.MAT_PHASOR_FIELDS
+    elif 'rect_data' in raw_data:
+        return FileFormat.MAT_PHASOR_FIELD_DIFFRACTION
     else:
         raise AssertionError('Unable to detect capture data file format')
 
@@ -216,6 +265,8 @@ def convert_dict(capture_data: dict,
         capture_data_tal = __convert_dict_dirac_to_tal(capture_data)
     elif file_format == FileFormat.MAT_PHASOR_FIELDS:
         capture_data_tal = __convert_dict_pfmat_to_tal(capture_data)
+    elif file_format == FileFormat.MAT_PHASOR_FIELD_DIFFRACTION:
+        capture_data_tal = __convert_dict_pfdiffmat_to_tal(capture_data)
     else:
         raise AssertionError(
             'convert_dict not implemented for this file format')
@@ -229,6 +280,8 @@ def convert_dict(capture_data: dict,
         return __convert_dict_tal_to_dirac(capture_data_tal)
     elif format_to == FileFormat.MAT_PHASOR_FIELDS:
         return __convert_dict_tal_to_pfmat(capture_data_tal)
+    elif format_to == FileFormat.MAT_PHASOR_FIELD_DIFFRACTION:
+        return __convert_dict_tal_to_pfdiffmat(capture_data_tal)
     else:
         raise AssertionError(
             'convert_dict not implemented for this file format')
