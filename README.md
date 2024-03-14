@@ -252,6 +252,22 @@ V = np.moveaxis(np.mgrid[-1:1.1:0.1, -1:1.1:0.1, 0.5:2.6:0.1], 0, -1).reshape(-1
 reconstruction = tal.reconstruct.pf.solve(data, 6, 4, V, verbose=3, n_threads=1)
 ```
 
+### Logging
+
+The verbosity of the output can be controlled through `tal.set_log_level(level)`.
+For the available values of `level`, see `tal.LogLevel`. For example, if you only wish to see
+progress bars, warnings and more you can use:
+
+```python
+import tal
+
+tal.set_log_level(tal.LogLevel.PROGRESS)
+# ...rest of your code...
+```
+
+Your choice of logging level is also stored in the configuration file, so it is kept between executions.
+It also can be changed using `tal config` in the command line.
+
 ### `tal.resources`
 
 The `filter_H`, `bp`, `fbp` and `pf_dev` functions/modules support multi-threading.

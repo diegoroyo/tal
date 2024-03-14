@@ -25,6 +25,11 @@ def _set_default_log_level():
 
 
 def set_log_level(level: LogLevel):
+    """
+    Controls the amount of information that will be logged to the console.
+
+    See tal.LogLevel for the different levels of verbosity.
+    """
     global _log_level
     _log_level = level
     from tal.config import Config, read_config, write_config
