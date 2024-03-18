@@ -10,3 +10,4 @@ PyYAML>=6.0
 setuptools>=67.3.3
 tqdm>=4.64.1
 pyvista>=0.38.2
+psutil>=5.9.8

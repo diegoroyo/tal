@@ -284,11 +284,18 @@ class NLOSCaptureData:
                 ily < self.H.shape[2], \
                 'Index out of bounds'
             slices = np.index_exp[ilx:ilx+1, ily:ily+1]
+        else:
+            raise AssertionError('Invalid number of indices')
 
         from copy import deepcopy
         data_out = deepcopy(self)
-        data_out.H = data_out.H[:, *slices, ...]
-        data_out.laser_grid_xyz = data_out.laser_grid_xyz[*slices, ...]
-        data_out.laser_grid_normals = data_out.laser_grid_normals[*slices, ...]
+        # cannot use * operator directly inside slice [...]
+        # as it is not supported until python 3.11
+        # for now it's rewritten by wrapping everything inside a tuple
+        data_out.H = data_out.H[(slice(None), *slices, ...)]
+        data_out.laser_grid_xyz = \
+            data_out.laser_grid_xyz[(*slices, ...)]
+        data_out.laser_grid_normals = \
+            data_out.laser_grid_normals[(*slices, ...)]
 
         return data_out
