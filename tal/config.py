@@ -1,4 +1,3 @@
-import dill
 import os
 import shutil
 import yaml
@@ -6,6 +5,7 @@ import multiprocessing as mp
 import numpy as np
 from tqdm import tqdm
 from enum import Enum
+from concurrent.futures import ThreadPoolExecutor
 
 # FIXME decide if we keep this here or not
 import resource
@@ -120,19 +120,6 @@ def write_yaml_string(data_dict: dict) -> str:
     return yaml.dump(data_dict)
 
 
-""" Utils to read/write to the context configuration (tal.config) """
-
-
-def _run_dill_encoded(payload):
-    fun, args = dill.loads(payload)
-    return fun(*args)
-
-
-def _apply_async(pool, fun, args, **kwargs):
-    payload = dill.dumps((fun, args))
-    return pool.apply_async(_run_dill_encoded, (payload,), **kwargs)
-
-
 DEFAULT_CPU_PROCESSES = 1
 DEFAULT_DOWNSCALE = None
 DEFAULT_CALLBACK = None
@@ -182,88 +169,83 @@ class ResourcesConfig:
 
         in_slice_dim, out_slice_dim = slice_dims
 
-        def check_divisible(x):
-            if in_slice_dim is not None and data_in.shape[in_slice_dim] % x != 0:
-                return False
-            if out_slice_dim is not None and data_out.shape[out_slice_dim] % x != 0:
-                return False
-            return True
-
         cpus = min(
             mp.cpu_count(),
             999 if self.cpu_processes == 'max' else self.cpu_processes
         )
-        max_downscale = 128
-        if self.downscale is None:
-            downscale = 1
-        else:
-            downscale = 2**int(np.ceil(np.log2(self.downscale)))
-        downscale = min(max_downscale, downscale)
-        while downscale < cpus and downscale < max_downscale and check_divisible(downscale * 2):
-            downscale *= 2
-
-        data_dim = min((x for x in [
-                        None if in_slice_dim is None else data_in.shape[in_slice_dim],
-                        None if out_slice_dim is None else data_out.shape[out_slice_dim],
-                        ] if x is not None), default=None)
+        max_downscale = 1024
+        downscale = min(max_downscale, self.downscale or cpus)
 
         if downscale == 1:
             single_process()
             return
 
-        log(LogLevel.INFO, f'tal.resources: Using {cpus} CPU processes '
-            f'and downscale {downscale}.')
+        def make_slice(arr, slice_obj=None, slice_dim=-1):
+            return tuple(slice_obj if i == slice_dim else slice(None)
+                         for i in range(arr.ndim))
 
-        if in_slice_dim is not None:
-            in_shape = np.insert(data_in.shape, in_slice_dim + 1, downscale)
-            in_shape[in_slice_dim] //= downscale
-        if out_slice_dim is not None:
-            out_shape = np.insert(data_out.shape, out_slice_dim + 1, downscale)
-            out_shape[out_slice_dim] //= downscale
+        assert in_slice_dim is not None, \
+            'Input slice dimension must be specified.'
 
-        with mp.Pool(processes=cpus) as pool:
+        assert in_slice_dim is None or out_slice_dim is None or data_in.shape[in_slice_dim] == data_out.shape[out_slice_dim], \
+            'Inconsistent dimensions for input and output slices.'
+
+        # maybe downscale is modified because it does not exactly fit with 0 remainder
+        old_downscale = None
+
+        if in_slice_dim is None:
+            in_slices = [make_slice(data_in),]
+        else:
+            in_slice_size = int(
+                np.ceil(data_in.shape[in_slice_dim] / downscale))
+
+            old_downscale = downscale
+            downscale = int(
+                np.ceil(data_in.shape[in_slice_dim] / in_slice_size))
+            if old_downscale != downscale:
+                old_downscale = None
+
+            in_slices = [make_slice(data_in, slice(i * in_slice_size, (i + 1) * in_slice_size), in_slice_dim)
+                         for i in range(downscale)]
+
+        if out_slice_dim is None:
+            out_slices = [make_slice(data_out),] * len(in_slices)
+        else:
+            out_slice_size = int(
+                np.ceil(data_out.shape[out_slice_dim] / downscale))
+            out_slices = [make_slice(data_out, slice(i * out_slice_size, (i + 1) * out_slice_size), out_slice_dim)
+                          for i in range(downscale)]
+
+        if old_downscale is None:
+            log(LogLevel.INFO, f'tal.resources: Using {cpus} CPU processes '
+                f'and downscale {downscale}.')
+        else:
+            log(LogLevel.WARNING, f'tal.resources: Using {cpus} CPU processes '
+                f'and downscale {downscale} (instead of {old_downscale}).')
+
+        with ThreadPoolExecutor(max_workers=cpus) as pool:
             try:
-                def do_work(din):
-                    return _apply_async(pool, f_work, (din,),
-                                        error_callback=lambda exc: log(LogLevel.ERROR, f'/!\ Process found an exception: {exc}'))
+                futures = []
+                for in_slice in in_slices:
+                    futures.append(pool.submit(f_work, data_in[in_slice]))
 
-                if in_slice_dim is not None:
-                    data_in = np.moveaxis(
-                        data_in.reshape(in_shape), in_slice_dim + 1, 0)
-                if out_slice_dim is not None:
-                    data_out = np.moveaxis(
-                        data_out.reshape(out_shape), out_slice_dim + 1, 0)
-
-                asyncs = []
-                for in_slice in data_in:
-                    asyncs.append(do_work(in_slice))
-
-                pool.close()
-                tqdm_kwargs = {
-                    'total': len(asyncs),
-                    'desc': 'tal.resources progress',
-                    'file': TQDMLogRedirect(),
-                }
-                if out_slice_dim is None:
-                    for i, async_ in tqdm(enumerate(asyncs), **tqdm_kwargs):
-                        data_out += async_.get()
-                        if self.callback is not None:
-                            self.callback(data_out, i, len(asyncs))
-                else:
-                    for i, (async_, out_slice) in tqdm(enumerate(zip(asyncs, data_out)), **tqdm_kwargs):
-                        out_slice[:] = async_.get()
-                        if self.callback is not None:
-                            self.callback(data_out, i, len(asyncs))
-                pool.join()
+                pool.shutdown(wait=True)
+                for i, (f, out_slice) in tqdm(enumerate(zip(futures, out_slices)),
+                                              total=len(futures), desc='tal.resources progress', file=TQDMLogRedirect()):
+                    data_out[out_slice] += f.result()
+                    if self.callback is not None:
+                        self.callback(data_out, i, len(futures))
             # FIXME decide if this should be here
             # except MemoryError:
             #     pool.terminate()
             #     pool.join()
             #     raise MemoryError(f'tal.resources: Memory error, {free_memory_gb:.2f} GiB is not enough.'
-            #                       ' Either decrease CPU processes, increase downscale, or move to another system.')
+            #                       '
+            #  Either decrease CPU processes, increase downscale, or move to another system.')
             except KeyboardInterrupt:
-                pool.terminate()
-                pool.join()
+                for future in futures:
+                    future.cancel()
+                pool.shutdown(wait=False)
                 raise KeyboardInterrupt
 
 

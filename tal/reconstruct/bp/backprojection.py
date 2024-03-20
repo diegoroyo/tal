@@ -128,8 +128,6 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
             return H_1_i[0].reshape(volume_xyz_shape)
 
     range_s = np.arange(ns, dtype=np.int32)
-    h = H_0.dtype.itemsize
-    s = sensor_grid_xyz.dtype.itemsize
 
     get_resources().split_work(
         backproject_i,

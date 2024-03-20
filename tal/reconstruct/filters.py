@@ -130,8 +130,6 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
         return HoK
 
     HoK = np.zeros((nt_pad,) + H.shape[1:], dtype=np.complex64)
-    s = H.dtype.itemsize
-    c = HoK.dtype.itemsize
 
     get_resources().split_work(
         work,
