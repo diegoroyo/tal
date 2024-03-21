@@ -123,7 +123,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
                 H_1_i[i_t, :] += H_1_raw.sum(axis=1)
 
         if camera_system.is_transient():
-            return H_1_i.reshape(volume_xyz_shape)
+            return H_1_i.reshape((nt, *volume_xyz_shape))
         else:
             return H_1_i[0].reshape(volume_xyz_shape)
 
