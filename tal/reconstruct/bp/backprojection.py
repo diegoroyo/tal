@@ -71,8 +71,8 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
         d_1 = distance(laser_xyz, laser_grid_xyz)
         d_4 = distance(sensor_grid_xyz, sensor_xyz)
     else:
-        d_1 = np.float32(0.0)
-        d_4 = np.float32(0.0)
+        d_1 = np.float32(0.0).reshape((1, 1, 1))
+        d_4 = np.float32(0.0).reshape((1, 1, 1))
 
     if camera_system.bp_accounts_for_d_2():
         d_2 = distance(laser_grid_xyz, projector_focus)
@@ -88,6 +88,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
             d_2_i = d_2
         sensor_grid_xyz_i = sensor_grid_xyz[:, :, subrange_s, :]
         d_3 = distance(volume_xyz, sensor_grid_xyz_i)
+        d_4_i = d_4[:, :, subrange_s]
 
         invsq = 1
         if compensate_invsq:
@@ -97,9 +98,9 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
                 term[d > epsilon] = d[d > epsilon] ** 2
                 return term
 
-            invsq = c(d_1) * c(d_2_i) * c(d_3) * c(d_4)
+            invsq = c(d_1) * c(d_2_i) * c(d_3) * c(d_4_i)
 
-        idx = d_1 + d_2_i + d_3 + d_4 - t_start
+        idx = d_1 + d_2_i + d_3 + d_4_i - t_start
         idx /= delta_t
         idx = idx.astype(np.int32)
 
