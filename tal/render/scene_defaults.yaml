@@ -53,15 +53,22 @@ geometry:
   rot_degrees_x: 0.0
   rot_degrees_y: 0.0
   rot_degrees_z: 0.0
-  scale: 1
+  scale_x: 1
+  scale_y: 1
+  scale_z: 1
   material:
     id: white
 - name: relay_wall
   mesh:
     type: rectangle
-  # Relay wall displacement and rotation is NYI (see tal.render.render.py)
-  # as an alternative, you can displace/rotate the rest of the scene
-  scale: 1  # 1: relay wall is 2x2, 0.5: relay wall is 1x1
+  # Relay wall rotation is NYI (see tal.render.render.py)
+  # as an alternative, you can rotate the rest of the scene
+  displacement_x: 0.0
+  displacement_y: 0.0
+  displacement_z: 0.0
+  scale_x: 1  # 1: relay wall is 2x2, 0.5: relay wall is 1x1 (X dimension)
+  scale_y: 1  # same for Y dimension
+  scale_z: 1  # +1: normal is (0, 0, 1), -1. normal is (0, 0, -1)
   material:
     id: white
 

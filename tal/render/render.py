@@ -121,18 +121,18 @@ def render_nlos_scene(config_path, args, num_retries=0):
         relay_wall = next(filter(
             lambda g: g['name'] == scene_config['relay_wall'],
             scene_config['geometry']))
-        assert 'displacement_x' not in relay_wall and \
-            'displacement_y' not in relay_wall and \
-            'displacement_z' not in relay_wall and \
-            'rot_degrees_x' not in relay_wall and \
+        assert 'rot_degrees_x' not in relay_wall and \
             'rot_degrees_y' not in relay_wall and \
             'rot_degrees_z' not in relay_wall, \
             'Relay wall displacement/rotation is NYI'
 
-        def get_grid_xyz(nx, ny, relay_wall_scale):
-            p = relay_wall_scale
-            xg = np.stack((np.linspace(-p, p, num=2*nx + 1)[1::2],)*ny, axis=1)
-            yg = np.stack((np.linspace(-p, p, num=2*ny + 1)[1::2],)*nx, axis=0)
+        def get_grid_xyz(nx, ny, rw_scale_x, rw_scale_y):
+            px = rw_scale_x
+            py = rw_scale_y
+            xg = np.stack(
+                (np.linspace(-px, px, num=2*nx + 1)[1::2],)*ny, axis=1)
+            yg = np.stack(
+                (np.linspace(-py, py, num=2*ny + 1)[1::2],)*nx, axis=0)
             assert xg.shape[0] == yg.shape[0] == nx and xg.shape[1] == yg.shape[1] == ny, \
                 'Incorrect shapes'
             return np.stack([xg, yg, np.zeros((nx, ny))], axis=-1).astype(np.float32)
@@ -163,19 +163,25 @@ def render_nlos_scene(config_path, args, num_retries=0):
 
         # TODO(diego): rotate + translate (asssumes no rot/trans)
         # or use a more generalist approach that does not need to be rectangular
+        displacement = np.array([
+            relay_wall['displacement_x'],
+            relay_wall['displacement_y'],
+            relay_wall['displacement_z']])
         sensor_grid_xyz = get_grid_xyz(
-            sensor_width, sensor_height, relay_wall['scale'])
+            sensor_width, sensor_height, relay_wall['scale_x'], relay_wall['scale_y'])
+        sensor_grid_xyz += displacement
         if scan_type == 'single':
-            px = relay_wall['scale'] * \
+            px = relay_wall['scale_x'] * \
                 ((laser_lookat_x / sensor_width) * 2 - 1)
-            py = relay_wall['scale'] * \
+            py = relay_wall['scale_y'] * \
                 ((laser_lookat_y / sensor_height) * 2 - 1)
             laser_grid_xyz = np.array([[
                 [px, py, 0],
             ]], dtype=np.float32)
         else:
             laser_grid_xyz = get_grid_xyz(
-                laser_width, laser_height, relay_wall['scale'])
+                laser_width, laser_height, relay_wall['scale_x'], relay_wall['scale_y'])
+        laser_grid_xyz += displacement
         # TODO(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
         # or use a more generalist approach
         sensor_grid_normals = expand(

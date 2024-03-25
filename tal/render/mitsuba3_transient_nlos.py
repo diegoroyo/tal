@@ -322,7 +322,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
         shape_transform = fdent(f'''\
             <transform name="to_world">
-                <scale x="{g('scale') or 1.0}" y="{g('scale') or 1.0}" z="{g('scale') or 1.0}"/>
+                <scale x="{g('scale_x') or 1.0}" y="{g('scale_y') or 1.0}" z="{g('scale_z') or 1.0}"/>
                 <rotate x="1" angle="{g('rot_degrees_x') or 0.0}"/>
                 <rotate y="1" angle="{g('rot_degrees_y') or 0.0}"/>
                 <rotate z="1" angle="{g('rot_degrees_z') or 0.0}"/>
