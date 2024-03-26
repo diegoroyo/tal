@@ -71,8 +71,8 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
         d_1 = distance(laser_xyz, laser_grid_xyz)
         d_4 = distance(sensor_grid_xyz, sensor_xyz)
     else:
-        d_1 = np.float32(0.0).reshape((1, 1, 1))
-        d_4 = np.float32(0.0).reshape((1, 1, 1))
+        d_1 = np.zeros((nl, 1, 1))
+        d_4 = np.zeros((1, 1, ns))
 
     if camera_system.bp_accounts_for_d_2():
         d_2 = distance(laser_grid_xyz, projector_focus)
