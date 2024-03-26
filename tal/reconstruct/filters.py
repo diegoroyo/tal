@@ -105,7 +105,8 @@ def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_fi
                 total=3,
                 desc=f'tal.reconstruct.filter_H ({filter_name}, 1/3)',
                 file=TQDMLogRedirect(),
-                leave=False)
+                position=0,
+                leave=True)
         H_pad = np.pad(H,
                        ((padding, padding),) +  # first dim (time)
                        ((0, 0),) * (H.ndim - 1),  # other dims

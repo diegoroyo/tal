@@ -177,7 +177,8 @@ def backproject_pf_multi_frequency(
             desc='tal.reconstruct.pf_dev Z slices',
             total=nvz,
             file=TQDMLogRedirect(),
-            leave=False)
+            position=0,
+            leave=True)
 
     if camera_system.is_transient():
         H_1 = np.zeros(
@@ -282,7 +283,8 @@ def backproject_pf_multi_frequency(
                                    desc='tal.reconstruct.pf_dev propagation (1/2)',
                                    file=TQDMLogRedirect(),
                                    total=min(len(freqs_i), nw),
-                                   leave=False)
+                                   position=0,
+                                   leave=True)
 
             for i_w, (frequency, weight) in fw_iterator:
                 if weight == 0.0:
@@ -365,7 +367,8 @@ def backproject_pf_multi_frequency(
                               desc='tal.reconstruct.pf_dev ifft (2/2)',
                               file=TQDMLogRedirect(),
                               total=nw,
-                              leave=False)
+                              position=0,
+                              leave=True)
         for i_w, frequency in f_iterator:
             e = np.exp(np.complex64(2j * np.pi) * t * frequency) / nf
             H_1_t = (

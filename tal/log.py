@@ -47,16 +47,23 @@ def log(level: LogLevel, message: str, **kwargs):
         print(message, **kwargs)
 
 
-class TQDMLogRedirect:
+def TQDMLogRedirect():
+    import sys
+    if LogLevel.PROGRESS.value >= _log_level.value:
+        return sys.stderr
+    else:
+        return EmptyLogRedirect()
+
+
+class EmptyLogRedirect:
     def __init__(self):
-        self.buffer = ""
+        pass
 
     def write(self, text):
-        self.buffer += text
+        pass
 
     def flush(self):
-        log(LogLevel.PROGRESS, self.buffer, end='\r')
-        self.buffer = ""
+        pass
 
     def getvalue(self):
-        return self.buffer
+        return ''

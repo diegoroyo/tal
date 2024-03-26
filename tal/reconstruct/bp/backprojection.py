@@ -108,7 +108,9 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
         t_range = np.arange(t_range, dtype=np.int32)
         if progress and len(t_range) > 1:
             t_range = tqdm(t_range, file=TQDMLogRedirect(),
-                           desc='tal.reconstruct.bp time bins', leave=False)
+                           desc='tal.reconstruct.bp time bins',
+                           position=0,
+                           leave=True)
 
         H_1_i = np.zeros((len(t_range), nv), dtype=H_0.dtype)
         i_v, i_s = np.ogrid[:nv, :nsi]
