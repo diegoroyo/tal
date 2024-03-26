@@ -68,7 +68,7 @@ geometry:
   displacement_z: 0.0
   scale_x: 1  # 1: relay wall is 2x2, 0.5: relay wall is 1x1 (X dimension)
   scale_y: 1  # same for Y dimension
-  scale_z: 1  # +1: normal is (0, 0, 1), -1. normal is (0, 0, -1)
+  scale_z: 1  # Only valid values are: +1: normal is (0, 0, 1), -1. normal is (0, 0, -1)
   material:
     id: white
 
