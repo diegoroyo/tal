@@ -250,10 +250,27 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             </film>
         </sensor>''')
 
-    confocal_capture = 'false'
+    laser_nlos = fdent(f'''\
+        <emitter type="projector" id="laser">
+            <transform name="to_world">
+                <translate x="{v('laser_x')}" y="{v('laser_y')}" z="{v('laser_z')}"/>
+            </transform>
+            <rgb name="irradiance" value="1.0, 1.0, 1.0"/>
+            <float name="fov" value="{0.2 if v('integrator_nlos_laser_sampling') else 2}"/>
+        </emitter>''')
+
     if v('scan_type') == 'confocal':
-        confocal_capture = 'true'
-    elif v('scan_type') != 'single' and v('scan_type') != 'exhaustive':
+        film_width = 1
+        film_height = 1
+        confocal_config = fdent(f'''\
+            <integer name="original_film_width" value="{v('sensor_width')}"/>
+            <integer name="original_film_height" value="{v('sensor_height')}"/>
+        ''')
+    elif v('scan_type') == 'single' or v('scan_type') == 'exhaustive':
+        film_width = v('sensor_width')
+        film_height = v('sensor_height')
+        confocal_config = ''
+    else:
         raise AssertionError(
             'scan_type should be one of {single|confocal|exhaustive}')
     sensor_nlos = fdent(f'''\
@@ -263,19 +280,12 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                 <integer name="seed" value="{random_seed}"/>
             </sampler>
 
-            <emitter type="projector">
-                <rgb name="irradiance" value="1.0, 1.0, 1.0"/>
-                <float name="fov" value="{0.2 if v('integrator_nlos_laser_sampling') else 2}"/>
-            </emitter>
-
-            <boolean name="confocal" value="{confocal_capture}"/>
+            {confocal_config}
             <boolean name="account_first_and_last_bounces" value="{v('account_first_and_last_bounces')}"/>
             <point name="sensor_origin" x="{v('sensor_x')}" y="{v('sensor_y')}" z="{v('sensor_z')}"/>
-            <point name="laser_origin" x="{v('laser_x')}" y="{v('laser_y')}" z="{v('laser_z')}"/>
-            <point name="laser_lookat_pixel" x="$laser_lookat_x" y="$laser_lookat_y" z="0"/>
             <film type="transient_hdr_film">
-                <integer name="width" value="{v('sensor_width')}"/>
-                <integer name="height" value="{v('sensor_height')}"/>
+                <integer name="width" value="{film_width}"/>
+                <integer name="height" value="{film_height}"/>
 
                 <integer name="temporal_bins" value="{v('num_bins')}"/>
                 <!-- <boolean name="auto_detect_bins" value="{v('auto_detect_bins')}"/> -->
@@ -356,10 +366,14 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             def shapify(content):
                 return fdent('''\
                 {shape_name}
-                <shape type="{shape_type}">
+                <shape type="{shape_type}"
+                             {is_relay_wall}>
                     {content}
-                </shape>''', shape_name=shape_name, content=content,
-                             shape_type=g('mesh')['type'])
+                </shape>''',
+                             shape_name=shape_name,
+                             shape_type=g('mesh')['type'],
+                             is_relay_wall=' id="relay_wall"' if is_relay_wall else '',
+                             content=content)
 
             shapes_steady.append(shapify(shape_contents_steady))
             shapes_nlos.append(shapify(shape_contents_nlos))
@@ -393,11 +407,14 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         <scene version="{mitsuba_version}">
             {integrator_nlos}
 
+            {laser_nlos}
+
             {shapes_nlos}
         </scene>''',
                       tal_version=tal.__version__,
                       mitsuba_version=get_version(),
                       integrator_nlos=integrator_nlos,
+                      laser_nlos=laser_nlos,
                       shapes_nlos=shapes_nlos)
 
     return file_steady, file_nlos
@@ -433,10 +450,22 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         else:
             os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
+        laser_lookat_x = defines.pop('laser_lookat_x')
+        laser_lookat_y = defines.pop('laser_lookat_y')
         scene = mi.load_file(scene_xml_path, **defines)
         integrator = scene.integrator()
 
-        mi.Thread.set_thread_count(args.threads)
+        def find_id(array, eid):
+            same_id = list(filter(lambda e: e.id() == eid, array))
+            assert len(same_id) == 1, f'Expected 1 element with id {eid}'
+            return same_id[0]
+
+        mitr.nlos.focus_emitter_at_relay_wall_pixel(
+            mi.Point2f(laser_lookat_x, laser_lookat_y),
+            find_id(scene.shapes(), 'relay_wall'),
+            find_id(scene.emitters(), 'laser'))
+
+        mitr.utils.set_thread_count(args.threads)
 
         # prepare
         if isinstance(integrator, TransientADIntegrator):

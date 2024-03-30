@@ -161,8 +161,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
             raise AssertionError(
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
 
-        # TODO(diego): rotate + translate (asssumes no rot/trans)
-        # or use a more generalist approach that does not need to be rectangular
+        # TODO(diego): rotate
         displacement = np.array([
             relay_wall['displacement_x'],
             relay_wall['displacement_y'],
@@ -294,12 +293,21 @@ def render_nlos_scene(config_path, args, num_retries=0):
                 pbar.set_description(
                     f'Rendering {experiment_name} ({scan_type}, estimated size: {final_size_gb:.2f} GB)...')
             if args.do_logging and not args.dry_run:
+                past_elems = []
                 while not queue.empty():
                     e = queue.get()
+                    past_elems.append(e)
                     if isinstance(e, Exception):
+                        log(LogLevel.ERROR, '')
+                        log(LogLevel.ERROR, '/!\ Mitsuba thread got an exception!')
+                        log(LogLevel.ERROR, '')
+                        for pe in past_elems[:-1]:
+                            log(LogLevel.ERROR, pe)
+                        log(LogLevel.ERROR, '')
                         raise e
                     else:
                         logfile.write(e)
+                    logfile.flush()
                 queue.close()
                 logfile.close()
 
