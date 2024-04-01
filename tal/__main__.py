@@ -114,8 +114,16 @@ def main():
             ask_for_config(
                 Config.MITSUBA2_TRANSIENT_NLOS_FOLDER, force_ask=True)
         elif version == '3':
-            ask_for_config(
-                Config.MITSUBA3_TRANSIENT_NLOS_FOLDER, force_ask=True)
+            log(LogLevel.INFO, 'Checking if mitsuba can be imported...')
+            try:
+                import mitsuba
+                log(LogLevel.INFO, 'OK mitsuba can be imported')
+            except NameError:
+                log(LogLevel.PROMPT, 'mitsuba cannot be imported. '
+                    'This can happen if you run a custom installation. '
+                    'Please point to the mitsuba3 (not mitsuba3-transient-nlos) folder:')
+                ask_for_config(
+                    Config.MITSUBA3_TRANSIENT_NLOS_FOLDER, force_ask=True)
         else:
             raise AssertionError(
                 f'Invalid MITSUBA_VERSION={version}, must be one of (2, 3)')
