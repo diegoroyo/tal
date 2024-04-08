@@ -118,7 +118,7 @@ def main():
             try:
                 import mitsuba
                 log(LogLevel.INFO, 'OK mitsuba can be imported')
-            except NameError:
+            except ModuleNotFoundError:
                 log(LogLevel.PROMPT, 'mitsuba cannot be imported. '
                     'This can happen if you run a custom installation. '
                     'Please point to the mitsuba3 (not mitsuba3-transient-nlos) folder:')

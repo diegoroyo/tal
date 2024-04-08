@@ -202,7 +202,7 @@ class ResourcesConfig:
             old_downscale = downscale
             downscale = int(
                 np.ceil(data_in.shape[in_slice_dim] / in_slice_size))
-            if old_downscale != downscale:
+            if old_downscale == downscale:
                 old_downscale = None
 
             in_slices = [make_slice(data_in, slice(i * in_slice_size, (i + 1) * in_slice_size), in_slice_dim)
