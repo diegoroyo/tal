@@ -450,22 +450,26 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         else:
             os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
-        laser_lookat_x = defines.pop('laser_lookat_x')
-        laser_lookat_y = defines.pop('laser_lookat_y')
+        focus_laser = False
+        if 'laser_lookat_x' in defines and 'laser_lookat_y' in defines:
+            focus_laser = True
+            laser_lookat_x = defines.pop('laser_lookat_x')
+            laser_lookat_y = defines.pop('laser_lookat_y')
+
         scene = mi.load_file(scene_xml_path, **defines)
         integrator = scene.integrator()
-
-        def find_id(array, eid):
-            same_id = list(filter(lambda e: e.id() == eid, array))
-            assert len(same_id) == 1, f'Expected 1 element with id {eid}'
-            return same_id[0]
-
-        mitr.nlos.focus_emitter_at_relay_wall_pixel(
-            mi.Point2f(laser_lookat_x, laser_lookat_y),
-            find_id(scene.shapes(), 'relay_wall'),
-            find_id(scene.emitters(), 'laser'))
-
         mitr.utils.set_thread_count(args.threads)
+
+        if focus_laser:
+            def find_id(array, eid):
+                same_id = list(filter(lambda e: e.id() == eid, array))
+                assert len(same_id) == 1, f'Expected 1 element with id {eid}'
+                return same_id[0]
+
+            mitr.nlos.focus_emitter_at_relay_wall_pixel(
+                mi.Point2f(laser_lookat_x, laser_lookat_y),
+                find_id(scene.shapes(), 'relay_wall'),
+                find_id(scene.emitters(), 'laser'))
 
         # prepare
         if isinstance(integrator, TransientADIntegrator):
