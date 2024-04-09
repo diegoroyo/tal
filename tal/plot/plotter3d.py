@@ -6,9 +6,9 @@ import pyvista as pv
 
 
 def plot3d(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
-           title: str = '', slider_title: str = 'Time', 
-           slider_step: float = 0.1, color = 'hot',
-           opacity = 'sigmoid', backgroundcolor = None):
+           title: str = '', slider_title: str = 'Time',
+           slider_step: float = 0.1, color='hot',
+           opacity='linear', backgroundcolor=None):
     """
     Plot in 3d the data indicated, with a slider if the data has a four 
     dimension
@@ -25,11 +25,11 @@ def plot3d(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
     data_to_plot = data
     if isinstance(data, NLOSCaptureData):
         data_to_plot = data.H
-    
-    assert data_to_plot.ndim >= 3 and data_to_plot.ndim <= 4,\
+
+    assert data_to_plot.ndim >= 3 and data_to_plot.ndim <= 4, \
         "Expected 3 or 4 dimension data,"\
-        +f" but data has dimension {data_to_plot.ndim}"
-    
+        + f" but data has dimension {data_to_plot.ndim}"
+
     p = pv.Plotter()
     p.add_title(title)
     if backgroundcolor is not None:
@@ -45,32 +45,33 @@ def plot3d(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
         cmap = color
 
     # Normalize the data so it is possible to plot it with the plotter
-    norm_data_to_plot = (data_to_plot - np.min(data_to_plot))* 256 \
-                        / (np.max(data_to_plot) - np.min(data_to_plot))
-    
+    norm_data_to_plot = (data_to_plot - np.min(data_to_plot)) * 255 \
+        / (np.max(data_to_plot) - np.min(data_to_plot))
+
     # Plot with slider if the data has more than 3 dimension
     if norm_data_to_plot.ndim == 4:
         assert cmap is not None, "Only colormaps can be used with a slider"
+
         def volume_by_time(slider_value):
             idx = int(slider_value/slider_step)
             p.add_volume(norm_data_to_plot[idx],
-                        clim = [np.min(data_to_plot), np.max(data_to_plot)],
-                        scalars = scalars,
-                        cmap = cmap,
-                        opacity = opacity,
-                        name = 'data_by_time')
+                         clim=[0, 255],
+                         scalars=scalars,
+                         cmap=cmap,
+                         opacity=opacity,
+                         name='data_by_time')
 
-        p.add_slider_widget(volume_by_time, 
+        p.add_slider_widget(volume_by_time,
                             [0, (norm_data_to_plot.shape[0]-1) * slider_step],
-                            value = 0,
-                            title = slider_title)
-    else: # 3 dim
+                            value=0,
+                            title=slider_title)
+    else:  # 3 dim
         p.add_volume(norm_data_to_plot,
-                    clim = [np.min(data_to_plot), np.max(data_to_plot)],
-                    scalars = scalars,
-                    cmap = cmap,
-                    opacity = opacity,
-                    name = 'full_data')
+                     clim=[0, 255],
+                     scalars=scalars,
+                     cmap=cmap,
+                     opacity=opacity,
+                     name='full_data')
 
     # Select the initial camera
     p.camera_position = 'yz'
