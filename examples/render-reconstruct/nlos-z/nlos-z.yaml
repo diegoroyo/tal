@@ -123,9 +123,9 @@ geometry:
   displacement_x: 0.0
   displacement_y: 0.0
   displacement_z: 0.0
-  scale_x: 1  # scale = 1: relay wall is 2x2m, scale = 0.5: relay wall is 1x1m
-  scale_y: 1  # scale = 1: relay wall is 2x2m, scale = 0.5: relay wall is 1x1m
-  scale_z: 1  # scale = 1: relay wall is 2x2m, scale = 0.5: relay wall is 1x1m
+  scale_x: 1  # 1: relay wall is 2x2, 0.5: relay wall is 1x1 (X dimension)
+  scale_y: 1  # same for Y dimension
+  scale_z: 1  # Only valid values are: +1: normal is (0, 0, 1), -1. normal is (0, 0, -1)
   # Material of the object. See "material reference" below
   material:
     id: white
