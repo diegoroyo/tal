@@ -1,4 +1,5 @@
 .vscode
+.idea
 scripts/pypi_publish.sh
 *__pycache__*
 build
@@ -8,3 +9,4 @@ dist
 examples/old/test/data
 examples/old/test/render
 examples/old/test/debug_notebook.ipynb
+**/.ipynb_checkpoints/
