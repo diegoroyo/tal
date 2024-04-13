@@ -74,6 +74,15 @@ class SimulationParams:
 
 class Renderer:
     def __init__(self, config_path: str, args: argparse.Namespace) -> None:
+        # HACK: on macOS "spawn" method, which is the default since 3.8,
+        # is considered more safe than "fork", but requires serialization methods available
+        # to send the objects to the spawned process. So a proper fix would be to add them
+        # (see e.g. https://stackoverflow.com/a/65513291 and
+        # https://docs.python.org/3/library/multiprocessing.html#the-spawn-and-forkserver-start-methods
+        # for more details)
+        if platform.system() == "Darwin":
+            multiprocessing.set_start_method("fork")
+
         self.config_path = os.path.abspath(config_path)
         self.args = args
         assert os.path.exists(self.config_path), f"{self.config_path} does not exist"
@@ -436,15 +445,6 @@ class Renderer:
             # NOTE: Windows does not support multiprocessing
             run_mitsuba_f()
         else:
-            # HACK: on macOS "spawn" method, which is the default since 3.8,
-            # is considered more safe than "fork", but requires serialization methods available
-            # to send the objects to the spawned process. So a proper fix would be to add them
-            # (see e.g. https://stackoverflow.com/a/65513291 and
-            # https://docs.python.org/3/library/multiprocessing.html#the-spawn-and-forkserver-start-methods
-            # for more details)
-            if platform.system() == "Darwin":
-                multiprocessing.set_start_method("fork")
-
             process = multiprocessing.Process(target=run_mitsuba_f)
             try:
                 process.start()
