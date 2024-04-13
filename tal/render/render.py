@@ -505,7 +505,7 @@ class Renderer:
                 laser_lookat.y,
             )
             # ToDo: why do we have `self.args.quiet` here?
-            if os.path.exists(hdr_path) and not self.args.quiet:
+            if os.path.exists(hdr_path):
                 return None  # Skip this render
             if is_dir:
                 os.mkdir(hdr_path)
