@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_shape,
                 camera_system, t_accounts_first_and_last_bounces,
-                t_start, delta_t, is_confocal,
+                t_start, delta_t, is_laser_paired_to_sensor,
                 projector_focus=None,
                 laser_xyz=None, sensor_xyz=None,
                 compensate_invsq=False, progress=False):
@@ -19,7 +19,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
 
     nt, nl, ns = H_0.shape
     nv, _ = volume_xyz.shape
-    if is_confocal:
+    if is_laser_paired_to_sensor:
         assert laser_grid_xyz.shape[0] == ns, 'H does not match with laser_grid_xyz'
     else:
         assert laser_grid_xyz.shape[0] == nl, 'H does not match with laser_grid_xyz'
@@ -32,7 +32,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
         laser_xyz = laser_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
     if sensor_xyz is not None:
         sensor_xyz = sensor_xyz.reshape((1, 1, 1, 3)).astype(np.float32)
-    if is_confocal:
+    if is_laser_paired_to_sensor:
         laser_grid_xyz = laser_grid_xyz.reshape(
             (1, 1, ns, 3)).astype(np.float32)
     else:
@@ -82,7 +82,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
     def backproject_i(subrange_s):
         nsi = len(subrange_s)
         H_0_i = H_0[:, :, subrange_s]
-        if is_confocal:
+        if is_laser_paired_to_sensor:
             d_2_i = d_2[:, :, subrange_s]
         else:
             d_2_i = d_2

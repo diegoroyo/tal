@@ -78,7 +78,7 @@ def solve(data: NLOSCaptureData,
     reconstructed_volume_n3 = backproject(
         H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3, volume_xyz.shape[:-1],
         camera_system, data.t_accounts_first_and_last_bounces,
-        data.t_start, data.delta_t, data.is_confocal(),
+        data.t_start, data.delta_t, data.is_laser_paired_to_sensor(),
         projector_focus,
         data.laser_xyz, data.sensor_xyz,
         compensate_invsq=compensate_invsq,

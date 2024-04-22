@@ -216,6 +216,24 @@ class NLOSCaptureData:
                 raise AssertionError(f'raw_data contains unknown key: {key}')
             setattr(self, key, value)
 
+    def is_laser_paired_to_sensor(self):
+        """
+        Returns True if each sensor point only has one laser point associated.
+        This is the case for confocal capture or custom configurations.
+        In single or exhaustive configuration, this does not happen as each
+        laser/sensor point can have multiple sensor/laser points associated.
+        Some reconstructions algorithms require this information to work properly.
+        """
+        if self.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.T_Li_Si]:
+            return False
+        elif self.H_format in [HFormat.T_Sx_Sy, HFormat.T_Si]:
+            return (self.sensor_grid_format == self.laser_grid_format
+                    and
+                    self.sensor_grid_xyz.shape[:-1] ==
+                    self.laser_grid_xyz.shape[:-1])
+        else:
+            raise AssertionError('Invalid H_format')
+
     def is_confocal(self):
         """ Returns True if H contains confocal data (i.e. Sx and Sy represent both laser and sensor coordinates) """
         if self.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.T_Li_Si]:

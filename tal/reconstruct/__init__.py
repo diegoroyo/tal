@@ -88,7 +88,7 @@ def compensate_laser_cos_dsqr(data: NLOSCaptureData):
     if data.H_format == HFormat.T_Lx_Ly_Sx_Sy:
         compensate_i_j(*data.laser_grid_xyz.shape[:2])
     elif data.H_format == HFormat.T_Sx_Sy:
-        if data.is_confocal():
+        if data.is_laser_paired_to_sensor():
             compensate_i_j(*data.sensor_grid_xyz.shape[:2])
         else:
             assert len(data.laser_grid_xyz) == 3
@@ -98,7 +98,7 @@ def compensate_laser_cos_dsqr(data: NLOSCaptureData):
     elif data.H_format == HFormat.T_Li_Si:
         compensate_i(data.laser_grid_xyz.shape[0])
     elif data.H_format == HFormat.T_Si:
-        if data.is_confocal():
+        if data.is_laser_paired_to_sensor():
             compensate_i(data.sensor_grid_xyz.shape[0])
         else:
             assert len(data.laser_grid_xyz) == 3
