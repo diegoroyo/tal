@@ -22,7 +22,7 @@ class Config(Enum):
     MITSUBA_VERSION = \
         ('MITSUBA_VERSION',
          'Version of Mitsuba to use (2 or 3)',
-         '2',
+         '3',
          lambda s: s in ['2', '3'])
     MITSUBA2_TRANSIENT_NLOS_FOLDER = \
         ('MITSUBA2_TRANSIENT_NLOS_FOLDER',

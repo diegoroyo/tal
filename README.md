@@ -70,13 +70,13 @@ optional arguments:
   -v, --version         show program's version number and exit
 ```
 
-## `tal render`: Command line tool to render mitsuba2-transient-nlos scenes
+## `tal render`: Command line tool to render `mitsuba3-transient-nlos` scenes
 
-You will need to have [mitsuba2-transient-nlos](https://github.com/diegoroyo/mitsuba2-transient-nlos) installed in your PC. [Follow the Mitsuba build instructions here](https://mitsuba2.readthedocs.io/en/latest/src/getting_started/compiling.html). Also, `tal` supports `mitsuba3-transient-nlos` too (recommended if you have access).
+You will need to have [mitsuba3-transient-nlos](https://github.com/diegoroyo/mitsuba3-transient-nlos) installed in your PC. You can install just via `pip install mitransient` or follow their README for custom installation instructions.
 
-> *IMPORTANT:* On the first run of `tal render`, it will ask you if you have installed Mitsuba 2 or 3, and the location of your installation folder. For Mitsuba 2, please use the root folder of the repo (i.e. `mitsuba2-transient-nlos`), but for Mitsuba 3 please use the folder for the fork of Mitsuba 3 (i.e. `mitsuba3-transient-nlos/ext/mitsuba3`). **If at any time you want to switch from Mitsuba 2 to 3 or vice-versa, or want to switch your installation folder, please use the `tal config` command.**
+> On the first run of `tal render`, it will ask you if you have installed Mitsuba 2 or 3, and (only if you have compiled Mitsuba youself) the location of your installation folder. For Mitsuba 2, please use the root folder of the repo (i.e. `/path/to/mitsuba2-transient-nlos`). For Mitsuba 3 you'll have to use the root folder of your custom mitsuba instalation (i.e. `/path/to/mitsuba3`). **If at any time you need to switch from Mitsuba 2 to 3 or vice-versa, or want to switch your installation folder, please use the `tal config` command.**
 
-`mitsuba2-transient-nlos` must be installed in your device. On your first `tal render <scene>` comamnd, it will ask you where your installation folder is located, and will execute the necessary `mitsuba` commands and generate the specified scene XML files.
+`mitsuba3-transient-nlos` must be installed in your device. On your first `tal render <scene>` command, it will detect (or ask you) where your installation folder is located, and will execute the necessary `mitsuba` commands and generate the specified scene XML files.
 
 You can find examples for how to render a scene in the [`examples`](https://github.com/diegoroyo/tal/tree/master/examples) folder of this repository. You can always use the `tal render -h` command too:
 
@@ -103,12 +103,10 @@ optional arguments:
   -q, --quiet           Disable progress bars and other verbose outputs
   -r, --dry-run         Do not execute mitsuba, just print out the commands that would be executed
   --no-steady           Disable generation of steady state images
-  --no-logging          Disable logging of mitsuba2 output
+  --no-logging          Disable logging of mitsuba output
   --no-partial-results  Remove the "partial" folder which stores temporal data after creating the final hdf5
                         file (e.g. multiple experiments for confocal/exhaustive)
 ```
-
-Please note that, if you're using Mitsuba 3 instead of Mitsuba 2, not all of the rendering options may be implemented.
 
 ## `tal plot`: Visualize time-resolved capture data
 

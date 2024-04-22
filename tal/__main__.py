@@ -83,7 +83,7 @@ def main():
                                help='Disable generation of steady state images')
     render_parser.add_argument('--no-logging',
                                dest='do_logging', action='store_false',
-                               help='Disable logging of mitsuba2 output')
+                               help='Disable logging of mitsuba output')
     render_parser.add_argument('--no-partial-results',
                                dest='keep_partial_results', action='store_false',
                                help='Remove the "partial" folder which stores temporal data after creating the final hdf5 file (e.g. multiple experiments for confocal/exhaustive)')
