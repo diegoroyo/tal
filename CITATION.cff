@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: y-tal
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Diego
+    family-names: Royo
+  - given-names: Pablo
+    family-names: Luesia-Lahoz
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.11197745
+repository-code: 'https://github.com/diegoroyo/tal'
+repository: 'https://pypi.org/project/y-tal/'
+keywords:
+  - python
+  - transient
+  - rendering
+  - non-line-of-sight
+license: GPL-3.0
