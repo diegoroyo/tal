@@ -5,7 +5,7 @@ name: confocal-scene
 ##
 # Mitsuba
 ##
-mitsuba_variant: llvm_mono  # see mitsuba for possible types
+mitsuba_variant: llvm_ad_rgb  # see mitsuba for possible types
 #integrator_max_depth: -1
 #integrator_filter_bounces: -1
 #integrator_discard_direct_paths: false
@@ -63,7 +63,12 @@ geometry:
     type: rectangle
   # Relay wall displacement and rotation is NYI (see tal.render.render.py)
   # as an alternative, you can displace/rotate the rest of the scene
-  scale: 1  # 1: relay wall is 2x2, 0.5: relay wall is 1x1
+  displacement_x: 0.0
+  displacement_y: 0.0
+  displacement_z: 0.0
+  scale_x: 1  # 1: relay wall is 2x2, 0.5: relay wall is 1x1 (X dimension)
+  scale_y: 1  # same for Y dimension
+  scale_z: 1  # Only valid values are: +1: normal is (0, 0, 1), -1. normal is (0, 0, -1)
   material:
     id: white
 

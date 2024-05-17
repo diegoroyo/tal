@@ -31,7 +31,7 @@ name: nlos-z
 # See https://mitsuba.readthedocs.io/en/latest/src/key_topics/variants.html
 # you should have compiled this variant previously
 # See mitsuba{2|3}-transient-nlos repository for more information
-mitsuba_variant: llvm_rgb
+mitsuba_variant: llvm_ad_rgb
 # Transient Mitsuba's intergator properties
 # See mitsuba{2|3}-transient-nlos' documentation for transient_nlos_path
 integrator_max_depth: -1
@@ -120,7 +120,12 @@ geometry:
 - name: relay_wall
   mesh:
     type: rectangle
-  scale: 1  # scale = 1: relay wall is 2x2m, scale = 0.5: relay wall is 1x1m
+  displacement_x: 0.0
+  displacement_y: 0.0
+  displacement_z: 0.0
+  scale_x: 1  # 1: relay wall is 2x2, 0.5: relay wall is 1x1 (X dimension)
+  scale_y: 1  # same for Y dimension
+  scale_z: 1  # Only valid values are: +1: normal is (0, 0, 1), -1. normal is (0, 0, -1)
   # Material of the object. See "material reference" below
   material:
     id: white
