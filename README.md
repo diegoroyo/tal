@@ -288,3 +288,18 @@ tal.set_resources(4)  # use 4 CPUs
 > [Velten2012] Velten, A., Willwacher, T., Gupta, O., Veeraraghavan, A., Bawendi, M. G., & Raskar, R. (2012). Recovering three-dimensional shape around a corner using ultrafast time-of-flight imaging. Nature communications, 3(1), 745.
 
 > [Liu2019] Liu, X., Guillén, I., La Manna, M., Nam, J. H., Reza, S. A., Huu Le, T., ... & Velten, A. (2019). Non-line-of-sight imaging using phasor-field virtual wave optics. Nature, 572(7771), 620-623.
+
+### License and citation
+
+`tal` is licensed under the GPL-3.0 license. If you use `tal` in an academic work, we would appreciate if you cited our work:
+
+```
+@software{Royo_y-tal,
+author = {Royo, Diego and Luesia-Lahoz, Pablo},
+license = {GPL-3.0},
+title = {{y-tal}},
+url = {https://github.com/diegoroyo/tal},
+publisher = {GitHub},
+doi = {https://doi.org/10.5281/zenodo.11197745},
+}
+```
