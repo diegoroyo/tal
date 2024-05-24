@@ -55,11 +55,10 @@ def render_nlos_scene(config_path, args, num_retries=0):
         raise AssertionError(
             f'Invalid YAML format in TAL config file: {exc}') from exc
     scene_config = {**scene_defaults, **scene_config}
-
     if not args.dry_run:
         mitsuba_backend.set_variant(scene_config['mitsuba_variant'])
 
-    steady_xml, nlos_xml = mitsuba_backend.get_scene_xml(
+    steady_xml, ground_truth_xml, nlos_xml = mitsuba_backend.get_scene_xml(
         scene_config, random_seed=args.seed, quiet=args.quiet)
 
     try:
@@ -82,6 +81,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
         root_dir = os.path.join(config_dir, progress_folder)
         partial_results_dir = os.path.join(root_dir, 'partial')
         steady_dir = os.path.join(root_dir, 'steady')
+        ground_truth_dir = os.path.join(root_dir, 'ground_truth')
         log_dir = os.path.join(root_dir, 'logs')
 
         if not in_progress:
@@ -101,6 +101,10 @@ def render_nlos_scene(config_path, args, num_retries=0):
         steady_scene_xml = os.path.join(root_dir, 'steady_scene.xml')
         with open(steady_scene_xml, 'w') as f:
             f.write(steady_xml)
+
+        ground_truth_scene_xml = os.path.join(root_dir, 'ground_truth_scene.xml')
+        with open(ground_truth_scene_xml, 'w') as f:
+            f.write(ground_truth_xml)
 
         nlos_scene_xml = os.path.join(root_dir, 'nlos_scene.xml')
         with open(nlos_scene_xml, 'w') as f:
@@ -248,53 +252,47 @@ def render_nlos_scene(config_path, args, num_retries=0):
             render_steady('side_view', 1)
 
         if args.get_hidden_ground_truth:
-            def get_ground_turth(render_name, sensor_index):
-                if not args.quiet:
-                    log(LogLevel.INFO,
-                        f'{render_name} for {experiment_name} steady render...')
-                hdr_ext = mitsuba_backend.get_hdr_extension()
-                hdr_path = os.path.join(partial_results_dir,
-                                        f'{experiment_name}_{render_name}.{hdr_ext}')
-                ldr_path = os.path.join(steady_dir,
-                                        f'{experiment_name}_{render_name}.png')
-                if os.path.exists(ldr_path) and not args.quiet:
-                    pass  # skip
+            # raise(NotImplementedError('The ground truth from the hidden scene is not implemented yet'))
+            ground_truth_xml
+            if not args.quiet:
+                log(LogLevel.INFO,
+                    f'Retrieving ground truth for {experiment_name}...')
+            hdr_ext = mitsuba_backend.get_hdr_extension()
+            hdr_path = os.path.join(ground_truth_dir,
+                                    f'{experiment_name}_{render_name}.{hdr_ext}')
+            if os.path.exists(hdr_path) and not args.quiet:
+                pass  # skip
+            else:
+                logfile = None
+                if args.do_logging and not args.dry_run:
+                    logfile = open(os.path.join(
+                        log_dir, f'{experiment_name}_{render_name}.log'), 'w')
+                # NOTE: something here has a memory leak (probably Mitsuba-related)
+                # We run Mitsuba in a separate process to ensure that the leaks do not add up
+                # as they can fill your RAM in exhaustive scans
+                queue = StdoutQueue()
+                run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, ground_truth_scene_xml, hdr_path, dict(),
+                                        render_name, logfile, args, None, queue)
+                if os.name == 'nt':
+                    # NOTE: Windows does not support multiprocessing
+                    run_mitsuba_f()
                 else:
-                    logfile = None
-                    if args.do_logging and not args.dry_run:
-                        logfile = open(os.path.join(
-                            log_dir, f'{experiment_name}_{render_name}.log'), 'w')
-                    # NOTE: something here has a memory leak (probably Mitsuba-related)
-                    # We run Mitsuba in a separate process to ensure that the leaks do not add up
-                    # as they can fill your RAM in exhaustive scans
-                    queue = StdoutQueue()
-                    run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, steady_scene_xml, hdr_path, dict(),
-                                            render_name, logfile, args, sensor_index, queue)
-                    if os.name == 'nt':
-                        # NOTE: Windows does not support multiprocessing
-                        run_mitsuba_f()
-                    else:
-                        process = multiprocessing.Process(target=run_mitsuba_f)
-                        try:
-                            process.start()
-                            process.join()
-                        except KeyboardInterrupt:
-                            process.terminate()
-                            raise KeyboardInterrupt
-                    if args.do_logging and not args.dry_run:
-                        while not queue.empty():
-                            e = queue.get()
-                            if isinstance(e, Exception):
-                                raise e
-                            else:
-                                logfile.write(e)
-                        queue.close()
-                        logfile.close()
-                    if not args.dry_run:
-                        mitsuba_backend.convert_hdr_to_ldr(hdr_path, ldr_path)
-
-            raise(NotImplementedError('The ground truth from the hidden scene is not implemented yet'))
-            # get_ground_turth()
+                    process = multiprocessing.Process(target=run_mitsuba_f)
+                    try:
+                        process.start()
+                        process.join()
+                    except KeyboardInterrupt:
+                        process.terminate()
+                        raise KeyboardInterrupt
+                if args.do_logging and not args.dry_run:
+                    while not queue.empty():
+                        e = queue.get()
+                        if isinstance(e, Exception):
+                            raise e
+                        else:
+                            logfile.write(e)
+                    queue.close()
+                    logfile.close()
 
 
         pbar = tqdm(
@@ -391,9 +389,16 @@ def render_nlos_scene(config_path, args, num_retries=0):
         capture_data.t_accounts_first_and_last_bounces = \
             scene_config['account_first_and_last_bounces']
         # TODO (Pablo): Save here the depth information
-        capture_data.hidden_depth_grid_xyz = None
-        capture_data.hidden_depth_grid_normals = None
-        capture_data.hidden_grid_format = None
+        if args.get_hidden_ground_truth:
+            hdr_gt_depth_path = os.path.join(ground_truth_dir,
+                                    f'{experiment_name}_{render_name}.{hdr_ext}')
+            capture_data.hidden_depth_grid_xyz = np.load(hdr_gt_depth_path) 
+            capture_data.hidden_depth_grid_normals = 1
+            capture_data.hidden_grid_format = GridFormat.X_Y_3
+        else:
+            capture_data.hidden_depth_grid_xyz = None
+            capture_data.hidden_depth_grid_normals = None
+            capture_data.hidden_grid_format = None
         # capture_data.hidden_grid_format = GridFormat.XYZ
         capture_data.scene_info = {
             'tal_version': tal.__version__,

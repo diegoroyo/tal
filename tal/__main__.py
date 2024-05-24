@@ -81,6 +81,9 @@ def main():
     render_parser.add_argument('--no-steady',
                                dest='do_steady_renders', action='store_false',
                                help='Disable generation of steady state images')
+    render_parser.add_argument('--no-ground-truth',
+                               dest='get_hidden_ground_truth', action='store_false',
+                               help='Disable generation ground truth depths and normals from the hidden scene')
     render_parser.add_argument('--no-logging',
                                dest='do_logging', action='store_false',
                                help='Disable logging of mitsuba output')

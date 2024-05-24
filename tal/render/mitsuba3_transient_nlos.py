@@ -127,6 +127,12 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     # integrator
     integrator_steady = fdent(f'''\
         <integrator type="path"/>''')
+    
+    integrator_ground_truth = fdent(f'''\
+        <integrator type="aov">
+            <string name="aovs" value="dd.y:depth,nn:geo_normal"/>
+            <integrator type="path"/>
+        </integrator>''')
 
     integrator_nlos = fdent(f'''\
         <integrator type="transient_nlos_path">
@@ -300,6 +306,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     materials = get_materials()
     shapes_steady = []
     shapes_nlos = []
+    shapes_ground_truth = []
     for gdict in v('geometry'):
         def g(key):
             return s(gdict.get(key, None))
@@ -377,12 +384,53 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
             shapes_steady.append(shapify(shape_contents_steady))
             shapes_nlos.append(shapify(shape_contents_nlos))
+            if is_relay_wall:
+                relay_wall_x_scale = g('scale_x') or 1.0
+                relay_wall_y_scale = g('scale_y') or 1.0
+                look_at_origin = ''
+                look_at_target = ''
+                look_at_up = ''
+                relay_wall_x_rot = g('rot_degrees_x') or 0.0
+                relay_wall_y_rot = g('rot_degrees_y') or 0.0
+                relay_wall_z_rot = g('rot_degrees_z') or 0.0
+                relay_wall_x_disp = g('displacement_x') or 0.0
+                relay_wall_y_disp = g('displacement_y') or 0.0
+                relay_wall_z_disp = g('displacement_z') or 0.0
+            else:
+                shapes_ground_truth.append(shapify(shape_contents_steady))
         else:
             raise AssertionError(
                 f'Shape not yet supported: {g("mesh")["type"]}')
 
     shapes_steady = '\n\n'.join(shapes_steady)
+    shapes_ground_truth = '\n\n'.join(shapes_ground_truth)
     shapes_nlos = '\n\n'.join(shapes_nlos)
+
+
+
+    # Ground truth sensor declared here, after relay wall reading
+    # TODO: Finish look_at depending on relay wall after scale:
+        # <look_at origin="{look_at_origin}"
+        #          target="{look_at_target}"
+        #          up="{look_at_up}"/>
+    sensor_ground_truth = fdent(f'''\
+        <!-- Ortografic relay wall sensor for depth and normals -->
+        <sensor type="orthographic">
+            <transform name="to_world">
+            <!-- Resize and move the sensor to the relay wall -->
+                <scale x="{relay_wall_x_scale}" y="{relay_wall_y_scale}"/>
+            </transform>
+            <sampler type="independent">
+                <integer name="sample_count" value="4"/>
+                <integer name="seed" value="{random_seed}"/>
+            </sampler>
+            <film type="hdrfilm">
+                <integer name="width" value="1028"/>
+                <integer name="height" value="1028"/>
+                <string name="pixel_format" value="{pixel_format}"/>
+                <rfilter name="rfilter" type="gaussian"/>
+            </film>
+        </sensor>''')
 
     file_steady = fdent('''\
         <!-- Auto-generated using TAL v{tal_version} -->
@@ -402,6 +450,21 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                         shapes_steady=shapes_steady,
                         sensors_steady=sensors_steady)
 
+    file_ground_truth = fdent('''\
+        <!-- Auto-generated using TAL v{tal_version} -->
+        <scene version="{mitsuba_version}">
+            {integrator_ground_truth}
+                              
+            {shapes_ground_truth}
+
+            {sensor_ground_truth}
+        <\scene>''',
+                        tal_version=tal.__version__,
+                        mitsuba_version=get_version(),
+                        integrator_ground_truth=integrator_ground_truth,
+                        shapes_ground_truth=shapes_nlos,
+                        sensor_ground_truth = sensor_ground_truth)
+
     file_nlos = fdent('''\
         <!-- Auto-generated using TAL v{tal_version} -->
         <scene version="{mitsuba_version}">
@@ -417,7 +480,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                       laser_nlos=laser_nlos,
                       shapes_nlos=shapes_nlos)
 
-    return file_steady, file_nlos
+    return file_steady, file_ground_truth, file_nlos
 
 
 def run_mitsuba(scene_xml_path, hdr_path, defines,
