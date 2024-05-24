@@ -130,6 +130,15 @@ class NLOSCaptureData:
         the laser origin and the wall (first bounce),
         and the wall and the sensor origin (last bounce).
 
+    hidden_depth_grid_xyz
+        Depth position of the hidden scene assuming z=0 the position of the relay wall.
+        Calculated from the normals of the relay wall. z=-1 means no hidden geometry from that point
+        See hidden_grid_format for the number of dimensions.
+
+    hidden_depth_grid_normals
+        Normal direction of the hidden scene at the point indicated by hidden_depth_grid_xyz.
+        See hidden_grid_format for the number of dimensions.
+
     scene_info
         YAML-encoded string. Contains additional information about the scene. Implemented keys:
         - 'original_format': str (e.g. 'HDF5_ZNLOS')
@@ -153,6 +162,8 @@ class NLOSCaptureData:
     TensorXY3 = NDArray[Shape['X, Y, 3'], Float]
     LaserGridType = Union[MatrixN3, TensorXY3]
     SensorGridType = Union[MatrixN3, TensorXY3]
+    DepthGridType = Union[MatrixN3, TensorXY3]
+    HiddenNormalType = Union[MatrixN3, TensorXY3]
     TensorXYZ3 = NDArray[Shape['X, Y, Z, 3'], Float]
     VolumeXYZType = Union[MatrixN3, TensorXY3, TensorXYZ3]
     Array3 = NDArray[Shape['3'], Float]
@@ -187,6 +198,11 @@ class NLOSCaptureData:
     t_start: Float = None
     t_accounts_first_and_last_bounces: bool = None
     scene_info: dict = None  # additional information
+    # Depth from relay wall
+    hidden_depth_grid_xyz: DepthGridType = None
+    # Normal of the given points
+    hidden_depth_grid_normals: HiddenNormalType = None
+    hidden_grid_format: GridFormat = None
     _end: None = None  # used in as_dict()
 
     def __get_dict_keys(self):

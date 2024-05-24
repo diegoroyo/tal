@@ -247,6 +247,56 @@ def render_nlos_scene(config_path, args, num_retries=0):
             render_steady('back_view', 0)
             render_steady('side_view', 1)
 
+        if args.get_hidden_ground_truth:
+            def get_ground_turth(render_name, sensor_index):
+                if not args.quiet:
+                    log(LogLevel.INFO,
+                        f'{render_name} for {experiment_name} steady render...')
+                hdr_ext = mitsuba_backend.get_hdr_extension()
+                hdr_path = os.path.join(partial_results_dir,
+                                        f'{experiment_name}_{render_name}.{hdr_ext}')
+                ldr_path = os.path.join(steady_dir,
+                                        f'{experiment_name}_{render_name}.png')
+                if os.path.exists(ldr_path) and not args.quiet:
+                    pass  # skip
+                else:
+                    logfile = None
+                    if args.do_logging and not args.dry_run:
+                        logfile = open(os.path.join(
+                            log_dir, f'{experiment_name}_{render_name}.log'), 'w')
+                    # NOTE: something here has a memory leak (probably Mitsuba-related)
+                    # We run Mitsuba in a separate process to ensure that the leaks do not add up
+                    # as they can fill your RAM in exhaustive scans
+                    queue = StdoutQueue()
+                    run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, steady_scene_xml, hdr_path, dict(),
+                                            render_name, logfile, args, sensor_index, queue)
+                    if os.name == 'nt':
+                        # NOTE: Windows does not support multiprocessing
+                        run_mitsuba_f()
+                    else:
+                        process = multiprocessing.Process(target=run_mitsuba_f)
+                        try:
+                            process.start()
+                            process.join()
+                        except KeyboardInterrupt:
+                            process.terminate()
+                            raise KeyboardInterrupt
+                    if args.do_logging and not args.dry_run:
+                        while not queue.empty():
+                            e = queue.get()
+                            if isinstance(e, Exception):
+                                raise e
+                            else:
+                                logfile.write(e)
+                        queue.close()
+                        logfile.close()
+                    if not args.dry_run:
+                        mitsuba_backend.convert_hdr_to_ldr(hdr_path, ldr_path)
+
+            raise(NotImplementedError('The ground truth from the hidden scene is not implemented yet'))
+            # get_ground_turth()
+
+
         pbar = tqdm(
             enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
             file=TQDMLogRedirect(), ascii=True, total=len(laser_lookats))
@@ -340,6 +390,11 @@ def render_nlos_scene(config_path, args, num_retries=0):
         capture_data.t_start = scene_config['start_opl']
         capture_data.t_accounts_first_and_last_bounces = \
             scene_config['account_first_and_last_bounces']
+        # TODO (Pablo): Save here the depth information
+        capture_data.hidden_depth_grid_xyz = None
+        capture_data.hidden_depth_grid_normals = None
+        capture_data.hidden_grid_format = None
+        # capture_data.hidden_grid_format = GridFormat.XYZ
         capture_data.scene_info = {
             'tal_version': tal.__version__,
             'config': scene_config,

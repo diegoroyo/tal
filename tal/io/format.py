@@ -63,6 +63,9 @@ def __convert_dict_znlos_to_tal(capture_data: dict) -> dict:
         'delta_t': capture_data['deltaT'],
         't_start': capture_data['t0'],
         't_accounts_first_and_last_bounces': True,
+        'hidden_depth_grid_xyz': None,
+        'hidden_depth_grid_normals': None,
+        'hidden_grid_format': None,
         'scene_info': {
             'original_format': 'HDF5_ZNLOS',
             'volume': {
@@ -113,6 +116,9 @@ def __convert_dict_dirac_to_tal(capture_data: dict) -> dict:
         'delta_t': da[1] - da[0],
         't_start': None if t_accounts_first_and_last_bounces else 0.0,
         't_accounts_first_and_last_bounces': t_accounts_first_and_last_bounces,
+        'hidden_depth_grid_xyz': None,
+        'hidden_depth_grid_normals': None,
+        'hidden_grid_format': None,
         'scene_info': {
             'original_format': 'HDF5_NLOS_DIRAC',
             'offset': {
@@ -165,6 +171,9 @@ def __convert_dict_pfmat_to_tal(capture_data: dict) -> dict:
         'delta_t': dataset['deltat'],
         't_start': dataset['t0'],
         't_accounts_first_and_last_bounces': True,
+        'hidden_depth_grid_xyz': None,
+        'hidden_depth_grid_normals': None,
+        'hidden_grid_format': None,
         'scene_info': {
             'original_format': 'MAT_PHASOR_FIELDS',
             'volume': {
@@ -206,6 +215,9 @@ def __convert_dict_pfdiffmat_to_tal(capture_data: dict) -> dict:
         'laser_grid_format': GridFormat.X_Y_3,
         'volume_format': VolumeFormat.X_Y_Z_3,
         'delta_t': delta_t,
+        'hidden_depth_grid_xyz': None,
+        'hidden_depth_grid_normals': None,
+        'hidden_grid_format': None,
         't_start': 0,
         't_accounts_first_and_last_bounces': False,
         'scene_info': {
