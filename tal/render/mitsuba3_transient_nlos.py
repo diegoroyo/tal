@@ -127,7 +127,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     # integrator
     integrator_steady = fdent(f'''\
         <integrator type="path"/>''')
-    
+
     integrator_ground_truth = fdent(f'''\
         <integrator type="aov">
             <string name="aovs" value="pp:position, nn:geo_normal"/>
@@ -346,7 +346,6 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             </transform>''')
 
         shape_contents_steady = f'{shape_material}\n{shape_transform}'
-        shape_contents_ground_truth = f'{shape_material}\n{shape_transform}'
         newline = '\n'
         shape_contents_nlos = f'{shape_material}\n{shape_transform}{f"{newline}{sensor_nlos}" if is_relay_wall else ""}'
 
@@ -384,27 +383,29 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                              is_relay_wall=' id="relay_wall"' if is_relay_wall else '',
                              content=content)
 
-            shapes_steady.append(shapify(shape_contents_steady))
-            shapes_nlos.append(shapify(shape_contents_nlos))
             if is_relay_wall:
+                # Transform on the ortographic camera depends on relay wall
                 orto_x_scale = g('scale_x') or 1.0
                 orto_y_scale = g('scale_y') or 1.0
-                orto_origin = '0, 0, 0'
-                orto_target = '0, 0, 1'
-                orto_up = '0, -1, 0'
                 x_rotation = g('rot_degrees_x') or 0.0
                 y_rotation = g('rot_degrees_y') or 0.0
                 z_rotation = g('rot_degrees_z') or 0.0
-                # orto_sensor_transf = fdent(f'''\
-                #     <transform name="to_world">
-                #         <rotate x="1" angle="{x_rotation}"/>
-                #         <rotate y="1" angle="{y_rotation}"/>
-                #         <rotate z="1" angle="{180 + z_rotation}"/>
-                #         <translate x="{g('displacement_x') or 0.0}" y="{g('displacement_y') or 0.0}" z="{g('displacement_z') or 0.0}"/>
-                #     </transform>''')
+                orto_sensor_transf = fdent(f'''\
+                    <transform name="to_world">
+                        <scale x="{orto_x_scale}" y="{orto_y_scale}"/>
+                        <rotate x="1" angle="{x_rotation}"/>
+                        <rotate y="1" angle="{y_rotation}"/>
+                        <rotate z="1" angle="{z_rotation}"/>
+                        <translate x="{g('displacement_x') or 0.0}" 
+                                   y="{g('displacement_y') or 0.0}"
+                                   z="{g('displacement_z') or 0.0}"/>
+                    </transform>''')
                 is_relay_wall = False
             else:
                 shapes_ground_truth.append(shapify(shape_contents_steady))
+
+            shapes_steady.append(shapify(shape_contents_steady))
+            shapes_nlos.append(shapify(shape_contents_nlos))
         else:
             raise AssertionError(
                 f'Shape not yet supported: {g("mesh")["type"]}')
@@ -414,21 +415,11 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     shapes_nlos = '\n\n'.join(shapes_nlos)
 
 
-
     # Ground truth sensor declared here, after relay wall reading
-    # TODO: Finish look_at depending on relay wall after scale:
-        # <look_at origin="{look_at_origin}"
-        #          target="{look_at_target}"
-        #          up="{look_at_up}"/>
     sensor_ground_truth = fdent(f'''\
         <!-- Ortografic relay wall sensor for depth and normals -->
         <sensor type="orthographic">
-            <transform name="to_world">
-                <scale x="{orto_x_scale}" y="{orto_y_scale}"/>
-                <lookat origin="{orto_origin}"
-                        target="{orto_target}"
-                        up="{orto_up}" />
-            </transform>
+            {orto_sensor_transf}
             <sampler type="independent">
                 <integer name="sample_count" value="4"/>
                 <integer name="seed" value="{random_seed}"/>
@@ -463,7 +454,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         <!-- Auto-generated using TAL v{tal_version} -->
         <scene version="{mitsuba_version}">
             {integrator_ground_truth}
-                              
+
             {shapes_ground_truth}
 
             {sensor_ground_truth}

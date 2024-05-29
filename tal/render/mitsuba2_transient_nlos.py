@@ -65,7 +65,7 @@ def get_hdr_extension():
 
 def convert_hdr_to_ldr(hdr_path, ldr_path):
     from tal.util import write_img, tonemap_ldr
-    image = _read_mitsuba_bitmap(hdr_path)
+    image = read_mitsuba_bitmap(hdr_path)
     image = tonemap_ldr(image)
     write_img(ldr_path, image)
 
@@ -124,6 +124,11 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     # integrator
     integrator_steady = fdent(f'''\
         <integrator type="path"/>''')
+
+    integrator_ground_truth = fdent(f'''\
+        <integrator type="aov">
+            <string name="aovs" value="pp:position, nn:geo_normal"/>
+        </integrator>''')
 
     integrator_nlos = fdent(f'''\
         <integrator type="transientpath">
@@ -279,6 +284,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     materials = get_materials()
     shapes_steady = []
     shapes_nlos = []
+    shapes_ground_truth = []
     for gdict in v('geometry'):
         def g(key):
             return s(gdict.get(key, None))
@@ -339,7 +345,10 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                     {content}
                 </shape>''', shape_name=shape_name, filename=filename, content=content)
 
-            shapes_steady.append(shapify(shape_contents_steady, filename))
+
+            shapified_content_steady = shapify(shape_contents_steady, filename)
+            shapes_steady.append(shapified_content_steady)
+            shapes_ground_truth.append(shapified_content_steady)
             shapes_nlos.append(shapify(shape_contents_nlos, filename))
         elif g('mesh')['type'] == 'rectangle' or g('mesh')['type'] == 'sphere':
             def shapify(content):
@@ -350,6 +359,27 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                 </shape>''', shape_name=shape_name, content=content,
                              shape_type=g('mesh')['type'])
 
+            if is_relay_wall:
+                # Transform on the ortographic camera depends on relay wall
+                orto_x_scale = g('scale_x') or 1.0
+                orto_y_scale = g('scale_y') or 1.0
+                x_rotation = g('rot_degrees_x') or 0.0
+                y_rotation = g('rot_degrees_y') or 0.0
+                z_rotation = g('rot_degrees_z') or 0.0
+                orto_sensor_transf = fdent(f'''\
+                    <transform name="to_world">
+                        <scale x="{orto_x_scale}" y="{orto_y_scale}"/>
+                        <rotate x="1" angle="{x_rotation}"/>
+                        <rotate y="1" angle="{y_rotation}"/>
+                        <rotate z="1" angle="{z_rotation}"/>
+                        <translate x="{g('displacement_x') or 0.0}" 
+                                   y="{g('displacement_y') or 0.0}"
+                                   z="{g('displacement_z') or 0.0}"/>
+                    </transform>''')
+                is_relay_wall = False
+            else:
+                shapes_ground_truth.append(shapify(shape_contents_steady))
+
             shapes_steady.append(shapify(shape_contents_steady))
             shapes_nlos.append(shapify(shape_contents_nlos))
         else:
@@ -357,7 +387,26 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                 f'Shape not yet supported: {g("mesh")["type"]}')
 
     shapes_steady = '\n\n'.join(shapes_steady)
+    shapes_ground_truth = '\n\n'.join(shapes_ground_truth)
     shapes_nlos = '\n\n'.join(shapes_nlos)
+
+    # Ground truth sensor declared here, after relay wall reading
+    # Maybe this is necesary in film later
+    #       <string name="pixel_format" value="{pixel_format}"/>
+    sensor_ground_truth = fdent(f'''\
+        <!-- Ortografic relay wall sensor for depth and normals -->
+        <sensor type="orthographic">
+            {orto_sensor_transf}
+            <sampler type="independent">
+                <integer name="sample_count" value="4"/>
+                <integer name="seed" value="{random_seed}"/>
+            </sampler>
+            <film type="hdrfilm">
+                <integer name="width" value="1028"/>
+                <integer name="height" value="1028"/>
+                <rfilter name="rfilter" type="gaussian"/>
+            </film>
+        </sensor>''')
 
     file_steady = fdent('''\
         <!-- Auto-generated using TAL v{tal_version} -->
@@ -389,7 +438,23 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                       integrator_nlos=integrator_nlos,
                       shapes_nlos=shapes_nlos)
 
-    return file_steady, file_nlos
+    file_ground_truth = fdent('''\
+        <!-- Auto-generated using TAL v{tal_version} -->
+        <scene version="{mitsuba_version}">
+            {integrator_ground_truth}
+
+            {shapes_ground_truth}
+
+            {sensor_ground_truth}
+        </scene>''',
+                        tal_version=tal.__version__,
+                        mitsuba_version=get_version(),
+                        integrator_ground_truth=integrator_ground_truth,
+                        shapes_ground_truth=shapes_ground_truth,
+                        sensor_ground_truth = sensor_ground_truth)
+
+
+    return file_steady, file_ground_truth, file_nlos
 
 
 def run_mitsuba(scene_xml_path, hdr_path, defines,
@@ -494,7 +559,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         assert os.path.isfile(hdr_path), 'No frames were rendered?'
 
 
-def _read_mitsuba_bitmap(path: str):
+def read_mitsuba_bitmap(path: str):
     from mitsuba.core import Bitmap
     import numpy as np
     return np.array(Bitmap(path), copy=False)
@@ -525,12 +590,12 @@ def _read_mitsuba_streakbitmap(path: str, exr_format='RGB'):
     xtframes = sorted(xtframes,
                       key=lambda x: int(re.compile(r'\d+').findall(x)[-1]))
     number_of_xtframes = len(xtframes)
-    first_img = _read_mitsuba_bitmap(xtframes[0])
+    first_img = read_mitsuba_bitmap(xtframes[0])
     streak_img = np.empty(
         (number_of_xtframes, *first_img.shape), dtype=first_img.dtype)
     with tqdm(desc=f'Reading {path}', total=number_of_xtframes, file=TQDMLogRedirect(), ascii=True) as pbar:
         for i_xtframe in range(number_of_xtframes):
-            other = _read_mitsuba_bitmap(xtframes[i_xtframe])
+            other = read_mitsuba_bitmap(xtframes[i_xtframe])
             streak_img[i_xtframe] = np.nan_to_num(other, nan=0.)
             pbar.update(1)
 
