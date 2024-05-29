@@ -65,7 +65,7 @@ def get_hdr_extension():
 
 def convert_hdr_to_ldr(hdr_path, ldr_path):
     from tal.util import write_img, tonemap_ldr
-    image = _read_mitsuba_bitmap(hdr_path)
+    image = read_mitsuba_bitmap(hdr_path)
     image = tonemap_ldr(image)
     write_img(ldr_path, image)
 
@@ -131,7 +131,6 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     integrator_ground_truth = fdent(f'''\
         <integrator type="aov">
             <string name="aovs" value="pp:position, nn:geo_normal"/>
-            <integrator type="path"/>
         </integrator>''')
 
     integrator_nlos = fdent(f'''\
@@ -347,6 +346,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             </transform>''')
 
         shape_contents_steady = f'{shape_material}\n{shape_transform}'
+        shape_contents_ground_truth = f'{shape_material}\n{shape_transform}'
         newline = '\n'
         shape_contents_nlos = f'{shape_material}\n{shape_transform}{f"{newline}{sensor_nlos}" if is_relay_wall else ""}'
 
@@ -367,7 +367,9 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                     {content}
                 </shape>''', shape_name=shape_name, filename=filename, content=content)
 
-            shapes_steady.append(shapify(shape_contents_steady, filename))
+            shapified_content_steady = shapify(shape_contents_steady, filename)
+            shapes_steady.append(shapified_content_steady)
+            shapes_ground_truth.append(shapified_content_steady)
             shapes_nlos.append(shapify(shape_contents_nlos, filename))
         elif g('mesh')['type'] == 'rectangle' or g('mesh')['type'] == 'sphere':
             def shapify(content):
@@ -400,6 +402,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                 #         <rotate z="1" angle="{180 + z_rotation}"/>
                 #         <translate x="{g('displacement_x') or 0.0}" y="{g('displacement_y') or 0.0}" z="{g('displacement_z') or 0.0}"/>
                 #     </transform>''')
+                is_relay_wall = False
             else:
                 shapes_ground_truth.append(shapify(shape_contents_steady))
         else:
@@ -460,8 +463,6 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         <!-- Auto-generated using TAL v{tal_version} -->
         <scene version="{mitsuba_version}">
             {integrator_ground_truth}
-
-            {dummy_lights_and_geometry_steady}
                               
             {shapes_ground_truth}
 
@@ -469,7 +470,6 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         </scene>''',
                         tal_version=tal.__version__,
                         mitsuba_version=get_version(),
-                        dummy_lights_and_geometry_steady=dummy_lights_and_geometry_steady,
                         integrator_ground_truth=integrator_ground_truth,
                         shapes_ground_truth=shapes_ground_truth,
                         sensor_ground_truth = sensor_ground_truth)
@@ -586,7 +586,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
     sys.stderr = sys.__stderr__
 
 
-def _read_mitsuba_bitmap(path: str):
+def read_mitsuba_bitmap(path: str):
     import numpy as np
     return np.load(path)
 

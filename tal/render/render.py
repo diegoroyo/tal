@@ -411,8 +411,9 @@ def render_nlos_scene(config_path, args, num_retries=0):
         if args.get_hidden_ground_truth:
             hdr_gt_depth_path = os.path.join(ground_truth_dir,
                                     f'{experiment_name}_depth_normals.{hdr_ext}')
-            capture_data.hidden_depth_grid_xyz = np.load(hdr_gt_depth_path) 
-            capture_data.hidden_depth_grid_normals = 1
+            depth_normals = mitsuba_backend.read_mitsuba_bitmap(hdr_gt_depth_path)
+            capture_data.hidden_depth_grid_xyz = depth_normals[:,:,:3]
+            capture_data.hidden_depth_grid_normals = depth_normals[:,:,3:6]
             capture_data.hidden_grid_format = GridFormat.X_Y_3
         else:
             capture_data.hidden_depth_grid_xyz = None
