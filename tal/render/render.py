@@ -88,6 +88,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
             os.mkdir(root_dir)
             os.mkdir(partial_results_dir)
             os.mkdir(steady_dir)
+            os.mkdir(ground_truth_dir)
             os.mkdir(log_dir)
             shutil.copy(
                 config_path,
@@ -129,6 +130,19 @@ def render_nlos_scene(config_path, args, num_retries=0):
             'rot_degrees_y' not in relay_wall and \
             'rot_degrees_z' not in relay_wall, \
             'Relay wall displacement/rotation is NYI'
+        
+        # Fill the missing parameters
+        if 'displacement_x' not in relay_wall:
+            relay_wall['displacement_x'] = 0.0
+        if 'displacement_y' not in relay_wall:
+            relay_wall['displacement_y'] = 0.0
+        if 'displacement_z' not in relay_wall:
+            relay_wall['displacement_z'] = 0.0
+        if 'scale_x' not in relay_wall:
+            relay_wall['scale_x'] = relay_wall['scale'] if 'scale' in relay_wall else 1.0
+        if 'scale_y' not in relay_wall:
+            relay_wall['scale_y'] = relay_wall['scale'] if 'scale' in relay_wall else 1.0
+
 
         def get_grid_xyz(nx, ny, rw_scale_x, rw_scale_y):
             px = rw_scale_x
@@ -210,6 +224,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
                 hdr_ext = mitsuba_backend.get_hdr_extension()
                 hdr_path = os.path.join(partial_results_dir,
                                         f'{experiment_name}_{render_name}.{hdr_ext}')
+                print(hdr_path)
                 ldr_path = os.path.join(steady_dir,
                                         f'{experiment_name}_{render_name}.png')
                 if os.path.exists(ldr_path) and not args.quiet:
@@ -251,31 +266,34 @@ def render_nlos_scene(config_path, args, num_retries=0):
             render_steady('back_view', 0)
             render_steady('side_view', 1)
 
+
         if args.get_hidden_ground_truth:
             # raise(NotImplementedError('The ground truth from the hidden scene is not implemented yet'))
-            ground_truth_xml
             if not args.quiet:
                 log(LogLevel.INFO,
-                    f'Retrieving ground truth for {experiment_name}...')
+                    f'Retrieving ground_truth for {experiment_name}...')
             hdr_ext = mitsuba_backend.get_hdr_extension()
             hdr_path = os.path.join(ground_truth_dir,
-                                    f'{experiment_name}_{render_name}.{hdr_ext}')
+                                    f'{experiment_name}_depth_normals.{hdr_ext}')
             if os.path.exists(hdr_path) and not args.quiet:
                 pass  # skip
             else:
                 logfile = None
                 if args.do_logging and not args.dry_run:
                     logfile = open(os.path.join(
-                        log_dir, f'{experiment_name}_{render_name}.log'), 'w')
+                        log_dir, f'{experiment_name}_depth_normals.log'), 'w')
                 # NOTE: something here has a memory leak (probably Mitsuba-related)
                 # We run Mitsuba in a separate process to ensure that the leaks do not add up
                 # as they can fill your RAM in exhaustive scans
                 queue = StdoutQueue()
                 run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, ground_truth_scene_xml, hdr_path, dict(),
-                                        render_name, logfile, args, None, queue)
+                                        '_depth_normals', logfile, args, 0, queue)
                 if os.name == 'nt':
                     # NOTE: Windows does not support multiprocessing
-                    run_mitsuba_f()
+                    try:
+                        run_mitsuba_f()
+                    except:
+                        pass
                 else:
                     process = multiprocessing.Process(target=run_mitsuba_f)
                     try:
@@ -287,6 +305,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
                 if args.do_logging and not args.dry_run:
                     while not queue.empty():
                         e = queue.get()
+                        print(e)
                         if isinstance(e, Exception):
                             raise e
                         else:
@@ -391,7 +410,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
         # TODO (Pablo): Save here the depth information
         if args.get_hidden_ground_truth:
             hdr_gt_depth_path = os.path.join(ground_truth_dir,
-                                    f'{experiment_name}_{render_name}.{hdr_ext}')
+                                    f'{experiment_name}_depth_normals.{hdr_ext}')
             capture_data.hidden_depth_grid_xyz = np.load(hdr_gt_depth_path) 
             capture_data.hidden_depth_grid_normals = 1
             capture_data.hidden_grid_format = GridFormat.X_Y_3

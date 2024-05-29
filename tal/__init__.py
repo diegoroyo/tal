@@ -5,4 +5,4 @@ from . import enums, callbacks
 from tal.config import set_resources, ResourcesConfig as resources
 from tal.log import set_log_level, LogLevel
 
-__version__ = '0.16.2'
+__version__ = '0.16.3'

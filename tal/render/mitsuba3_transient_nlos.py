@@ -130,7 +130,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     
     integrator_ground_truth = fdent(f'''\
         <integrator type="aov">
-            <string name="aovs" value="dd.y:depth,nn:geo_normal"/>
+            <string name="aovs" value="pp:position, nn:geo_normal"/>
             <integrator type="path"/>
         </integrator>''')
 
@@ -385,17 +385,21 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             shapes_steady.append(shapify(shape_contents_steady))
             shapes_nlos.append(shapify(shape_contents_nlos))
             if is_relay_wall:
-                relay_wall_x_scale = g('scale_x') or 1.0
-                relay_wall_y_scale = g('scale_y') or 1.0
-                look_at_origin = ''
-                look_at_target = ''
-                look_at_up = ''
-                relay_wall_x_rot = g('rot_degrees_x') or 0.0
-                relay_wall_y_rot = g('rot_degrees_y') or 0.0
-                relay_wall_z_rot = g('rot_degrees_z') or 0.0
-                relay_wall_x_disp = g('displacement_x') or 0.0
-                relay_wall_y_disp = g('displacement_y') or 0.0
-                relay_wall_z_disp = g('displacement_z') or 0.0
+                orto_x_scale = g('scale_x') or 1.0
+                orto_y_scale = g('scale_y') or 1.0
+                orto_origin = '0, 0, 0'
+                orto_target = '0, 0, 1'
+                orto_up = '0, -1, 0'
+                x_rotation = g('rot_degrees_x') or 0.0
+                y_rotation = g('rot_degrees_y') or 0.0
+                z_rotation = g('rot_degrees_z') or 0.0
+                # orto_sensor_transf = fdent(f'''\
+                #     <transform name="to_world">
+                #         <rotate x="1" angle="{x_rotation}"/>
+                #         <rotate y="1" angle="{y_rotation}"/>
+                #         <rotate z="1" angle="{180 + z_rotation}"/>
+                #         <translate x="{g('displacement_x') or 0.0}" y="{g('displacement_y') or 0.0}" z="{g('displacement_z') or 0.0}"/>
+                #     </transform>''')
             else:
                 shapes_ground_truth.append(shapify(shape_contents_steady))
         else:
@@ -417,8 +421,10 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         <!-- Ortografic relay wall sensor for depth and normals -->
         <sensor type="orthographic">
             <transform name="to_world">
-            <!-- Resize and move the sensor to the relay wall -->
-                <scale x="{relay_wall_x_scale}" y="{relay_wall_y_scale}"/>
+                <scale x="{orto_x_scale}" y="{orto_y_scale}"/>
+                <lookat origin="{orto_origin}"
+                        target="{orto_target}"
+                        up="{orto_up}" />
             </transform>
             <sampler type="independent">
                 <integer name="sample_count" value="4"/>
@@ -454,15 +460,18 @@ def get_scene_xml(config, random_seed=0, quiet=False):
         <!-- Auto-generated using TAL v{tal_version} -->
         <scene version="{mitsuba_version}">
             {integrator_ground_truth}
+
+            {dummy_lights_and_geometry_steady}
                               
             {shapes_ground_truth}
 
             {sensor_ground_truth}
-        <\scene>''',
+        </scene>''',
                         tal_version=tal.__version__,
                         mitsuba_version=get_version(),
+                        dummy_lights_and_geometry_steady=dummy_lights_and_geometry_steady,
                         integrator_ground_truth=integrator_ground_truth,
-                        shapes_ground_truth=shapes_nlos,
+                        shapes_ground_truth=shapes_ground_truth,
                         sensor_ground_truth = sensor_ground_truth)
 
     file_nlos = fdent('''\
@@ -494,8 +503,8 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         import sys
         import os
 
-        sys.stdout = queue
-        sys.stderr = queue
+        # sys.stdout = queue
+        # sys.stderr = queue
         if os.name == 'posix':
             # Nice only available in posix systems
             os.nice(args.nice)
@@ -568,6 +577,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             result = np.array(image)
 
         np.save(hdr_path, result)
+
         del result, scene, integrator
     except Exception as e:
         queue.write(e)

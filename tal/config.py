@@ -8,7 +8,7 @@ from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
 
 # FIXME decide if we keep this here or not
-import resource
+# import resource
 import psutil
 import gc
 
