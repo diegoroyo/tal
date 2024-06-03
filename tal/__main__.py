@@ -37,14 +37,40 @@ def get_plot_functions():
     return function_names, function_param_names, function_param_data
 
 
+def get_tal_version_string():
+    from tal.render.util import import_mitsuba_backend
+
+    def f(path):
+        return os.path.split(os.path.abspath(path))[0]
+
+    try:
+        render_backend = import_mitsuba_backend()
+        render_backend_version = f'{render_backend.get_name()}\n{render_backend.get_version()}'
+    except AssertionError:
+        render_backend_version = 'No render backend found'
+
+    return f'tal v{tal_version} ({f(__file__)})\n\n* Render backend: {render_backend_version}'
+
+
+class LazyVersionAction(argparse.Action):
+    def __init__(self, option_strings, version=None, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
+        super().__init__(option_strings=option_strings,
+                         dest=dest, default=default, nargs=0, help=help)
+        self.version = version
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        version_str = self.version() if callable(self.version) else self.version
+        parser.exit(message=f'{version_str}\n')
+
+
 def main():
     from tal.log import _set_default_log_level
     _set_default_log_level()
 
     parser = argparse.ArgumentParser(
         description=f'Y-TAL - (Your) Transient Auxiliary Library - v{tal_version}', formatter_class=SmartFormatter)
-    parser.add_argument('-v', '--version', action='version',
-                        version=f'%(prog)s v{tal_version}')
+    parser.add_argument('-v', '--version', action=LazyVersionAction,
+                        version=get_tal_version_string)
     subparsers = parser.add_subparsers(
         help='Command', required=True, dest='command')
 

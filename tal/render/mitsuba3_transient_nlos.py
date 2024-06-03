@@ -44,11 +44,20 @@ def get_name():
 
 
 def get_version():
-    return '3.3.0'
+    import mitsuba as mi
+    mi.set_variant('scalar_rgb')
+    import mitransient as mitr
+    import os
+
+    def f(path):
+        return os.path.split(os.path.abspath(path))[0]
+
+    return f'mitransient v{mitr.__version__} ({f(mitr.__file__)})\n' \
+        f'mitsuba v{mi.__version__} ({f(mi.__file__)})'
 
 
 def get_default_variant():
-    return 'llvm_mono'
+    return 'llvm_ad_rgb'
 
 
 def set_variant(s):
