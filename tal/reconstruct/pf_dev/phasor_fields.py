@@ -313,11 +313,11 @@ def backproject_pf_multi_frequency(
                     H_0_w = np.fft.ifft2(H_0_w_fft, axes=(2, 3))
                     H_0_w = H_0_w[:, :, :nvx, :nvy]
                     H_0_w = H_0_w.reshape((nl, nvi))
-                    del rsd_3
                 else:
                     H_0_w = H_0_w.reshape((nl, 1, ns))
                     H_0_w = H_0_w * rsd_3.reshape((1, nvi, ns))
                     H_0_w = H_0_w.sum(axis=2)
+                del rsd_3
 
                 if camera_system.bp_accounts_for_d_2():
                     rsd_2 = np.exp(np.complex64(2j * np.pi) * d_2 * frequency)
