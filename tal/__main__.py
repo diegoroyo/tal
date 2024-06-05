@@ -45,7 +45,7 @@ def get_tal_version_string():
 
     try:
         render_backend = import_mitsuba_backend()
-        render_backend_version = f'{render_backend.get_name()}\n{render_backend.get_version()}'
+        render_backend_version = f'{render_backend.get_name()}\n{render_backend.get_long_version()}'
     except AssertionError:
         render_backend_version = 'No render backend found'
 

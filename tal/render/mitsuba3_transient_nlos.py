@@ -43,7 +43,12 @@ def get_name():
     return 'mitsuba3-transient-nlos'
 
 
-def get_version():
+def get_scene_version():
+    import mitsuba as mi
+    return mi.__version__
+
+
+def get_long_version():
     import mitsuba as mi
     mi.set_variant('scalar_rgb')
     import mitransient as mitr
@@ -405,7 +410,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             {sensors_steady}
         </scene>''',
                         tal_version=tal.__version__,
-                        mitsuba_version=get_version(),
+                        mitsuba_version=get_scene_version(),
                         integrator_steady=integrator_steady,
                         dummy_lights_and_geometry_steady=dummy_lights_and_geometry_steady,
                         shapes_steady=shapes_steady,
@@ -421,7 +426,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             {shapes_nlos}
         </scene>''',
                       tal_version=tal.__version__,
-                      mitsuba_version=get_version(),
+                      mitsuba_version=get_scene_version(),
                       integrator_nlos=integrator_nlos,
                       laser_nlos=laser_nlos,
                       shapes_nlos=shapes_nlos)
