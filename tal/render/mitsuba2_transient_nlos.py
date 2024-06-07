@@ -43,7 +43,11 @@ def get_name():
     return 'mitsuba2-transient-nlos'
 
 
-def get_version():
+def get_scene_version():
+    return '2.2.1'
+
+
+def get_long_version():
     return '2.2.1'
 
 
@@ -420,7 +424,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             {sensors_steady}
         </scene>''',
                         tal_version=tal.__version__,
-                        mitsuba_version=get_version(),
+                        mitsuba_version=get_scene_version(),
                         integrator_steady=integrator_steady,
                         dummy_lights_and_geometry_steady=dummy_lights_and_geometry_steady,
                         shapes_steady=shapes_steady,
@@ -434,7 +438,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             {shapes_nlos}
         </scene>''',
                       tal_version=tal.__version__,
-                      mitsuba_version=get_version(),
+                      mitsuba_version=get_scene_version(),
                       integrator_nlos=integrator_nlos,
                       shapes_nlos=shapes_nlos)
 

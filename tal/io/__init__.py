@@ -26,7 +26,7 @@ def read_capture(filename: str, file_format: FileFormat = FileFormat.AUTODETECT)
     return NLOSCaptureData(filename, file_format)
 
 
-def write_capture(capture_data: NLOSCaptureData, filename: str, file_format: FileFormat = FileFormat.HDF5_TAL):
+def write_capture(filename: str, capture_data: NLOSCaptureData, file_format: FileFormat = FileFormat.HDF5_TAL):
     """
     Write a NLOS capture data to a file located at path described by filename.
 
