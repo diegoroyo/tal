@@ -271,7 +271,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
             # raise(NotImplementedError('The ground truth from the hidden scene is not implemented yet'))
             if not args.quiet:
                 log(LogLevel.INFO,
-                    f'Retrieving ground_truth for {experiment_name}...')
+                    f'Generating ground_truth for {experiment_name}...')
             hdr_ext = mitsuba_backend.get_hdr_extension()
             hdr_path = os.path.join(ground_truth_dir,
                                     f'{experiment_name}_depth_normals.{hdr_ext}')

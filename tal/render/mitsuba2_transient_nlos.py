@@ -362,7 +362,9 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                     {content}
                 </shape>''', shape_name=shape_name, content=content,
                              shape_type=g('mesh')['type'])
-
+            shapified_content_steady = shapify(shape_contents_steady)
+            shapes_steady.append(shapified_content_steady)
+            shapes_nlos.append(shapify(shape_contents_nlos))
             if is_relay_wall:
                 # Transform on the ortographic camera depends on relay wall
                 orto_x_scale = g('scale_x') or 1.0
@@ -382,10 +384,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                     </transform>''')
                 is_relay_wall = False
             else:
-                shapes_ground_truth.append(shapify(shape_contents_steady))
-
-            shapes_steady.append(shapify(shape_contents_steady))
-            shapes_nlos.append(shapify(shape_contents_nlos))
+                shapes_ground_truth.append(shapified_content_steady)
         else:
             raise AssertionError(
                 f'Shape not yet supported: {g("mesh")["type"]}')
@@ -452,7 +451,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             {sensor_ground_truth}
         </scene>''',
                         tal_version=tal.__version__,
-                        mitsuba_version=get_version(),
+                        mitsuba_version=get_scene_version(),
                         integrator_ground_truth=integrator_ground_truth,
                         shapes_ground_truth=shapes_ground_truth,
                         sensor_ground_truth = sensor_ground_truth)

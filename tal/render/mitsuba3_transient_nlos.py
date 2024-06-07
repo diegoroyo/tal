@@ -397,6 +397,10 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                              is_relay_wall=' id="relay_wall"' if is_relay_wall else '',
                              content=content)
 
+            shapified_content_steady = shapify(shape_contents_steady) 
+            shapes_steady.append(shapified_content_steady)
+            shapes_nlos.append(shapify(shape_contents_nlos))
+
             if is_relay_wall:
                 # Transform on the ortographic camera depends on relay wall
                 orto_x_scale = g('scale_x') or 1.0
@@ -416,10 +420,8 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                     </transform>''')
                 is_relay_wall = False
             else:
-                shapes_ground_truth.append(shapify(shape_contents_steady))
+                shapes_ground_truth.append(shapified_content_steady)
 
-            shapes_steady.append(shapify(shape_contents_steady))
-            shapes_nlos.append(shapify(shape_contents_nlos))
         else:
             raise AssertionError(
                 f'Shape not yet supported: {g("mesh")["type"]}')
@@ -474,7 +476,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             {sensor_ground_truth}
         </scene>''',
                         tal_version=tal.__version__,
-                        mitsuba_version=get_version(),
+                        mitsuba_version=get_scene_version(),
                         integrator_ground_truth=integrator_ground_truth,
                         shapes_ground_truth=shapes_ground_truth,
                         sensor_ground_truth = sensor_ground_truth)
@@ -542,7 +544,6 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
                 same_id = list(filter(lambda e: e.id() == eid, array))
                 assert len(same_id) == 1, f'Expected 1 element with id {eid}'
                 return same_id[0]
-
             mitr.nlos.focus_emitter_at_relay_wall_pixel(
                 mi.Point2f(laser_lookat_x, laser_lookat_y),
                 find_id(scene.shapes(), 'relay_wall'),
