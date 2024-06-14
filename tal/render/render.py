@@ -484,7 +484,7 @@ def render_nlos_scene(config_path, args, num_retries=0):
                 'Invalid scan_type, must be one of {single|exhaustive|confocal}')
 
         hdf5_path = os.path.join(root_dir, f'{experiment_name}.hdf5')
-        tal.io.write_capture(capture_data, hdf5_path,
+        tal.io.write_capture(hdf5_path, capture_data,
                              file_format=FileFormat.HDF5_TAL)
 
         if not args.quiet:

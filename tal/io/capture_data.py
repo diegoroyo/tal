@@ -216,8 +216,13 @@ class NLOSCaptureData:
             return
 
         # Read raw data and check its current format
-        assert os.path.isfile(filename), f'Does not exist: {filename}'
-        raw_data = read_hdf5(filename)
+        aux_filename = filename
+        while os.path.islink(aux_filename):
+            # Access the original data in case it is a link
+            log(LogLevel.INFO, f'{filename} is a link. Following link...')
+            aux_filename = os.readlink(aux_filename)
+        assert os.path.isfile(aux_filename), f'Does not exist: {aux_filename}'
+        raw_data = read_hdf5(aux_filename)
         if file_format == FileFormat.AUTODETECT:
             file_format = detect_dict_format(raw_data)
 
