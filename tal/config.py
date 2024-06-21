@@ -7,11 +7,6 @@ from tqdm import tqdm
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor
 
-# FIXME decide if we keep this here or not
-# import resource
-import psutil
-import gc
-
 from tal.util import local_file_path
 from tal.log import log, LogLevel, TQDMLogRedirect
 
@@ -150,7 +145,14 @@ class ResourcesConfig:
 
     def split_work(self, f_work, data_in, data_out, slice_dims):
 
-        # FIXME decide what to do with memory management
+        # TODO(diego): here's some legacy code to set the maximum
+        # memory limit of the program. Now e.g. fbp does not use as
+        # much memory as before, so this is not really necessary.
+        # It would be good to have, but it needs to be tested.
+        #
+        # import resource
+        # import psutil
+        # import gc
         # and also with other parameters' names
         # gc.collect()
         # _, hard = resource.getrlimit(resource.RLIMIT_AS)
@@ -235,13 +237,12 @@ class ResourcesConfig:
                     data_out[out_slice] += f.result()
                     if self.callback is not None:
                         self.callback(data_out, i, len(futures))
-            # FIXME decide if this should be here
+            # NOTE(diego): See TODO about memory limit above
             # except MemoryError:
             #     pool.terminate()
             #     pool.join()
-            #     raise MemoryError(f'tal.resources: Memory error, {free_memory_gb:.2f} GiB is not enough.'
-            #                       '
-            #  Either decrease CPU processes, increase downscale, or move to another system.')
+            #     raise MemoryError(f'tal.resources: Memory error, {free_memory_gb:.2f} GiB is not enough. '
+            #                        'Either decrease CPU processes, increase downscale, or move to another system.')
             except KeyboardInterrupt:
                 for future in futures:
                     future.cancel()

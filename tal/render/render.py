@@ -4,7 +4,7 @@ import shutil
 import yaml
 import tal
 from tal.io.capture_data import NLOSCaptureData
-from tal.enums import FileFormat, GridFormat, HFormat
+from tal.enums import FileFormat, GridFormat, HFormat, GroundTruthFormat
 from tal.config import local_file_path
 from tal.log import log, LogLevel, TQDMLogRedirect
 import datetime
@@ -81,14 +81,12 @@ def render_nlos_scene(config_path, args, num_retries=0):
         root_dir = os.path.join(config_dir, progress_folder)
         partial_results_dir = os.path.join(root_dir, 'partial')
         steady_dir = os.path.join(root_dir, 'steady')
-        ground_truth_dir = os.path.join(root_dir, 'ground_truth')
         log_dir = os.path.join(root_dir, 'logs')
 
         if not in_progress:
             os.mkdir(root_dir)
             os.mkdir(partial_results_dir)
             os.mkdir(steady_dir)
-            os.mkdir(ground_truth_dir)
             os.mkdir(log_dir)
             shutil.copy(
                 config_path,
@@ -103,7 +101,8 @@ def render_nlos_scene(config_path, args, num_retries=0):
         with open(steady_scene_xml, 'w') as f:
             f.write(steady_xml)
 
-        ground_truth_scene_xml = os.path.join(root_dir, 'ground_truth_scene.xml')
+        ground_truth_scene_xml = os.path.join(
+            root_dir, 'ground_truth_scene.xml')
         with open(ground_truth_scene_xml, 'w') as f:
             f.write(ground_truth_xml)
 
@@ -130,19 +129,6 @@ def render_nlos_scene(config_path, args, num_retries=0):
             'rot_degrees_y' not in relay_wall and \
             'rot_degrees_z' not in relay_wall, \
             'Relay wall displacement/rotation is NYI'
-        
-        # Fill the missing parameters
-        if 'displacement_x' not in relay_wall:
-            relay_wall['displacement_x'] = 0.0
-        if 'displacement_y' not in relay_wall:
-            relay_wall['displacement_y'] = 0.0
-        if 'displacement_z' not in relay_wall:
-            relay_wall['displacement_z'] = 0.0
-        if 'scale_x' not in relay_wall:
-            relay_wall['scale_x'] = relay_wall['scale'] if 'scale' in relay_wall else 1.0
-        if 'scale_y' not in relay_wall:
-            relay_wall['scale_y'] = relay_wall['scale'] if 'scale' in relay_wall else 1.0
-
 
         def get_grid_xyz(nx, ny, rw_scale_x, rw_scale_y):
             px = rw_scale_x
@@ -216,6 +202,8 @@ def render_nlos_scene(config_path, args, num_retries=0):
             def write(self, msg):
                 self.put(msg)
 
+        # TODO(diego): move this to a separate function
+
         if args.do_steady_renders:
             def render_steady(render_name, sensor_index):
                 if not args.quiet:
@@ -224,7 +212,6 @@ def render_nlos_scene(config_path, args, num_retries=0):
                 hdr_ext = mitsuba_backend.get_hdr_extension()
                 hdr_path = os.path.join(partial_results_dir,
                                         f'{experiment_name}_{render_name}.{hdr_ext}')
-                print(hdr_path)
                 ldr_path = os.path.join(steady_dir,
                                         f'{experiment_name}_{render_name}.png')
                 if os.path.exists(ldr_path) and not args.quiet:
@@ -266,34 +253,29 @@ def render_nlos_scene(config_path, args, num_retries=0):
             render_steady('back_view', 0)
             render_steady('side_view', 1)
 
-
-        if args.get_hidden_ground_truth:
-            # raise(NotImplementedError('The ground truth from the hidden scene is not implemented yet'))
+        if args.do_ground_truth_renders:
             if not args.quiet:
                 log(LogLevel.INFO,
-                    f'Generating ground_truth for {experiment_name}...')
-            hdr_ext = mitsuba_backend.get_hdr_extension()
-            hdr_path = os.path.join(ground_truth_dir,
-                                    f'{experiment_name}_depth_normals.{hdr_ext}')
-            if os.path.exists(hdr_path) and not args.quiet:
+                    f'ground_truth for {experiment_name}...')
+            gt_ext = mitsuba_backend.get_hdr_extension()
+            gt_path = os.path.join(partial_results_dir,
+                                   f'{experiment_name}_ground_truth.{gt_ext}')
+            if os.path.exists(gt_path) and not args.quiet:
                 pass  # skip
             else:
                 logfile = None
                 if args.do_logging and not args.dry_run:
                     logfile = open(os.path.join(
-                        log_dir, f'{experiment_name}_depth_normals.log'), 'w')
+                        log_dir, f'{experiment_name}_ground_truth.log'), 'w')
                 # NOTE: something here has a memory leak (probably Mitsuba-related)
                 # We run Mitsuba in a separate process to ensure that the leaks do not add up
                 # as they can fill your RAM in exhaustive scans
                 queue = StdoutQueue()
-                run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, ground_truth_scene_xml, hdr_path, dict(),
-                                        '_depth_normals', logfile, args, 0, queue)
+                run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, ground_truth_scene_xml, gt_path, dict(),
+                                        'ground_truth', logfile, args, 0, queue)
                 if os.name == 'nt':
                     # NOTE: Windows does not support multiprocessing
-                    try:
-                        run_mitsuba_f()
-                    except:
-                        pass
+                    run_mitsuba_f()
                 else:
                     process = multiprocessing.Process(target=run_mitsuba_f)
                     try:
@@ -305,14 +287,12 @@ def render_nlos_scene(config_path, args, num_retries=0):
                 if args.do_logging and not args.dry_run:
                     while not queue.empty():
                         e = queue.get()
-                        print(e)
                         if isinstance(e, Exception):
                             raise e
                         else:
                             logfile.write(e)
                     queue.close()
                     logfile.close()
-
 
         pbar = tqdm(
             enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
@@ -407,24 +387,22 @@ def render_nlos_scene(config_path, args, num_retries=0):
         capture_data.t_start = scene_config['start_opl']
         capture_data.t_accounts_first_and_last_bounces = \
             scene_config['account_first_and_last_bounces']
-        # TODO (Pablo): Save here the depth information
-        if args.get_hidden_ground_truth:
-            hdr_gt_depth_path = os.path.join(ground_truth_dir,
-                                    f'{experiment_name}_depth_normals.{hdr_ext}')
-            depth_normals = mitsuba_backend.read_mitsuba_bitmap(hdr_gt_depth_path)
-            capture_data.hidden_depth_grid_xyz = depth_normals[:,:,:3]
-            capture_data.hidden_depth_grid_normals = depth_normals[:,:,3:6]
-            capture_data.hidden_grid_format = GridFormat.X_Y_3
-        else:
-            capture_data.hidden_depth_grid_xyz = None
-            capture_data.hidden_depth_grid_normals = None
-            capture_data.hidden_grid_format = None
-        # capture_data.hidden_grid_format = GridFormat.XYZ
         capture_data.scene_info = {
             'tal_version': tal.__version__,
             'config': scene_config,
             'args': vars(args),
         }
+
+        if args.do_ground_truth_renders:
+            gt_image = mitsuba_backend.read_mitsuba_bitmap(gt_path)
+            depth = gt_image[:, :, 0:3]
+            normals = gt_image[:, :, 3:6]
+            capture_data.scene_info['ground_truth'] = {
+                'format': GroundTruthFormat.X_Y,
+                'depth': depth,
+                'normals': normals,
+            }
+
         if scan_type == 'single':
             hdr_path, _ = mitsuba_backend.partial_laser_path(
                 partial_results_dir,

@@ -292,34 +292,50 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     else:
         raise AssertionError(
             'scan_type should be one of {single|confocal|exhaustive}')
-    sensor_nlos = fdent(f'''\
+    sensor_nlos = fdent('''\
         <sensor type="nlos_capture_meter">
             <sampler type="independent">
-                <integer name="sample_count" value="{v('sample_count')}"/>
+                <integer name="sample_count" value="{sample_count}"/>
                 <integer name="seed" value="{random_seed}"/>
             </sampler>
 
             {confocal_config}
-            <boolean name="account_first_and_last_bounces" value="{v('account_first_and_last_bounces')}"/>
-            <point name="sensor_origin" x="{v('sensor_x')}" y="{v('sensor_y')}" z="{v('sensor_z')}"/>
+            <boolean name="account_first_and_last_bounces" value="{account_first_and_last_bounces}"/>
+            <point name="sensor_origin" x="{sensor_x}"
+                                        y="{sensor_y}"
+                                        z="{sensor_z}"/>
             <film type="transient_hdr_film">
                 <integer name="width" value="{film_width}"/>
                 <integer name="height" value="{film_height}"/>
 
-                <integer name="temporal_bins" value="{v('num_bins')}"/>
-                <!-- <boolean name="auto_detect_bins" value="{v('auto_detect_bins')}"/> -->
-                <float name="bin_width_opl" value="{v('bin_width_opl')}"/>
-                <float name="start_opl" value="{v('start_opl')}"/>
+                <integer name="temporal_bins" value="{num_bins}"/>
+                <!-- <boolean name="auto_detect_bins" value="{auto_detect_bins}"/> -->
+                <float name="bin_width_opl" value="{bin_width_opl}"/>
+                <float name="start_opl" value="{start_opl}"/>
                 <rfilter type="box">
                     <!-- <float name="radius" value="0.5"/> -->
                 </rfilter>
             </film>
-        </sensor>''')
+        </sensor>''',
+                        sample_count=v('sample_count'),
+                        random_seed=random_seed,
+                        confocal_config=confocal_config,
+                        account_first_and_last_bounces=v(
+                            'account_first_and_last_bounces'),
+                        sensor_x=v('sensor_x'),
+                        sensor_y=v('sensor_y'),
+                        sensor_z=v('sensor_z'),
+                        film_width=film_width,
+                        film_height=film_height,
+                        num_bins=v('num_bins'),
+                        auto_detect_bins=v('auto_detect_bins'),
+                        bin_width_opl=v('bin_width_opl'),
+                        start_opl=v('start_opl'))
 
     materials = get_materials()
     shapes_steady = []
-    shapes_nlos = []
     shapes_ground_truth = []
+    shapes_nlos = []
     for gdict in v('geometry'):
         def g(key):
             return s(gdict.get(key, None))
@@ -360,8 +376,22 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             </transform>''')
 
         shape_contents_steady = f'{shape_material}\n{shape_transform}'
+        shape_contents_ground_truth = shape_contents_steady
         newline = '\n'
         shape_contents_nlos = f'{shape_material}\n{shape_transform}{f"{newline}{sensor_nlos}" if is_relay_wall else ""}'
+
+        if is_relay_wall:
+            # Transform on the ortographic camera depends on relay wall
+            sensor_ground_truth_transform = fdent(f'''\
+                <transform name="to_world">
+                    <scale x="{g('scale_x') or 1.0}" y="{g('scale_y') or 1.0}"/>
+                    <rotate x="1" angle="{g('rot_degrees_x') or 0.0}"/>
+                    <rotate y="1" angle="{g('rot_degrees_y') or 0.0}"/>
+                    <rotate z="1" angle="{g('rot_degrees_z') or 0.0}"/>
+                    <translate x="{g('displacement_x') or 0.0}"
+                               y="{g('displacement_y') or 0.0}"
+                               z="{g('displacement_z') or 0.0}"/>
+                </transform>''')
 
         if g('mesh')['type'] == 'obj':
             assert 'filename' in g('mesh'), \
@@ -380,10 +410,12 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                     {content}
                 </shape>''', shape_name=shape_name, filename=filename, content=content)
 
-            shapified_content_steady = shapify(shape_contents_steady, filename)
-            shapes_steady.append(shapified_content_steady)
-            shapes_ground_truth.append(shapified_content_steady)
-            shapes_nlos.append(shapify(shape_contents_nlos, filename))
+            shapes_steady.append(
+                shapify(shape_contents_steady, filename))
+            shapes_ground_truth.append(
+                shapify(shape_contents_ground_truth, filename))
+            shapes_nlos.append(
+                shapify(shape_contents_nlos, filename))
         elif g('mesh')['type'] == 'rectangle' or g('mesh')['type'] == 'sphere':
             def shapify(content):
                 return fdent('''\
@@ -397,31 +429,12 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                              is_relay_wall=' id="relay_wall"' if is_relay_wall else '',
                              content=content)
 
-            shapified_content_steady = shapify(shape_contents_steady) 
-            shapes_steady.append(shapified_content_steady)
-            shapes_nlos.append(shapify(shape_contents_nlos))
-
-            if is_relay_wall:
-                # Transform on the ortographic camera depends on relay wall
-                orto_x_scale = g('scale_x') or 1.0
-                orto_y_scale = g('scale_y') or 1.0
-                x_rotation = g('rot_degrees_x') or 0.0
-                y_rotation = g('rot_degrees_y') or 0.0
-                z_rotation = g('rot_degrees_z') or 0.0
-                orto_sensor_transf = fdent(f'''\
-                    <transform name="to_world">
-                        <scale x="{orto_x_scale}" y="{orto_y_scale}"/>
-                        <rotate x="1" angle="{x_rotation}"/>
-                        <rotate y="1" angle="{y_rotation}"/>
-                        <rotate z="1" angle="{z_rotation}"/>
-                        <translate x="{g('displacement_x') or 0.0}" 
-                                   y="{g('displacement_y') or 0.0}"
-                                   z="{g('displacement_z') or 0.0}"/>
-                    </transform>''')
-                is_relay_wall = False
-            else:
-                shapes_ground_truth.append(shapified_content_steady)
-
+            shapes_steady.append(
+                shapify(shape_contents_steady))
+            shapes_ground_truth.append(
+                shapify(shape_contents_ground_truth))
+            shapes_nlos.append(
+                shapify(shape_contents_nlos))
         else:
             raise AssertionError(
                 f'Shape not yet supported: {g("mesh")["type"]}')
@@ -430,23 +443,26 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     shapes_ground_truth = '\n\n'.join(shapes_ground_truth)
     shapes_nlos = '\n\n'.join(shapes_nlos)
 
-
-    # Ground truth sensor declared here, after relay wall reading
-    sensor_ground_truth = fdent(f'''\
-        <!-- Ortografic relay wall sensor for depth and normals -->
+    sensor_ground_truth = fdent('''\
+        <!-- Ortographic camera (whose aperture corresponds to the relay wall) for depth and normals -->
         <sensor type="orthographic">
-            {orto_sensor_transf}
+            {sensor_ground_truth_transform}
             <sampler type="independent">
-                <integer name="sample_count" value="4"/>
+                <integer name="sample_count" value="128"/>
                 <integer name="seed" value="{random_seed}"/>
             </sampler>
             <film type="hdrfilm">
                 <integer name="width" value="1028"/>
                 <integer name="height" value="1028"/>
                 <string name="pixel_format" value="{pixel_format}"/>
-                <rfilter name="rfilter" type="gaussian"/>
+                <rfilter type="box">
+                    <!-- <float name="radius" value="0.5"/> -->
+                </rfilter>
             </film>
-        </sensor>''')
+        </sensor>''',
+                                sensor_ground_truth_transform=sensor_ground_truth_transform,
+                                random_seed=random_seed,
+                                pixel_format=pixel_format)
 
     file_steady = fdent('''\
         <!-- Auto-generated using TAL v{tal_version} -->
@@ -475,11 +491,11 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
             {sensor_ground_truth}
         </scene>''',
-                        tal_version=tal.__version__,
-                        mitsuba_version=get_scene_version(),
-                        integrator_ground_truth=integrator_ground_truth,
-                        shapes_ground_truth=shapes_ground_truth,
-                        sensor_ground_truth = sensor_ground_truth)
+                              tal_version=tal.__version__,
+                              mitsuba_version=get_scene_version(),
+                              integrator_ground_truth=integrator_ground_truth,
+                              shapes_ground_truth=shapes_ground_truth,
+                              sensor_ground_truth=sensor_ground_truth)
 
     file_nlos = fdent('''\
         <!-- Auto-generated using TAL v{tal_version} -->
@@ -510,8 +526,8 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         import sys
         import os
 
-        # sys.stdout = queue
-        # sys.stderr = queue
+        sys.stdout = queue
+        sys.stderr = queue
         if os.name == 'posix':
             # Nice only available in posix systems
             os.nice(args.nice)

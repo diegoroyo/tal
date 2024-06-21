@@ -27,7 +27,7 @@ def fdent(text, **kwargs):
         except ValueError:
             # no newline found
             pass
-        lines = kwargs[key].split('\n')
+        lines = str(kwargs[key]).split('\n')
         if len(lines) > 1:
             kwargs[key] = '\n'.join(
                 [lines[0], indent('\n'.join(lines[1:]), indentation)])

@@ -287,8 +287,8 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
     materials = get_materials()
     shapes_steady = []
-    shapes_nlos = []
     shapes_ground_truth = []
+    shapes_nlos = []
     for gdict in v('geometry'):
         def g(key):
             return s(gdict.get(key, None))
@@ -329,8 +329,22 @@ def get_scene_xml(config, random_seed=0, quiet=False):
             </transform>''')
 
         shape_contents_steady = f'{shape_material}\n{shape_transform}'
+        shape_contents_ground_truth = shape_contents_steady
         newline = '\n'
         shape_contents_nlos = f'{shape_material}\n{shape_transform}{f"{newline}{sensor_nlos}" if is_relay_wall else ""}'
+
+        if is_relay_wall:
+            # Transform on the ortographic camera depends on relay wall
+            sensor_ground_truth_transform = fdent(f'''\
+                <transform name="to_world">
+                    <scale x="{g('scale_x') or 1.0}" y="{g('scale_y') or 1.0}"/>
+                    <rotate x="1" angle="{g('rot_degrees_x') or 0.0}"/>
+                    <rotate y="1" angle="{g('rot_degrees_y') or 0.0}"/>
+                    <rotate z="1" angle="{g('rot_degrees_z') or 0.0}"/>
+                    <translate x="{g('displacement_x') or 0.0}"
+                               y="{g('displacement_y') or 0.0}"
+                               z="{g('displacement_z') or 0.0}"/>
+                </transform>''')
 
         if g('mesh')['type'] == 'obj':
             assert 'filename' in g('mesh'), \
@@ -349,11 +363,12 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                     {content}
                 </shape>''', shape_name=shape_name, filename=filename, content=content)
 
-
-            shapified_content_steady = shapify(shape_contents_steady, filename)
-            shapes_steady.append(shapified_content_steady)
-            shapes_ground_truth.append(shapified_content_steady)
-            shapes_nlos.append(shapify(shape_contents_nlos, filename))
+            shapes_steady.append(
+                shapify(shape_contents_steady, filename))
+            shapes_ground_truth.append(
+                shapify(shape_contents_ground_truth, filename))
+            shapes_nlos.append(
+                shapify(shape_contents_nlos, filename))
         elif g('mesh')['type'] == 'rectangle' or g('mesh')['type'] == 'sphere':
             def shapify(content):
                 return fdent('''\
@@ -362,29 +377,13 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                     {content}
                 </shape>''', shape_name=shape_name, content=content,
                              shape_type=g('mesh')['type'])
-            shapified_content_steady = shapify(shape_contents_steady)
-            shapes_steady.append(shapified_content_steady)
-            shapes_nlos.append(shapify(shape_contents_nlos))
-            if is_relay_wall:
-                # Transform on the ortographic camera depends on relay wall
-                orto_x_scale = g('scale_x') or 1.0
-                orto_y_scale = g('scale_y') or 1.0
-                x_rotation = g('rot_degrees_x') or 0.0
-                y_rotation = g('rot_degrees_y') or 0.0
-                z_rotation = g('rot_degrees_z') or 0.0
-                orto_sensor_transf = fdent(f'''\
-                    <transform name="to_world">
-                        <scale x="{orto_x_scale}" y="{orto_y_scale}"/>
-                        <rotate x="1" angle="{x_rotation}"/>
-                        <rotate y="1" angle="{y_rotation}"/>
-                        <rotate z="1" angle="{z_rotation}"/>
-                        <translate x="{g('displacement_x') or 0.0}" 
-                                   y="{g('displacement_y') or 0.0}"
-                                   z="{g('displacement_z') or 0.0}"/>
-                    </transform>''')
-                is_relay_wall = False
-            else:
-                shapes_ground_truth.append(shapified_content_steady)
+
+            shapes_steady.append(
+                shapify(shape_contents_steady, filename))
+            shapes_ground_truth.append(
+                shapify(shape_contents_ground_truth, filename))
+            shapes_nlos.append(
+                shapify(shape_contents_nlos, filename))
         else:
             raise AssertionError(
                 f'Shape not yet supported: {g("mesh")["type"]}')
@@ -394,22 +393,24 @@ def get_scene_xml(config, random_seed=0, quiet=False):
     shapes_nlos = '\n\n'.join(shapes_nlos)
 
     # Ground truth sensor declared here, after relay wall reading
-    # Maybe this is necesary in film later
-    #       <string name="pixel_format" value="{pixel_format}"/>
-    sensor_ground_truth = fdent(f'''\
-        <!-- Ortografic relay wall sensor for depth and normals -->
+    sensor_ground_truth = fdent('''\
+        <!-- Ortographic camera (whose aperture corresponds to the relay wall) for depth and normals -->
         <sensor type="orthographic">
-            {orto_sensor_transf}
+            {sensor_ground_truth_transform}
             <sampler type="independent">
-                <integer name="sample_count" value="4"/>
+                <integer name="sample_count" value="128"/>
                 <integer name="seed" value="{random_seed}"/>
             </sampler>
             <film type="hdrfilm">
                 <integer name="width" value="1028"/>
                 <integer name="height" value="1028"/>
-                <rfilter name="rfilter" type="gaussian"/>
+                <rfilter type="box">
+                    <!-- <float name="radius" value="0.5"/> -->
+                </rfilter>
             </film>
-        </sensor>''')
+        </sensor>''',
+                                sensor_ground_truth_transform=sensor_ground_truth_transform,
+                                random_seed=random_seed)
 
     file_steady = fdent('''\
         <!-- Auto-generated using TAL v{tal_version} -->
@@ -429,6 +430,21 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                         shapes_steady=shapes_steady,
                         sensors_steady=sensors_steady)
 
+    file_ground_truth = fdent('''\
+        <!-- Auto-generated using TAL v{tal_version} -->
+        <scene version="{mitsuba_version}">
+            {integrator_ground_truth}
+
+            {shapes_ground_truth}
+
+            {sensor_ground_truth}
+        </scene>''',
+                              tal_version=tal.__version__,
+                              mitsuba_version=get_scene_version(),
+                              integrator_ground_truth=integrator_ground_truth,
+                              shapes_ground_truth=shapes_ground_truth,
+                              sensor_ground_truth=sensor_ground_truth)
+
     file_nlos = fdent('''\
         <!-- Auto-generated using TAL v{tal_version} -->
         <scene version="{mitsuba_version}">
@@ -440,22 +456,6 @@ def get_scene_xml(config, random_seed=0, quiet=False):
                       mitsuba_version=get_scene_version(),
                       integrator_nlos=integrator_nlos,
                       shapes_nlos=shapes_nlos)
-
-    file_ground_truth = fdent('''\
-        <!-- Auto-generated using TAL v{tal_version} -->
-        <scene version="{mitsuba_version}">
-            {integrator_ground_truth}
-
-            {shapes_ground_truth}
-
-            {sensor_ground_truth}
-        </scene>''',
-                        tal_version=tal.__version__,
-                        mitsuba_version=get_scene_version(),
-                        integrator_ground_truth=integrator_ground_truth,
-                        shapes_ground_truth=shapes_ground_truth,
-                        sensor_ground_truth = sensor_ground_truth)
-
 
     return file_steady, file_ground_truth, file_nlos
 

@@ -88,10 +88,10 @@ def main():
                                     3) 'new <folder_name>' to create a new folder (i.e. tal render new <folder_name>)'''))
     render_parser.add_argument('-t', '--threads',
                                type=int, default=os.cpu_count() - 1, required=False,
-                               help='Number of threads')
+                               help='Number of CPU threads')
     render_parser.add_argument('-s', '--seed',
                                type=int, default=0, required=False,
-                               help='Random seed for the sampler. Without setting this value to different values, the same results will be produced everytime.')
+                               help='Random seed for the sampler. Without setting this value to different values, the same results will be produced everytime')
     render_parser.add_argument('-n', '--nice',
                                type=int, default=0, required=False,
                                help='Change +/- in nice factor. Positive values = lower priority. Negative values = higher priority (needs sudo)')
@@ -100,22 +100,22 @@ def main():
                                help='Disable progress bars and other verbose outputs')
     render_parser.add_argument('-g', '--gpu',
                                dest='gpus', nargs='*', type=int, default=[], required=False,
-                               help='Select which GPUs should be used by Mitsuba')
+                               help='Select which GPUs should be used by Mitsuba via the CUDA_VISIBLE_DEVICES env. variable')
     render_parser.add_argument('-r', '--dry-run',
                                dest='dry_run', action='store_true',
-                               help='Do not execute mitsuba, just print out the commands that would be executed')
+                               help='Do not execute mitsuba, just print out the commands that would be executed (if any)')
     render_parser.add_argument('--no-steady',
                                dest='do_steady_renders', action='store_false',
-                               help='Disable generation of steady state images')
+                               help='Disable generation of steady state images during render')
     render_parser.add_argument('--no-ground-truth',
-                               dest='get_hidden_ground_truth', action='store_false',
-                               help='Disable generation ground truth depths and normals from the hidden scene')
+                               dest='do_ground_truth_renders', action='store_false',
+                               help='Disable generation of ground truth depths and normals from the hidden geometry')
     render_parser.add_argument('--no-logging',
                                dest='do_logging', action='store_false',
                                help='Disable logging of mitsuba output')
     render_parser.add_argument('--no-partial-results',
                                dest='keep_partial_results', action='store_false',
-                               help='Remove the "partial" folder which stores temporal data after creating the final hdf5 file (e.g. multiple experiments for confocal/exhaustive)')
+                               help='Delete the "partial" folder (which stores raw render results) after finishing the render and generating the final HDF5 file')
 
     # plot commands
     plot_parser = subparsers.add_parser(

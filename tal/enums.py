@@ -126,6 +126,23 @@ class VolumeFormat(Enum):
         return True
 
 
+class GroundTruthFormat(Enum):
+    """
+    Dimensions specification for ground truth data.
+
+    UNKNOWN
+        Avoid using this value.
+
+    X_Y
+        Ground truth (depth, normals) are 3D arrays
+        with dimensions (X, Y, num_channels).
+
+        If num_channels == 1 (e.g. depth), it's just (X, Y)
+    """
+    UNKNOWN = 0
+    X_Y = 1
+
+
 class CameraSystem(Enum):
     """
     Reconstruction algorithms work as a virtual camera system.
