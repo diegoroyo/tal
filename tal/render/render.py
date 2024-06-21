@@ -156,10 +156,26 @@ def render_nlos_scene(config_path, args, num_retries=0):
                         (laser_width != sensor_width or
                             laser_height != sensor_height)), \
                 'If using scan_type=confocal, sensor_{width|height} must match laser_{width|height}'
+
+            laser_aperture_start_x = scene_config['laser_aperture_start_x'] or 0
+            laser_aperture_start_y = scene_config['laser_aperture_start_y'] or 0
+            laser_aperture_end_x = scene_config['laser_aperture_end_x'] or 1
+            laser_aperture_end_y = scene_config['laser_aperture_end_y'] or 1
             for y in range(laser_height):
                 for x in range(laser_width):
-                    laser_lookat_x = (x + 0.5) * sensor_width / laser_width
-                    laser_lookat_y = (y + 0.5) * sensor_height / laser_height
+                    # start in (0, 1) space
+                    laser_lookat_x = (x + 0.5) / laser_width
+                    laser_lookat_y = (y + 0.5) / laser_height
+                    # take aperture into account
+                    laser_lookat_x = laser_aperture_start_x + \
+                        laser_lookat_x * \
+                        (laser_aperture_end_x - laser_aperture_start_x)
+                    laser_lookat_y = laser_aperture_start_y + \
+                        laser_lookat_y * \
+                        (laser_aperture_end_y - laser_aperture_start_y)
+                    # finally store in sensor space (0, sensor_width)
+                    laser_lookat_x *= sensor_width
+                    laser_lookat_y *= sensor_height
                     laser_lookats.append((laser_lookat_x, laser_lookat_y))
         else:
             raise AssertionError(

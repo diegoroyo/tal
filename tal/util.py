@@ -37,6 +37,8 @@ def fdent(text, **kwargs):
 
 def tonemap_ldr(image):
     import numpy as np
+    if np.isclose(0.0, image.max()):
+        return image.astype(np.uint8)
     if image.shape[-1] == 4:
         # assume it's rgba
         # assert alpha channel goes to 1

@@ -79,15 +79,21 @@ laser_z: 0.25
 # It is important to use a "rectangle" relay wall for correct UV coordinates. 
 sensor_width: 64
 sensor_height: 64
-# for scan_type=single
+# --- for scan_type=single
 # if set to null, laser points to the center pixel
-# if set to a number, laser points to that pixel
-# (e.g. center = laser_lookat_x,y 128,128 = UV coords 0.5,0.5)
+# if set to a number, laser points to that pixel (e.g. center = 128, 128)
 laser_lookat_x: null
 laser_lookat_y: null
-# for scan_type=confocal/exhaustive, equivalent of sensor_{width|height} for the laser
+# --- for scan_type=confocal/exhaustive
 laser_width: 32
 laser_height: 32
+# these next four variables specify the scanned area of the relay wall
+# they are in UV coordinates, where (0, 0) is the top-left corner and (1, 1) is the bottom-right corner
+# by default they cover the whole relay wall i.e. (0, 0) to (1, 1)
+laser_aperture_start_x: 0  # 0: left, 1: right of relay wall
+laser_aperture_start_y: 0  # 0: top, 1: bottom of relay wall
+laser_aperture_end_x: 1
+laser_aperture_end_y: 1
 
 ##
 # Geometry (valid for hidden geometry or relay wall)
