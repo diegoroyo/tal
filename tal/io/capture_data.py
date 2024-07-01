@@ -63,7 +63,7 @@ def read_hdf5(filename: str) -> dict:
     return raw_data
 
 
-def write_hdf5(capture_data: dict, filename: str):
+def write_hdf5(filename: str, capture_data: dict):
     file = h5py.File(filename, 'w')
     for key, value in capture_data.items():
         if value is None:
