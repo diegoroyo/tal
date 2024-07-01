@@ -150,7 +150,7 @@ def main():
             except ModuleNotFoundError:
                 log(LogLevel.PROMPT, 'mitsuba cannot be imported. '
                     'This can happen if you run a custom installation. '
-                    'Please point to the mitsuba3 (not mitsuba3-transient-nlos) folder:')
+                    'Please point to the mitsuba3 (not mitransient) folder:')
                 ask_for_config(
                     Config.MITSUBA3_TRANSIENT_NLOS_FOLDER, force_ask=True)
         else:

@@ -70,13 +70,13 @@ optional arguments:
   -v, --version         show program's version number and exit
 ```
 
-## `tal render`: Command line tool to render `mitsuba3-transient-nlos` scenes
+## `tal render`: Command line tool to render `mitransient` scenes
 
-You will need to have [mitsuba3-transient-nlos](https://github.com/diegoroyo/mitsuba3-transient-nlos) installed in your PC. You can install just via `pip install mitransient` or follow their README for custom installation instructions.
+You will need to have [mitransient](https://github.com/diegoroyo/mitransient) installed in your PC. You can install just via `pip install mitransient` or follow their README for custom installation instructions.
 
-> On the first run of `tal render`, it will ask you if you have installed Mitsuba 2 or 3, and (only if you have compiled Mitsuba youself) the location of your installation folder. For Mitsuba 2, please use the root folder of the repo (i.e. `/path/to/mitsuba2-transient-nlos`). For Mitsuba 3 you'll have to use the root folder of your custom mitsuba instalation (i.e. `/path/to/mitsuba3`). **If at any time you need to switch from Mitsuba 2 to 3 or vice-versa, or want to switch your installation folder, please use the `tal config` command.**
+> On the first run of `tal render`, it will ask you if you have installed Mitsuba 2 (mitsuba2-transient-nlos) or 3 (mitransient aka. mitsuba3-transient-nlos), and (only if you have compiled Mitsuba youself) the location of your installation folder: for Mitsuba 2, please use the root folder of the repo (i.e. `/path/to/mitsuba2-transient-nlos`); for Mitsuba 3 you'll have to use the root folder of your custom mitsuba instalation (i.e. `/path/to/mitsuba3`). **If at any time you need to switch from Mitsuba 2 to 3 or vice-versa, or want to switch your installation folder, please use the `tal config` command.**
 
-`mitsuba3-transient-nlos` must be installed in your device. On your first `tal render <scene>` command, it will detect (or ask you) where your installation folder is located, and will execute the necessary `mitsuba` commands and generate the specified scene XML files.
+`mitransient` must be installed in your device. On your first `tal render <scene>` command, it will detect (or ask you) where your installation folder is located, and will execute the necessary `mitsuba` commands and generate the specified scene XML files.
 
 You can find examples for how to render a scene in the [`examples`](https://github.com/diegoroyo/tal/tree/master/examples) folder of this repository. You can always use the `tal render -h` command too:
 

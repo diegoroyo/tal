@@ -26,7 +26,7 @@ class Config(Enum):
          lambda s: os.path.isdir(s))
     MITSUBA3_TRANSIENT_NLOS_FOLDER = \
         ('MITSUBA3_TRANSIENT_NLOS_FOLDER',
-         'Location of mitsuba3-transient-nlos installation folder',
+         'Location of Mitsuba 3 (not mitransient) installation folder',
          '',
          lambda s: os.path.isdir(s))
     LOG_LEVEL = \

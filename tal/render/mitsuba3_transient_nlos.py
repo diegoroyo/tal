@@ -40,7 +40,7 @@ except ModuleNotFoundError:
 
 
 def get_name():
-    return 'mitsuba3-transient-nlos'
+    return 'mitransient (mitsuba3-transient-nlos)'
 
 
 def get_scene_version():
