@@ -130,13 +130,15 @@ def render_nlos_scene(config_path, args, num_retries=0):
             'rot_degrees_z' not in relay_wall, \
             'Relay wall displacement/rotation is NYI'
 
-        def get_grid_xyz(nx, ny, rw_scale_x, rw_scale_y):
-            px = rw_scale_x
-            py = rw_scale_y
+        def get_grid_xyz(nx, ny, rw_scale_x, rw_scale_y, ax0=0, ax1=1, ay0=0, ay1=1):
+            px0 = -rw_scale_x + 2 * rw_scale_x * ax0
+            px1 = rw_scale_x - 2 * rw_scale_x * (1 - ax1)
+            py0 = rw_scale_y - 2 * rw_scale_y * ay0
+            py1 = -rw_scale_y + 2 * rw_scale_y * (1 - ay1)
             xg = np.stack(
-                (np.linspace(-px, px, num=2*nx + 1)[1::2],)*ny, axis=1)
+                (np.linspace(px0, px1, num=2*nx + 1)[1::2],)*ny, axis=1)
             yg = np.stack(
-                (np.linspace(-py, py, num=2*ny + 1)[1::2],)*nx, axis=0)
+                (np.linspace(py0, py1, num=2*ny + 1)[1::2],)*nx, axis=0)
             assert xg.shape[0] == yg.shape[0] == nx and xg.shape[1] == yg.shape[1] == ny, \
                 'Incorrect shapes'
             return np.stack([xg, yg, np.zeros((nx, ny))], axis=-1).astype(np.float32)
@@ -144,6 +146,11 @@ def render_nlos_scene(config_path, args, num_retries=0):
         def expand(vec, x, y):
             assert len(vec) == 3
             return vec.reshape(1, 1, 3).repeat(x, axis=0).repeat(y, axis=1)
+
+        laser_aperture_start_x = scene_config['laser_aperture_start_x'] or 0
+        laser_aperture_start_y = scene_config['laser_aperture_start_y'] or 0
+        laser_aperture_end_x = scene_config['laser_aperture_end_x'] or 1
+        laser_aperture_end_y = scene_config['laser_aperture_end_y'] or 1
 
         if scan_type == 'single':
             laser_lookat_x = \
@@ -157,10 +164,6 @@ def render_nlos_scene(config_path, args, num_retries=0):
                             laser_height != sensor_height)), \
                 'If using scan_type=confocal, sensor_{width|height} must match laser_{width|height}'
 
-            laser_aperture_start_x = scene_config['laser_aperture_start_x'] or 0
-            laser_aperture_start_y = scene_config['laser_aperture_start_y'] or 0
-            laser_aperture_end_x = scene_config['laser_aperture_end_x'] or 1
-            laser_aperture_end_y = scene_config['laser_aperture_end_y'] or 1
             for y in range(laser_height):
                 for x in range(laser_width):
                     # start in (0, 1) space
@@ -199,7 +202,9 @@ def render_nlos_scene(config_path, args, num_retries=0):
             ]], dtype=np.float32)
         else:
             laser_grid_xyz = get_grid_xyz(
-                laser_width, laser_height, relay_wall['scale_x'], relay_wall['scale_y'])
+                laser_width, laser_height, relay_wall['scale_x'], relay_wall['scale_y'],
+                ax0=laser_aperture_start_x, ax1=laser_aperture_start_x,
+                ay0=laser_aperture_start_y, ay1=laser_aperture_start_y)
         laser_grid_xyz += displacement
         # TODO(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
         # or use a more generalist approach
