@@ -35,21 +35,31 @@ def _infer_volume_format(volume_xyz, volume_format, do_log=True):
 def convert_to_N_3(data: NLOSCaptureData,
                    volume_xyz: NLOSCaptureData.VolumeXYZType,
                    volume_format: VolumeFormat = VolumeFormat.UNKNOWN,
+                   projector_focus: Union[NLOSCaptureData.Array3,
+                                          NLOSCaptureData.VolumeXYZType] = None,
                    try_optimize_convolutions: bool = False):
     """
         try_optimize_convolutions performs many checks:
         - H, {laser|sensor}_grid_xyz and volume_xyz have X, Y components (e.g. they are not N_3)
-        - The {laser|sensor}_grid_xyz's slices are parallel to the volume_xyz's slices
+        - The laser_grid_xyz's slices are parallel to the projector_focus' slices
+        - The sensor_grid_xyz's slices are parallel to the volume_xyz's slices
         - The points in the {laser|sensor}_grid_xyz's slices are sampled at the same rate
     """
 
     volume_format = _infer_volume_format(
         volume_xyz, volume_format, do_log=True)
+    try:
+        assert projector_focus is not None
+        projector_focus_format = _infer_volume_format(
+            projector_focus, VolumeFormat.UNKNOWN, do_log=False)
+    except AttributeError:
+        projector_focus_format = VolumeFormat.UNKNOWN
 
     # this variable is set to false during the conversion
     optimize_projector_convolutions = try_optimize_convolutions and \
         volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
-    optimize_camera_convolutions = optimize_projector_convolutions
+    optimize_camera_convolutions = optimize_projector_convolutions and \
+        projector_focus_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
 
     is_laser_paired_to_sensor = data.is_laser_paired_to_sensor()
 
@@ -120,8 +130,31 @@ def convert_to_N_3(data: NLOSCaptureData,
     assert H.shape[2] == sensor_grid_xyz.shape[0], \
         'H.shape does not match with sensor_grid_xyz.shape.'
 
-    assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
+    try:
+        assert projector_focus is not None
+        assert projector_focus_format in [
+            VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
+        npx, npy = projector_focus_format.shape[:2]
+        assert npx > 1 and npy > 1
 
+        # list of (Z, 3) normals of all Z positions in the plane
+        if projector_focus_format == VolumeFormat.X_Y_3:
+            z_index = Ellipsis
+        else:
+            z_index = 0
+        p_a = projector_focus[0, 0, z_index, :]
+        p_b = projector_focus[-1, 0, z_index, :]
+        p_c = projector_focus[0, -1, z_index, :]
+        p_n = np.cross(p_b - p_a, p_c - p_a).reshape((-1, 3))
+        p_n /= np.linalg.norm(p_n, axis=-1, keepdims=True)
+        p_dx = np.linalg.norm(
+            projector_focus[1, 0, z_index, :] - projector_focus[0, 0, z_index, :])
+        p_dy = np.linalg.norm(
+            projector_focus[0, 1, z_index, :] - projector_focus[0, 0, z_index, :])
+    except AssertionError:
+        optimize_camera_convolutions = False
+
+    assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
     try:
         assert volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
         nvx, nvy = volume_xyz.shape[:2]
@@ -142,7 +175,6 @@ def convert_to_N_3(data: NLOSCaptureData,
         v_dy = np.linalg.norm(
             volume_xyz[0, 1, z_index, :] - volume_xyz[0, 0, z_index, :])
     except AssertionError:
-        optimize_projector_convolutions = False
         optimize_camera_convolutions = False
 
     try:
@@ -160,9 +192,9 @@ def convert_to_N_3(data: NLOSCaptureData,
         l_dy = np.linalg.norm(
             laser_grid_xyz[0, 1, ..., :] - laser_grid_xyz[0, 0, ..., :])
 
-        dot_lv = np.sum(l_n * v_n, axis=-1)
-        assert np.allclose(np.abs(dot_lv), 1)
-        assert np.isclose(v_dx, l_dx) and np.isclose(v_dy, l_dy)
+        dot_lp = np.sum(l_n * p_n, axis=-1)
+        assert np.allclose(np.abs(dot_lp), 1)
+        assert np.isclose(p_dx, l_dx) and np.isclose(p_dy, l_dy)
         log(LogLevel.INFO, 'tal.reconstruct.utils: Optimizing for projector convolutions.')
     except AssertionError:
         optimize_projector_convolutions = False
@@ -191,7 +223,10 @@ def convert_to_N_3(data: NLOSCaptureData,
         optimize_camera_convolutions = False
         sensor_grid_xyz = sensor_grid_xyz.reshape((-1, 3))
 
-    if not optimize_projector_convolutions and not optimize_camera_convolutions:
+    if projector_focus is not None and not optimize_projector_convolutions:
+        projector_focus = projector_focus.reshape((-1, 3))
+
+    if not optimize_camera_convolutions:
         volume_xyz = volume_xyz.reshape((-1, 3))
 
     return (H, laser_grid_xyz, sensor_grid_xyz, volume_xyz,

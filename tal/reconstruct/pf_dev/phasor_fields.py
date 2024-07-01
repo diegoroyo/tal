@@ -98,9 +98,6 @@ def backproject_pf_multi_frequency(
                     'Falling back to default method.')
             optimize_projector_convolutions = False
         else:
-            assert np.allclose(projector_focus.flatten(), volume_xyz.flatten()), \
-                'projector_focus must be a single 3D point, ' \
-                'or you should pass the same value as volume_xyz.'
             assert nvz == 1, \
                 'When projector_focus=volume_xyz, the volume must be a single Z slice. ' \
                 f'In your case, your volume has {nvz} Z slices. ' \

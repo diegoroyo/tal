@@ -90,6 +90,7 @@ def solve(data: NLOSCaptureData,
     H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3, \
         optimize_projector_convolutions, optimize_camera_convolutions = \
         convert_to_N_3(data, volume_xyz, volume_format,
+                       projector_focus=projector_focus,
                        try_optimize_convolutions=try_optimize_convolutions)
 
     from tal.reconstruct.pf_dev.phasor_fields import backproject_pf_multi_frequency
