@@ -146,6 +146,7 @@ def convert_to_N_3(data: NLOSCaptureData,
         p_b = projector_focus[-1, 0, z_index, :]
         p_c = projector_focus[0, -1, z_index, :]
         p_n = np.cross(p_b - p_a, p_c - p_a).reshape((-1, 3))
+        assert np.all(np.linalg.norm(p_n, axis=-1) > 1e-5)
         p_n /= np.linalg.norm(p_n, axis=-1, keepdims=True)
         p_dx = np.linalg.norm(
             projector_focus[1, 0, z_index, :] - projector_focus[0, 0, z_index, :])
@@ -169,6 +170,7 @@ def convert_to_N_3(data: NLOSCaptureData,
         v_b = volume_xyz[-1, 0, z_index, :]
         v_c = volume_xyz[0, -1, z_index, :]
         v_n = np.cross(v_b - v_a, v_c - v_a).reshape((-1, 3))
+        assert np.all(np.linalg.norm(v_n, axis=-1) > 1e-5)
         v_n /= np.linalg.norm(v_n, axis=-1, keepdims=True)
         v_dx = np.linalg.norm(
             volume_xyz[1, 0, z_index, :] - volume_xyz[0, 0, z_index, :])
