@@ -63,7 +63,7 @@ def backproject_pf_multi_frequency(
     if camera_system.implements_projector():
         assert projector_focus is not None, \
             'projector_focus is required for this camera system'
-        if len(projector_focus) == 3:
+        if projector_focus.size == 3:
             projector_focus = np.array(projector_focus).reshape(
                 (1, 1, 1, 3))
             projector_focus_mode = 'single'

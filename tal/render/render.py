@@ -133,8 +133,8 @@ def render_nlos_scene(config_path, args, num_retries=0):
         def get_grid_xyz(nx, ny, rw_scale_x, rw_scale_y, ax0=0, ax1=1, ay0=0, ay1=1):
             px0 = -rw_scale_x + 2 * rw_scale_x * ax0
             px1 = rw_scale_x - 2 * rw_scale_x * (1 - ax1)
-            py0 = rw_scale_y - 2 * rw_scale_y * ay0
-            py1 = -rw_scale_y + 2 * rw_scale_y * (1 - ay1)
+            py0 = -rw_scale_y + 2 * rw_scale_y * ay0
+            py1 = rw_scale_y - 2 * rw_scale_y * (1 - ay1)
             xg = np.stack(
                 (np.linspace(px0, px1, num=2*nx + 1)[1::2],)*ny, axis=1)
             yg = np.stack(
@@ -203,8 +203,8 @@ def render_nlos_scene(config_path, args, num_retries=0):
         else:
             laser_grid_xyz = get_grid_xyz(
                 laser_width, laser_height, relay_wall['scale_x'], relay_wall['scale_y'],
-                ax0=laser_aperture_start_x, ax1=laser_aperture_start_x,
-                ay0=laser_aperture_start_y, ay1=laser_aperture_start_y)
+                ax0=laser_aperture_start_x, ax1=laser_aperture_end_x,
+                ay0=laser_aperture_start_y, ay1=laser_aperture_end_y)
         laser_grid_xyz += displacement
         # TODO(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
         # or use a more generalist approach

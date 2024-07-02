@@ -27,24 +27,36 @@ def backproject_pf_multi_frequency(
 
     nt, nl, ns = H_0.shape
     nv = np.prod(volume_xyz.shape[:-1])  # N or X * Y or X * Y * Z
-    if optimize_projector_convolutions or optimize_camera_convolutions:
+    if projector_focus is None:
+        npf = 0
+    elif projector_focus.size == 3:
+        npf = 1
+    else:
+        npf = np.prod(projector_focus.shape[:-1])
+    if optimize_projector_convolutions:
+        assert laser_grid_xyz.ndim == 3, 'Expecting X_Y_3 format'
+        nlx, nly, _ = laser_grid_xyz.shape
+
+        if projector_focus.ndim == 3:
+            npfx, npfy, _ = projector_focus.shape
+            projector_focus = projector_focus.reshape((npfx, npfy, 1, 3))
+        assert projector_focus.ndim == 4, 'Expecting X_Y_Z_3 format'
+        npfx, npfy, npfz, _ = projector_focus.shape
+    else:
+        nlx, nly = 1, 1
+        npfz = 1
+    if optimize_camera_convolutions:
+        assert sensor_grid_xyz.ndim == 3, 'Expecting X_Y_3 format'
+        nsx, nsy, _ = sensor_grid_xyz.shape
+
         if volume_xyz.ndim == 3:
             nvx, nvy, _ = volume_xyz.shape
             volume_xyz = volume_xyz.reshape((nvx, nvy, 1, 3))
         assert volume_xyz.ndim == 4, 'Expecting X_Y_Z_3 format'
         nvx, nvy, nvz, _ = volume_xyz.shape
     else:
-        nvz = 1
-    if optimize_projector_convolutions:
-        assert laser_grid_xyz.ndim == 3, 'Expecting X_Y_3 format'
-        nlx, nly, _ = laser_grid_xyz.shape
-    else:
-        nlx, nly = 1, 1
-    if optimize_camera_convolutions:
-        assert sensor_grid_xyz.ndim == 3, 'Expecting X_Y_3 format'
-        nsx, nsy, _ = sensor_grid_xyz.shape
-    else:
         nsx, nsy = 1, 1
+        nvz = 1
 
     """ Phasor fields filter """
 
@@ -89,7 +101,7 @@ def backproject_pf_multi_frequency(
     if camera_system.implements_projector():
         assert projector_focus is not None, \
             'projector_focus is required for this camera system'
-        if len(projector_focus) == 3:
+        if projector_focus.size == 3:
             projector_focus = np.array(projector_focus).reshape(
                 (1, 1, 1, 3))
             projector_focus_mode = 'single'
@@ -98,11 +110,11 @@ def backproject_pf_multi_frequency(
                     'Falling back to default method.')
             optimize_projector_convolutions = False
         else:
-            assert nvz == 1, \
-                'When projector_focus=volume_xyz, the volume must be a single Z slice. ' \
+            assert npfz == 1, \
+                'When projector_focus is a volume, it must be a single Z slice. ' \
                 f'In your case, your volume has {nvz} Z slices. ' \
                 'You can call this same function for each individual point in the volume.'
-            projector_focus = projector_focus.reshape((1, nv, 1, 3))
+            projector_focus = projector_focus.reshape((1, npf, 1, 3))
             projector_focus_mode = 'exhaustive'
     else:
         assert projector_focus is None, \
@@ -151,7 +163,7 @@ def backproject_pf_multi_frequency(
         d_4 = np.float32(0.0)
 
     if projector_focus_mode == 'exhaustive':
-        n_projector_points = nv
+        n_projector_points = npf
     else:
         n_projector_points = 1
 
@@ -187,9 +199,8 @@ def backproject_pf_multi_frequency(
             dtype=np.complex64)
 
     for i_z, nvzi in range_z:
-        if optimize_projector_convolutions or nl == 1:
-            projector_focus_i = projector_focus.reshape(
-                (nvx, nvy, nvz, 3))[..., nvzi, :]
+        if optimize_projector_convolutions:
+            projector_focus_i = projector_focus.reshape((npfx, npfy, 3))
         else:
             projector_focus_i = projector_focus
         if optimize_camera_convolutions:
@@ -201,8 +212,8 @@ def backproject_pf_multi_frequency(
         if camera_system.bp_accounts_for_d_2():
             if optimize_projector_convolutions:
                 assert projector_focus_mode in ['exhaustive', 'confocal']
-                rlx = nvx + nlx - 1
-                rly = nvy + nly - 1
+                rlx = npfx + nlx - 1
+                rly = npfy + nly - 1
                 laser_grid_xyz = laser_grid_xyz.reshape((nlx, nly, 3))
                 l_dx = laser_grid_xyz[1, 0, ...] - \
                     laser_grid_xyz[0, 0, ...]
@@ -300,15 +311,15 @@ def backproject_pf_multi_frequency(
                 rsd_3 = np.exp(np.complex64(2j * np.pi) * d_3 * frequency)
                 rsd_3 *= invsq_3
                 if optimize_camera_convolutions:
-                    H_0_w = H_0_w.reshape((nlx, nly, nsx, nsy))
-                    rsd_3 = rsd_3.reshape((1, 1, rsx, rsy))
+                    H_0_w = H_0_w.reshape((nl, nsx, nsy))
+                    rsd_3 = rsd_3.reshape((1, rsx, rsy))
                     H_0_w_fft = np.fft.fft2(
-                        H_0_w, axes=(2, 3), s=(rsx, rsy))
+                        H_0_w, axes=(1, 2), s=(rsx, rsy))
                     rsd_3_fft = np.fft.fft2(
-                        rsd_3, axes=(2, 3), s=(rsx, rsy))
+                        rsd_3, axes=(1, 2), s=(rsx, rsy))
                     H_0_w_fft *= rsd_3_fft
-                    H_0_w = np.fft.ifft2(H_0_w_fft, axes=(2, 3))
-                    H_0_w = H_0_w[:, :, :nvx, :nvy]
+                    H_0_w = np.fft.ifft2(H_0_w_fft, axes=(1, 2))
+                    H_0_w = H_0_w[:, :nvx, :nvy]
                     H_0_w = H_0_w.reshape((nl, nvi))
                 else:
                     H_0_w = H_0_w.reshape((nl, 1, ns))
@@ -323,7 +334,7 @@ def backproject_pf_multi_frequency(
                         assert optimize_projector_convolutions, \
                             'You must use the convolutions optimization when projector_focus=volume_xyz. ' \
                             'Check the documentation for tal.reconstruct.pf_dev for more information.'
-                        H_0_w = H_0_w.reshape((nlx, nly, nvx, nvy))
+                        H_0_w = H_0_w.reshape((nlx, nly, nsx, nsy))
                         rsd_2 = rsd_2.reshape((rlx, rly, 1, 1))
                         H_0_w_fft = np.fft.fft2(
                             H_0_w, axes=(0, 1), s=(rlx, rly))
@@ -331,7 +342,7 @@ def backproject_pf_multi_frequency(
                             rsd_2, axes=(0, 1), s=(rlx, rly))
                         H_0_w_fft *= rsd_2_fft
                         H_0_w = np.fft.ifft2(H_0_w_fft, axes=(0, 1))
-                        H_0_w = H_0_w[:nvx, :nvy, :, :]
+                        H_0_w = H_0_w[:npfx, :npfy, :, :]
                     else:
                         assert projector_focus_mode in ['single', 'confocal']
                         H_0_w = H_0_w.reshape((nl, nvi))

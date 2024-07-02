@@ -69,6 +69,8 @@ def solve(data: NLOSCaptureData,
         this optimization, tal.reconstruct.pf_dev will fall back to the default implementation.
         You can generate these depth-slices with tal.reconstruct.get_volumeXXX functions.
     """
+    raise NotImplementedError('This version of upf_dev is deprecated. '
+                              'If you want to use it, use a previous version of TAL or contact the authors.')
     from tal.reconstruct.util import convert_to_N_3, convert_reconstruction_from_N_3
     H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3, \
         optimize_projector_convolutions, optimize_camera_convolutions = \
@@ -88,7 +90,7 @@ def solve(data: NLOSCaptureData,
 
     mutliple_projector_points = \
         camera_system.implements_projector() \
-        and projector_focus is not None and len(projector_focus) > 3
+        and projector_focus is not None and projector_focus.size > 3
 
     return convert_reconstruction_from_N_3(data, reconstructed_volume_n3, volume_xyz, volume_format, camera_system,
                                            is_exhaustive_reconstruction=mutliple_projector_points)

@@ -91,7 +91,7 @@ def compensate_laser_cos_dsqr(data: NLOSCaptureData):
         if data.is_laser_paired_to_sensor():
             compensate_i_j(*data.sensor_grid_xyz.shape[:2])
         else:
-            assert len(data.laser_grid_xyz) == 3
+            assert data.laser_grid_xyz.size == 3
             compensate(data.H,
                        data.laser_grid_xyz.reshape(3),
                        data.laser_grid_normals.reshape(3))
@@ -101,7 +101,7 @@ def compensate_laser_cos_dsqr(data: NLOSCaptureData):
         if data.is_laser_paired_to_sensor():
             compensate_i(data.sensor_grid_xyz.shape[0])
         else:
-            assert len(data.laser_grid_xyz) == 3
+            assert data.laser_grid_xyz.size == 3
             compensate(data.H,
                        data.laser_grid_xyz.reshape(3),
                        data.laser_grid_normals.reshape(3))

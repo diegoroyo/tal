@@ -44,22 +44,24 @@ def convert_to_N_3(data: NLOSCaptureData,
         - The laser_grid_xyz's slices are parallel to the projector_focus' slices
         - The sensor_grid_xyz's slices are parallel to the volume_xyz's slices
         - The points in the {laser|sensor}_grid_xyz's slices are sampled at the same rate
+            as {projector_focus|volume_xyz}'s points
     """
 
     volume_format = _infer_volume_format(
         volume_xyz, volume_format, do_log=True)
     try:
         assert projector_focus is not None
+        projector_focus = np.array(projector_focus)
         projector_focus_format = _infer_volume_format(
             projector_focus, VolumeFormat.UNKNOWN, do_log=False)
-    except AttributeError:
+    except AssertionError:
         projector_focus_format = VolumeFormat.UNKNOWN
 
     # this variable is set to false during the conversion
     optimize_projector_convolutions = try_optimize_convolutions and \
-        volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
-    optimize_camera_convolutions = optimize_projector_convolutions and \
         projector_focus_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
+    optimize_camera_convolutions = try_optimize_convolutions and \
+        volume_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
 
     is_laser_paired_to_sensor = data.is_laser_paired_to_sensor()
 
@@ -134,7 +136,7 @@ def convert_to_N_3(data: NLOSCaptureData,
         assert projector_focus is not None
         assert projector_focus_format in [
             VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]
-        npx, npy = projector_focus_format.shape[:2]
+        npx, npy = projector_focus.shape[:2]
         assert npx > 1 and npy > 1
 
         # list of (Z, 3) normals of all Z positions in the plane
@@ -153,7 +155,7 @@ def convert_to_N_3(data: NLOSCaptureData,
         p_dy = np.linalg.norm(
             projector_focus[0, 1, z_index, :] - projector_focus[0, 0, z_index, :])
     except AssertionError:
-        optimize_camera_convolutions = False
+        optimize_projector_convolutions = False
 
     assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
     try:
@@ -241,7 +243,8 @@ def convert_reconstruction_from_N_3(data: NLOSCaptureData,
                                     volume_xyz: NLOSCaptureData.VolumeXYZType,
                                     volume_format: VolumeFormat,
                                     camera_system: CameraSystem,
-                                    is_exhaustive_reconstruction: bool = False):
+                                    projector_focus:  Union[NLOSCaptureData.Array3,
+                                                            NLOSCaptureData.VolumeXYZType] = None):
 
     volume_format = _infer_volume_format(
         volume_xyz, volume_format, do_log=False)
@@ -253,9 +256,14 @@ def convert_reconstruction_from_N_3(data: NLOSCaptureData,
 
     assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
 
+    is_exhaustive_reconstruction = \
+        camera_system.implements_projector() \
+        and projector_focus is not None and projector_focus.size > 3
+
     if is_exhaustive_reconstruction:
         # add an additional shape dimension for the exhaustive reconstruction
-        shape += volume_xyz.shape[:-1]
+        shape += projector_focus.shape[:-1]
+
     shape += volume_xyz.shape[:-1]
 
     return reconstructed_volume_n3.reshape(shape)

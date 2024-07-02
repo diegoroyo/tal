@@ -43,7 +43,7 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
 
     if camera_system.implements_projector():
         assert projector_focus is not None, 'projector_focus is required for this camera system'
-        assert len(projector_focus) == 3, \
+        assert projector_focus.size == 3, \
             'When using tal.reconstruct.bp, projector_focus must be a single 3D point. ' \
             'If you want to focus the illumination aperture at multiple points, ' \
             'please use tal.reconstruct.pf_dev instead or call tal.reconstruct.bp once per projector_focus.'
