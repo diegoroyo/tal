@@ -285,9 +285,15 @@ def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
     __v_print("Done", 2, verbose)
     __v_print(f"Propagating with {n_threads} threads...", 1, verbose)
 
+    # Select the propagation method
+    if res_in_freq or sig_idx is None:
+        propagate_partial = partial(__propagate, propagator_S, propagator_L, 
+                                    f_H, S_r, L_r, wv)
+    elif not res_in_freq and sig_idx is not None:
+        propagate_partial = partial(__propagate_t0, propagator_S, propagator_L, 
+                                    f_H, S_r, L_r, wv, f_pulse[sig_idx])
+
     # Propagate using multithreading
-    propagate_partial = partial(__propagate, propagator_S, propagator_L, f_H,
-                                S_r, L_r, wv)
     with ThreadPoolExecutor(max_workers=n_threads) as executor:
         fI = np.array(
             list(tqdm(
@@ -300,22 +306,28 @@ def reconstruct(H:  np.ndarray, t_bins:  np.ndarray, S:  np.ndarray,
     del S_r, L_r, f_H
     __v_print("Done", 1, verbose)
 
-    if not res_in_freq and sig_idx is not None:     # Result in time domain
-        __v_print(f"Transforming from Fourier to time domain with {n_threads}"
-                  + " threads...", 1, verbose)
-        if verbose >= 3:
-            desc = unit + ' to time domain'
-        else:
-            desc = None
-        # Transform the data to Fourier domain
-        I = fI_to_I(fI.swapaxes(0, 1), f_pulse, sig_idx, n_threads=n_threads,
-                    desc=desc)[0]
-        __v_print("Done", 1, verbose)
-        return I
-    elif not res_in_freq and sig_idx is None:
+    # if not res_in_freq and sig_idx is not None:     # Result in time domain
+    #     __v_print(f"Transforming from Fourier to time domain with {n_threads}"
+    #               + " threads...", 1, verbose)
+    #     if verbose >= 3:
+    #         desc = unit + ' to time domain'
+    #     else:
+    #         desc = None
+    #     # Transform the data to Fourier domain
+    #     I = fI_to_I(fI.swapaxes(0, 1), f_pulse, sig_idx, n_threads=n_threads,
+    #                 desc=desc)[0]
+    #     __v_print("Done", 1, verbose)
+    #     return I
+    # elif not res_in_freq and sig_idx is None:
+    #     return fI[:, 0, ...]
+    # else:
+    #     return fI
+
+    if not res_in_freq and sig_idx is None:
         return fI[:, 0, ...]
     else:
         return fI
+
 
 
 ###############################################################################
@@ -334,6 +346,21 @@ def __propagate(propagator_S, propagator_L, f_H, S, L, wv, V):
         v_axis = (-1,)
     fI = propagator_L.propagate(fI_s, L, V, wv, P_axis=(1, 2), V_axis=v_axis)
     return fI
+
+# Propagate given the propagators, the impulse response in time t=0
+# f_H, the sensor points S, the light points L, the target coordinates V_z,
+# with frecuency wavelengths wv
+def __propagate_t0(propagator_S, propagator_L, f_H, S, L, wv, wv_weight, V):
+    # Propagate from sensors
+    fI_s = propagator_S.propagate(f_H, S, V, wv, P_axis=(1, 2))
+    # Propagate from Lights
+    v_axis = tuple(np.arange(-V.ndim+1, 0))
+    if len(v_axis) == 0:
+        v_axis = (-1,)
+    fI = propagator_L.propagate(fI_s, L, V, wv, P_axis=(1, 2), V_axis=v_axis)
+
+    brcst_wv_shape = (1,) * (fI.ndim - 1) 
+    return np.sum(fI* wv_weight.reshape((-1,) + brcst_wv_shape), axis = 0)
 
 
 # Prints only iff threshold =< given_verbose

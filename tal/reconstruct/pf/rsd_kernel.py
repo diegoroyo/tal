@@ -42,7 +42,7 @@ class RSD_kernel(object):
                                                  V[0, -1, -1])
         normal_P, d_P = RSD_kernel.__as_plane_eq(P[0, 0], P[-1, 0], P[-1, -1])
         # Check if planes are parallel (with an small error to 0)
-        assert np.linalg.norm(np.cross(normal_V, normal_P)) == 0, \
+        assert np.abs(np.linalg.norm(np.cross(normal_V, normal_P))) < 1e-7, \
             "V and P are not parallel"
 
         # Volume to propagate
