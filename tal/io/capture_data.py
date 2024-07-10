@@ -241,8 +241,9 @@ class NLOSCaptureData:
         for key, value in raw_data.items():
             if key not in own_dict_keys:
                 raise AssertionError(f'raw_data contains unknown key: {key}')
-            if key == 'scene_info':
+            if key == 'scene_info' and not isinstance(value, h5py.Empty):
                 value = yaml.load(value, Loader=yaml.Loader)
+
             setattr(self, key, value)
 
     def is_laser_paired_to_sensor(self):
