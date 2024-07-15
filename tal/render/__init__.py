@@ -27,4 +27,4 @@ def render_nlos_scene(config_path, args):
     See tal render -h for more information. You probably want to do tal render <scene>, or tal render new <folder_name>
     """
     from tal.render import render
-    render.render_nlos_scene(config_path, args)
+    return render.render_nlos_scene(config_path, args)

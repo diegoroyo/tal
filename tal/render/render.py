@@ -1,23 +1,32 @@
 import os
-import sys
 import shutil
 import yaml
 import tal
+import platform
 from tal.io.capture_data import NLOSCaptureData
 from tal.enums import FileFormat, GridFormat, HFormat, GroundTruthFormat
 from tal.config import local_file_path
 from tal.log import log, LogLevel, TQDMLogRedirect
+from tal.render.util import get_grid_xyz, expand_xy_dims
 import datetime
 import numpy as np
 from tqdm import tqdm
 import multiprocessing
-from multiprocessing.queues import Queue
 from functools import partial
 
 from tal.render.util import import_mitsuba_backend
 
 
-def render_nlos_scene(config_path, args, num_retries=0):
+def _read_config_and_init_mitsuba_variant(config_path, args):
+    # FIXME: on macOS "spawn" method, which is the default since 3.8,
+    # is considered more safe than "fork", but requires serialization methods available
+    # to send the objects to the spawned process. So a proper fix would be to add them
+    # (see e.g. https://stackoverflow.com/a/65513291 and
+    # https://docs.python.org/3/library/multiprocessing.html#the-spawn-and-forkserver-start-methods
+    # for more details)
+    if platform.system() == 'Darwin':
+        multiprocessing.set_start_method('fork')
+
     config_path = os.path.abspath(config_path)
 
     assert os.path.exists(config_path), \
@@ -30,8 +39,6 @@ def render_nlos_scene(config_path, args, num_retries=0):
 
     assert os.path.isfile(config_path), \
         f'{config_path} is not a TAL config file'
-
-    config_dir, config_filename = os.path.split(config_path)
 
     try:
         scene_config = yaml.safe_load(
@@ -58,21 +65,23 @@ def render_nlos_scene(config_path, args, num_retries=0):
     if not args.dry_run:
         mitsuba_backend.set_variant(scene_config['mitsuba_variant'])
 
-    steady_xml, ground_truth_xml, nlos_xml = mitsuba_backend.get_scene_xml(
-        scene_config, random_seed=args.seed, quiet=args.quiet)
+    return mitsuba_backend, scene_config, config_path
 
+
+def _check_progress_and_create_folders(config_path, args):
+    config_dir, config_filename = os.path.split(config_path)
     try:
         in_progress = False
         progress_file = os.path.join(config_dir, 'IN_PROGRESS')
         if os.path.exists(progress_file):
             with open(progress_file, 'r') as f:
                 progress_folder = f.read()
-            if os.path.exists(os.path.join(config_dir, progress_folder)) and not args.quiet:
+            if os.path.exists(os.path.join(config_dir, progress_folder)):
                 in_progress = True
             else:
                 log(LogLevel.INFO, 'The IN_PROGRESS file is stale, removing it...')
                 os.remove(progress_file)
-        if in_progress and not args.quiet:
+        if in_progress:
             log(LogLevel.INFO,
                 f'Found a render in progress ({progress_folder}), continuing...')
         if not in_progress:
@@ -96,413 +105,411 @@ def render_nlos_scene(config_path, args, num_retries=0):
     except OSError as exc:
         raise AssertionError(f'Invalid permissions: {exc}') from exc
 
-    try:
-        steady_scene_xml = os.path.join(root_dir, 'steady_scene.xml')
-        with open(steady_scene_xml, 'w') as f:
-            f.write(steady_xml)
+    return root_dir, partial_results_dir, steady_dir, log_dir, progress_file
 
-        ground_truth_scene_xml = os.path.join(
-            root_dir, 'ground_truth_scene.xml')
-        with open(ground_truth_scene_xml, 'w') as f:
-            f.write(ground_truth_xml)
 
-        nlos_scene_xml = os.path.join(root_dir, 'nlos_scene.xml')
-        with open(nlos_scene_xml, 'w') as f:
-            f.write(nlos_xml)
+def __write_scene_xmls(args, mitsuba_backend, scene_config, root_dir):
+    steady_xml, ground_truth_xml, nlos_xml = mitsuba_backend.get_scene_xml(
+        scene_config, random_seed=args.seed)
 
-        laser_lookats = []
-        name = scene_config['name']
-        scan_type = scene_config['scan_type']
-        num_bins = scene_config['num_bins']
-        sensor_width = scene_config['sensor_width']
-        sensor_height = scene_config['sensor_height']
-        laser_width = scene_config['laser_width']
-        laser_height = scene_config['laser_height']
-        if scan_type == 'single':
-            laser_width = 1
-            laser_height = 1
+    steady_scene_xml = os.path.join(root_dir, 'steady_scene.xml')
+    with open(steady_scene_xml, 'w') as f:
+        f.write(steady_xml)
 
-        relay_wall = next(filter(
-            lambda g: g['name'] == scene_config['relay_wall'],
-            scene_config['geometry']))
-        assert 'rot_degrees_x' not in relay_wall and \
-            'rot_degrees_y' not in relay_wall and \
-            'rot_degrees_z' not in relay_wall, \
-            'Relay wall displacement/rotation is NYI'
+    ground_truth_scene_xml = os.path.join(
+        root_dir, 'ground_truth_scene.xml')
+    with open(ground_truth_scene_xml, 'w') as f:
+        f.write(ground_truth_xml)
 
-        def get_grid_xyz(nx, ny, rw_scale_x, rw_scale_y, ax0=0, ax1=1, ay0=0, ay1=1):
-            px0 = -rw_scale_x + 2 * rw_scale_x * ax0
-            px1 = rw_scale_x - 2 * rw_scale_x * (1 - ax1)
-            py0 = -rw_scale_y + 2 * rw_scale_y * ay0
-            py1 = rw_scale_y - 2 * rw_scale_y * (1 - ay1)
-            xg = np.stack(
-                (np.linspace(px0, px1, num=2*nx + 1)[1::2],)*ny, axis=1)
-            yg = np.stack(
-                (np.linspace(py0, py1, num=2*ny + 1)[1::2],)*nx, axis=0)
-            assert xg.shape[0] == yg.shape[0] == nx and xg.shape[1] == yg.shape[1] == ny, \
-                'Incorrect shapes'
-            return np.stack([xg, yg, np.zeros((nx, ny))], axis=-1).astype(np.float32)
+    nlos_scene_xml = os.path.join(root_dir, 'nlos_scene.xml')
+    with open(nlos_scene_xml, 'w') as f:
+        f.write(nlos_xml)
 
-        def expand(vec, x, y):
-            assert len(vec) == 3
-            return vec.reshape(1, 1, 3).repeat(x, axis=0).repeat(y, axis=1)
+    return steady_scene_xml, ground_truth_scene_xml, nlos_scene_xml
 
-        laser_aperture_start_x = scene_config['laser_aperture_start_x'] or 0
-        laser_aperture_start_y = scene_config['laser_aperture_start_y'] or 0
-        laser_aperture_end_x = scene_config['laser_aperture_end_x'] or 1
-        laser_aperture_end_y = scene_config['laser_aperture_end_y'] or 1
 
-        if scan_type == 'single':
-            laser_lookat_x = \
-                scene_config['laser_lookat_x'] or sensor_width / 2
-            laser_lookat_y = \
-                scene_config['laser_lookat_y'] or sensor_height / 2
-            laser_lookats.append((laser_lookat_x, laser_lookat_y))
-        elif scan_type == 'exhaustive' or scan_type == 'confocal':
-            assert not (scan_type == 'confocal' and
-                        (laser_width != sensor_width or
-                            laser_height != sensor_height)), \
-                'If using scan_type=confocal, sensor_{width|height} must match laser_{width|height}'
+def __write_metadata_and_get_laser_lookats(args, scene_config):
+    """ Compute laser_lookats """
 
-            for y in range(laser_height):
-                for x in range(laser_width):
-                    # start in (0, 1) space
-                    laser_lookat_x = (x + 0.5) / laser_width
-                    laser_lookat_y = (y + 0.5) / laser_height
-                    # take aperture into account
-                    laser_lookat_x = laser_aperture_start_x + \
-                        laser_lookat_x * \
-                        (laser_aperture_end_x - laser_aperture_start_x)
-                    laser_lookat_y = laser_aperture_start_y + \
-                        laser_lookat_y * \
-                        (laser_aperture_end_y - laser_aperture_start_y)
-                    # finally store in sensor space (0, sensor_width)
-                    laser_lookat_x *= sensor_width
-                    laser_lookat_y *= sensor_height
-                    laser_lookats.append((laser_lookat_x, laser_lookat_y))
-        else:
-            raise AssertionError(
-                'Invalid scan_type, must be one of {single|exhaustive|confocal}')
+    laser_lookats = []
+    scan_type = scene_config['scan_type']
+    num_bins = scene_config['num_bins']
+    sensor_width = scene_config['sensor_width']
+    sensor_height = scene_config['sensor_height']
+    laser_width = scene_config['laser_width']
+    laser_height = scene_config['laser_height']
+    if scan_type == 'single':
+        laser_width = 1
+        laser_height = 1
 
-        # TODO(diego): rotate
-        displacement = np.array([
-            relay_wall['displacement_x'],
-            relay_wall['displacement_y'],
-            relay_wall['displacement_z']])
-        sensor_grid_xyz = get_grid_xyz(
-            sensor_width, sensor_height, relay_wall['scale_x'], relay_wall['scale_y'])
-        sensor_grid_xyz += displacement
-        if scan_type == 'single':
-            px = relay_wall['scale_x'] * \
-                ((laser_lookat_x / sensor_width) * 2 - 1)
-            py = relay_wall['scale_y'] * \
-                ((laser_lookat_y / sensor_height) * 2 - 1)
-            laser_grid_xyz = np.array([[
-                [px, py, 0],
-            ]], dtype=np.float32)
-        else:
-            laser_grid_xyz = get_grid_xyz(
-                laser_width, laser_height, relay_wall['scale_x'], relay_wall['scale_y'],
-                ax0=laser_aperture_start_x, ax1=laser_aperture_end_x,
-                ay0=laser_aperture_start_y, ay1=laser_aperture_end_y)
-        laser_grid_xyz += displacement
-        # TODO(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
-        # or use a more generalist approach
-        sensor_grid_normals = expand(
-            np.array([0, 0, 1]), sensor_width, sensor_height)
-        laser_grid_normals = expand(
-            np.array([0, 0, 1]), laser_width, laser_height)
+    relay_wall = next(filter(
+        lambda g: g['name'] == scene_config['relay_wall'],
+        scene_config['geometry']))
+    assert 'rot_degrees_x' not in relay_wall and \
+        'rot_degrees_y' not in relay_wall and \
+        'rot_degrees_z' not in relay_wall, \
+        'Relay wall displacement/rotation is NYI'
 
-        experiment_name = scene_config['name']
+    laser_aperture_start_x = scene_config['laser_aperture_start_x'] or 0
+    laser_aperture_start_y = scene_config['laser_aperture_start_y'] or 0
+    laser_aperture_end_x = scene_config['laser_aperture_end_x'] or 1
+    laser_aperture_end_y = scene_config['laser_aperture_end_y'] or 1
 
-        class StdoutQueue(Queue):
-            def __init__(self, *args, **kwargs):
-                ctx = multiprocessing.get_context()
-                super(StdoutQueue, self).__init__(*args, **kwargs, ctx=ctx)
+    if scan_type == 'single':
+        laser_lookat_x = \
+            scene_config['laser_lookat_x'] or sensor_width / 2
+        laser_lookat_y = \
+            scene_config['laser_lookat_y'] or sensor_height / 2
+        laser_lookats.append((laser_lookat_x, laser_lookat_y))
+    elif scan_type == 'exhaustive' or scan_type == 'confocal':
+        assert not (scan_type == 'confocal' and
+                    (laser_width != sensor_width or
+                        laser_height != sensor_height)), \
+            'If using scan_type=confocal, sensor_{width|height} must match laser_{width|height}'
 
-            def write(self, msg):
-                self.put(msg)
+        for y in range(laser_height):
+            for x in range(laser_width):
+                # start in (0, 1) space
+                laser_lookat_x = (x + 0.5) / laser_width
+                laser_lookat_y = (y + 0.5) / laser_height
+                # take aperture into account
+                laser_lookat_x = laser_aperture_start_x + \
+                    laser_lookat_x * \
+                    (laser_aperture_end_x - laser_aperture_start_x)
+                laser_lookat_y = laser_aperture_start_y + \
+                    laser_lookat_y * \
+                    (laser_aperture_end_y - laser_aperture_start_y)
+                # finally store in sensor space (0, sensor_width)
+                laser_lookat_x *= sensor_width
+                laser_lookat_y *= sensor_height
+                laser_lookats.append((laser_lookat_x, laser_lookat_y))
+    else:
+        raise AssertionError(
+            'Invalid scan_type, must be one of {single|exhaustive|confocal}')
 
-        # TODO(diego): move this to a separate function
+    """ Create NLOSCaptureData and write all metadata """
 
-        if args.do_steady_renders:
-            def render_steady(render_name, sensor_index):
-                if not args.quiet:
-                    log(LogLevel.INFO,
-                        f'{render_name} for {experiment_name} steady render...')
-                hdr_ext = mitsuba_backend.get_hdr_extension()
-                hdr_path = os.path.join(partial_results_dir,
-                                        f'{experiment_name}_{render_name}.{hdr_ext}')
-                ldr_path = os.path.join(steady_dir,
-                                        f'{experiment_name}_{render_name}.png')
-                if os.path.exists(ldr_path) and not args.quiet:
-                    pass  # skip
+    # TODO(diego): rotate sensor_grid_xyz and laser_grid_xyz based on relay wall rotation
+    displacement = np.array([
+        relay_wall['displacement_x'],
+        relay_wall['displacement_y'],
+        relay_wall['displacement_z']])
+    sensor_grid_xyz = get_grid_xyz(
+        sensor_width, sensor_height, relay_wall['scale_x'], relay_wall['scale_y'])
+    sensor_grid_xyz += displacement
+    if scan_type == 'single':
+        px = relay_wall['scale_x'] * \
+            ((laser_lookat_x / sensor_width) * 2 - 1)
+        py = relay_wall['scale_y'] * \
+            ((laser_lookat_y / sensor_height) * 2 - 1)
+        laser_grid_xyz = np.array([[
+            [px, py, 0],
+        ]], dtype=np.float32)
+    else:
+        laser_grid_xyz = get_grid_xyz(
+            laser_width, laser_height, relay_wall['scale_x'], relay_wall['scale_y'],
+            ax0=laser_aperture_start_x, ax1=laser_aperture_end_x,
+            ay0=laser_aperture_start_y, ay1=laser_aperture_end_y)
+    laser_grid_xyz += displacement
+
+    # TODO(diego): rotate [0, 0, 1] by rot_degrees_x (assmes RW is a plane)
+    # or use a more generalist approach
+    sensor_grid_normals = expand_xy_dims(
+        np.array([0, 0, 1]), sensor_width, sensor_height)
+    laser_grid_normals = expand_xy_dims(
+        np.array([0, 0, 1]), laser_width, laser_height)
+
+    capture_data = NLOSCaptureData()
+    if scan_type == 'single' or scan_type == 'confocal':
+        capture_data.H = np.zeros(
+            (num_bins, sensor_width, sensor_height),
+            dtype=np.float32)
+        capture_data.H_format = HFormat.T_Sx_Sy
+    elif scan_type == 'exhaustive':
+        capture_data.H = np.zeros(
+            (num_bins, laser_width, laser_height, sensor_width, sensor_height),
+            dtype=np.float32)
+        capture_data.H_format = HFormat.T_Lx_Ly_Sx_Sy
+    else:
+        raise AssertionError(
+            'Invalid scan_type, must be one of {single|exhaustive|confocal}')
+    capture_data.sensor_xyz = np.array([
+        scene_config['sensor_x'],
+        scene_config['sensor_y'],
+        scene_config['sensor_z'],
+    ], dtype=np.float32)
+    capture_data.sensor_grid_xyz = sensor_grid_xyz
+    capture_data.sensor_grid_normals = sensor_grid_normals
+    capture_data.sensor_grid_format = GridFormat.X_Y_3
+    capture_data.laser_xyz = np.array([
+        scene_config['laser_x'],
+        scene_config['laser_y'],
+        scene_config['laser_z'],
+    ], dtype=np.float32)
+    capture_data.laser_grid_xyz = laser_grid_xyz
+    capture_data.laser_grid_normals = laser_grid_normals
+    capture_data.laser_grid_format = GridFormat.X_Y_3
+    capture_data.delta_t = scene_config['bin_width_opl']
+    capture_data.t_start = scene_config['start_opl']
+    capture_data.t_accounts_first_and_last_bounces = \
+        scene_config['account_first_and_last_bounces']
+    capture_data.scene_info = {
+        'tal_version': tal.__version__,
+        'config': scene_config,
+        'args': vars(args),
+    }
+
+    return scan_type, laser_lookats, capture_data
+
+
+def __run_mitsuba(args, log_path, mitsuba_backend, scene_xml, hdr_path, defines, experiment_name, render_name, sensor_index,
+                  check_done=lambda: False):
+    if check_done():
+        log(LogLevel.INFO, f'Skipping {render_name} for {experiment_name}')
+        return
+
+    class StdoutPipe:
+        def __init__(self, pipe, logfile=None):
+            self.pipe = pipe
+            self.logfile = logfile
+
+        def write(self, data):
+            self.pipe.send(data)
+            if logfile is not None:
+                self.logfile.write(data)
+
+        def close(self):
+            self.pipe.send(None)
+            self.pipe.close()
+            if logfile is not None:
+                self.logfile.close()
+
+    pipe_r, pipe_w = multiprocessing.Pipe()
+    logfile = None
+    if args.do_logging and not args.dry_run:
+        logfile = open(log_path, 'w')
+    # NOTE: something here has a memory leak (probably Mitsuba-related)
+    # We run Mitsuba in a separate process to ensure that the leaks do not add up
+    # as they can fill your RAM in exhaustive scans
+    run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, scene_xml, hdr_path, defines,
+                            render_name, args, StdoutPipe(pipe_w, logfile), sensor_index)
+    if os.name == 'nt':
+        # NOTE: Windows does not support multiprocessing
+        run_mitsuba_f()
+    else:
+        process = multiprocessing.Process(target=run_mitsuba_f)
+        try:
+            process.start()
+            while True:
+                line = pipe_r.recv()
+                if line:
+                    if len(line.strip()) > 0:
+                        log(LogLevel.INFO, line)
                 else:
-                    logfile = None
-                    if args.do_logging and not args.dry_run:
-                        logfile = open(os.path.join(
-                            log_dir, f'{experiment_name}_{render_name}.log'), 'w')
-                    # NOTE: something here has a memory leak (probably Mitsuba-related)
-                    # We run Mitsuba in a separate process to ensure that the leaks do not add up
-                    # as they can fill your RAM in exhaustive scans
-                    queue = StdoutQueue()
-                    run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, steady_scene_xml, hdr_path, dict(),
-                                            render_name, logfile, args, sensor_index, queue)
-                    if os.name == 'nt':
-                        # NOTE: Windows does not support multiprocessing
-                        run_mitsuba_f()
-                    else:
-                        process = multiprocessing.Process(target=run_mitsuba_f)
-                        try:
-                            process.start()
-                            process.join()
-                        except KeyboardInterrupt:
-                            process.terminate()
-                            raise KeyboardInterrupt
-                    if args.do_logging and not args.dry_run:
-                        while not queue.empty():
-                            e = queue.get()
-                            if isinstance(e, Exception):
-                                raise e
-                            else:
-                                logfile.write(e)
-                        queue.close()
-                        logfile.close()
-                    if not args.dry_run:
-                        mitsuba_backend.convert_hdr_to_ldr(hdr_path, ldr_path)
+                    raise EOFError
+        except EOFError:
+            pipe_r.close()
+            process.join()
+        except KeyboardInterrupt:
+            process.terminate()
+            raise KeyboardInterrupt
 
-            render_steady('back_view', 0)
-            render_steady('side_view', 1)
+    if args.do_logging and not args.dry_run:
+        logfile.flush()
+        logfile.close()
 
-        if args.do_ground_truth_renders:
-            if not args.quiet:
-                log(LogLevel.INFO,
-                    f'ground_truth for {experiment_name}...')
-            gt_ext = mitsuba_backend.get_hdr_extension()
-            gt_path = os.path.join(partial_results_dir,
-                                   f'{experiment_name}_ground_truth.{gt_ext}')
-            if os.path.exists(gt_path) and not args.quiet:
-                pass  # skip
-            else:
-                logfile = None
-                if args.do_logging and not args.dry_run:
-                    logfile = open(os.path.join(
-                        log_dir, f'{experiment_name}_ground_truth.log'), 'w')
-                # NOTE: something here has a memory leak (probably Mitsuba-related)
-                # We run Mitsuba in a separate process to ensure that the leaks do not add up
-                # as they can fill your RAM in exhaustive scans
-                queue = StdoutQueue()
-                run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, ground_truth_scene_xml, gt_path, dict(),
-                                        'ground_truth', logfile, args, 0, queue)
-                if os.name == 'nt':
-                    # NOTE: Windows does not support multiprocessing
-                    run_mitsuba_f()
+
+class RenderException(Exception):
+    pass
+
+
+def __merge_gt_results(args, mitsuba_backend, capture_data, gt_path):
+    if not args.do_ground_truth_renders:
+        return
+
+    gt_image = mitsuba_backend.read_mitsuba_bitmap(gt_path)
+    depth = gt_image[:, :, 0:3]
+    normals = gt_image[:, :, 3:6]
+    capture_data.scene_info['ground_truth'] = {
+        'format': GroundTruthFormat.X_Y,
+        'depth': depth,
+        'normals': normals,
+    }
+
+    return capture_data
+
+
+def __merge_nlos_results(args, mitsuba_backend, capture_data, partial_results_dir, experiment_name, scan_type, laser_lookats):
+
+    if scan_type == 'single':
+        hdr_path, _ = mitsuba_backend.partial_laser_path(
+            partial_results_dir,
+            experiment_name,
+            *laser_lookats[0])
+        capture_data.H = mitsuba_backend.read_transient_image(hdr_path)
+    elif scan_type == 'exhaustive' or scan_type == 'confocal':
+        laser_width = capture_data.H.shape[1]
+
+        e_laser_lookats = enumerate(laser_lookats)
+        if len(laser_lookats) > 1:
+            e_laser_lookats = tqdm(
+                e_laser_lookats, desc='Merging partial results...',
+                file=TQDMLogRedirect(), ascii=True, total=len(laser_lookats))
+        try:
+            for i, (laser_lookat_x, laser_lookat_y) in e_laser_lookats:
+                x = i % laser_width
+                y = i // laser_width
+                hdr_path, _ = mitsuba_backend.partial_laser_path(
+                    partial_results_dir,
+                    experiment_name,
+                    laser_lookat_x, laser_lookat_y)
+                if scan_type == 'confocal':
+                    capture_data.H[:, x:x+1, y:y+1, ...] = \
+                        mitsuba_backend.read_transient_image(hdr_path)
+                elif scan_type == 'exhaustive':
+                    capture_data.H[:, x, y, ...] = \
+                        mitsuba_backend.read_transient_image(hdr_path)
                 else:
-                    process = multiprocessing.Process(target=run_mitsuba_f)
-                    try:
-                        process.start()
-                        process.join()
-                    except KeyboardInterrupt:
-                        process.terminate()
-                        raise KeyboardInterrupt
-                if args.do_logging and not args.dry_run:
-                    while not queue.empty():
-                        e = queue.get()
-                        if isinstance(e, Exception):
-                            raise e
-                        else:
-                            logfile.write(e)
-                    queue.close()
-                    logfile.close()
+                    raise AssertionError
+        except Exception as exc:
+            raise RenderException from exc
+    else:
+        raise AssertionError(
+            'Invalid scan_type, must be one of {single|exhaustive|confocal}')
 
-        pbar = tqdm(
-            enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
-            file=TQDMLogRedirect(), ascii=True, total=len(laser_lookats))
-        for i, (laser_lookat_x, laser_lookat_y) in pbar:
-            try:
-                hdr_path, is_dir = mitsuba_backend.partial_laser_path(
-                    partial_results_dir, experiment_name, laser_lookat_x, laser_lookat_y)
-                if os.path.exists(hdr_path) and not args.quiet:
-                    continue  # skip
-                if is_dir:
-                    os.mkdir(hdr_path)
-            except OSError as exc:
-                raise AssertionError(f'Invalid permissions: {exc}') from exc
-            defines = {
-                'laser_lookat_x': laser_lookat_x,
-                'laser_lookat_y': laser_lookat_y,
-            }
-            logfile = None
-            if args.do_logging and not args.dry_run:
-                logfile = open(os.path.join(
-                    log_dir,
-                    f'{experiment_name}_L[{laser_lookat_x}][{laser_lookat_y}].log'), 'w')
-            queue = StdoutQueue()
-            render_name = f'Laser {i + 1} of {len(laser_lookats)}'
-            # NOTE: something here has a memory leak (probably Mitsuba-related)
-            # We run Mitsuba in a separate process to ensure that the leaks do not add up
-            # as they can fill your RAM in exhaustive scans
-            run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, nlos_scene_xml, hdr_path, defines,
-                                    render_name, sys.stdout, args, queue=queue)
-            if os.name == 'nt':
-                # NOTE: Windows does not support multiprocessing
-                run_mitsuba_f()
-            else:
-                process = multiprocessing.Process(target=run_mitsuba_f)
-                try:
-                    process.start()
-                    process.join()
-                except KeyboardInterrupt:
-                    process.terminate()
-                    raise KeyboardInterrupt
-            if scan_type == 'exhaustive' and i == 0:
-                size_bytes = os.path.getsize(hdr_path)
-                final_size_gb = size_bytes * len(laser_lookats) / 2**30
-                pbar.set_description(
-                    f'Rendering {experiment_name} ({scan_type}, estimated size: {final_size_gb:.2f} GB)...')
-            if args.do_logging and not args.dry_run:
-                past_elems = []
-                while not queue.empty():
-                    e = queue.get()
-                    past_elems.append(e)
-                    if isinstance(e, Exception):
-                        log(LogLevel.ERROR, '')
-                        log(LogLevel.ERROR, '/!\ Mitsuba thread got an exception!')
-                        log(LogLevel.ERROR, '')
-                        for pe in past_elems[:-1]:
-                            log(LogLevel.ERROR, pe)
-                        log(LogLevel.ERROR, '')
-                        raise e
-                    else:
-                        logfile.write(e)
-                    logfile.flush()
-                queue.close()
-                logfile.close()
+    return capture_data
 
-        if args.dry_run:
-            return
 
-        if not args.quiet:
-            log(LogLevel.INFO, 'Merging partial results...')
+def _main_render(config_path, args,
+                 mitsuba_backend, scene_config,
+                 root_dir, partial_results_dir, steady_dir, log_dir,
+                 progress_file, num_retries=0):
+    """ General initialization """
 
-        capture_data = NLOSCaptureData()
-        capture_data.sensor_xyz = np.array([
-            scene_config['sensor_x'],
-            scene_config['sensor_y'],
-            scene_config['sensor_z'],
-        ], dtype=np.float32)
-        capture_data.sensor_grid_xyz = sensor_grid_xyz
-        capture_data.sensor_grid_normals = sensor_grid_normals
-        capture_data.sensor_grid_format = GridFormat.X_Y_3
-        capture_data.laser_xyz = np.array([
-            scene_config['laser_x'],
-            scene_config['laser_y'],
-            scene_config['laser_z'],
-        ], dtype=np.float32)
-        capture_data.laser_grid_xyz = laser_grid_xyz
-        capture_data.laser_grid_normals = laser_grid_normals
-        capture_data.laser_grid_format = GridFormat.X_Y_3
-        # NOTE(diego): we do not store volume information for now
-        # capture_data.volume_format = VolumeFormat.X_Y_Z_3
-        capture_data.delta_t = scene_config['bin_width_opl']
-        capture_data.t_start = scene_config['start_opl']
-        capture_data.t_accounts_first_and_last_bounces = \
-            scene_config['account_first_and_last_bounces']
-        capture_data.scene_info = {
-            'tal_version': tal.__version__,
-            'config': scene_config,
-            'args': vars(args),
-        }
+    steady_scene_xml, ground_truth_scene_xml, nlos_scene_xml = \
+        __write_scene_xmls(args, mitsuba_backend, scene_config, root_dir)
+    experiment_name = scene_config['name']
 
-        if args.do_ground_truth_renders:
-            gt_image = mitsuba_backend.read_mitsuba_bitmap(gt_path)
-            depth = gt_image[:, :, 0:3]
-            normals = gt_image[:, :, 3:6]
-            capture_data.scene_info['ground_truth'] = {
-                'format': GroundTruthFormat.X_Y,
-                'depth': depth,
-                'normals': normals,
-            }
+    """ Steady state + ground truth """
 
-        if scan_type == 'single':
-            hdr_path, _ = mitsuba_backend.partial_laser_path(
-                partial_results_dir,
-                experiment_name,
-                *laser_lookats[0])
-            capture_data.H = mitsuba_backend.read_transient_image(hdr_path)
-            capture_data.H_format = HFormat.T_Sx_Sy
-        elif scan_type == 'exhaustive' or scan_type == 'confocal':
-            if scan_type == 'exhaustive':
-                capture_data.H = np.empty(
-                    (num_bins, laser_width, laser_height,
-                     sensor_width, sensor_height),
-                    dtype=np.float32)
-                capture_data.H_format = HFormat.T_Lx_Ly_Sx_Sy
-            elif scan_type == 'confocal':
-                capture_data.H = np.empty(
-                    (num_bins, laser_width, laser_height),
-                    dtype=np.float32)
-                capture_data.H_format = HFormat.T_Sx_Sy
-            else:
-                raise AssertionError
-
-            e_laser_lookats = enumerate(laser_lookats)
-            if not args.quiet and len(laser_lookats) > 1:
-                e_laser_lookats = tqdm(
-                    e_laser_lookats, desc='Merging partial results...',
-                    file=TQDMLogRedirect(), ascii=True, total=len(laser_lookats))
-            try:
-                for i, (laser_lookat_x, laser_lookat_y) in e_laser_lookats:
-                    x = i % laser_width
-                    y = i // laser_width
-                    hdr_path, _ = mitsuba_backend.partial_laser_path(
-                        partial_results_dir,
-                        experiment_name,
-                        laser_lookat_x, laser_lookat_y)
-                    if scan_type == 'confocal':
-                        capture_data.H[:, x:x+1, y:y+1, ...] = \
-                            mitsuba_backend.read_transient_image(hdr_path)
-                    elif scan_type == 'exhaustive':
-                        capture_data.H[:, x, y, ...] = \
-                            mitsuba_backend.read_transient_image(hdr_path)
-                    else:
-                        raise AssertionError
-            except Exception as exc:
-                if num_retries >= 10:
-                    raise AssertionError(
-                        f'Failed to read partial results after {num_retries} retries')
-                mitsuba_backend.remove_transient_image(hdr_path)
-                # TODO Mitsuba sometimes fails to write some images,
-                # it seems like some sort of race condition
-                # If there is a partial result missing, just re-launch for now
-                log(LogLevel.INFO,
-                    f'We missed some partial results (iteration {i} failed because: {exc}), re-launching...')
-                return render_nlos_scene(config_path, args, num_retries=num_retries + 1)
-        else:
-            raise AssertionError(
-                'Invalid scan_type, must be one of {single|exhaustive|confocal}')
-
-        hdf5_path = os.path.join(root_dir, f'{experiment_name}.hdf5')
-        tal.io.write_capture(hdf5_path, capture_data,
-                             file_format=FileFormat.HDF5_TAL)
-
-        if not args.quiet:
-            log(LogLevel.INFO, f'Stored result in {hdf5_path}')
-
-        # remove IN_PROGRESS file
-        os.remove(progress_file)
-
-        if args.keep_partial_results:
-            return
-
-        if not args.quiet:
+    if args.do_steady_renders:
+        def render_steady(render_name, sensor_index):
             log(LogLevel.INFO,
-                f'Cleaning partial results in {partial_results_dir}...')
+                f'{render_name} for {experiment_name} steady render...')
+            hdr_ext = mitsuba_backend.get_hdr_extension()
+            hdr_path = os.path.join(partial_results_dir,
+                                    f'{experiment_name}_{render_name}.{hdr_ext}')
+            ldr_path = os.path.join(steady_dir,
+                                    f'{experiment_name}_{render_name}.png')
+            log_path = os.path.join(
+                log_dir, f'{experiment_name}_{render_name}.log')
 
-        shutil.rmtree(partial_results_dir)
+            __run_mitsuba(args, log_path, mitsuba_backend, steady_scene_xml, hdr_path, dict(),
+                          experiment_name, render_name, sensor_index, check_done=lambda: os.path.exists(ldr_path))
 
-        if not args.quiet:
-            log(LogLevel.INFO, f'All clean.')
+            if not args.dry_run:
+                mitsuba_backend.convert_hdr_to_ldr(hdr_path, ldr_path)
+
+        render_steady('back_view', 0)
+        render_steady('side_view', 1)
+
+    if args.do_ground_truth_renders:
+        gt_render_name = 'ground_truth'
+        log(LogLevel.INFO, f'{gt_render_name} for {experiment_name}...')
+        gt_ext = mitsuba_backend.get_hdr_extension()
+        gt_path = os.path.join(partial_results_dir,
+                               f'{experiment_name}_{gt_render_name}.{gt_ext}')
+        log_path = os.path.join(
+            log_dir, f'{experiment_name}_{gt_render_name}.log')
+
+        __run_mitsuba(args, log_path, mitsuba_backend, ground_truth_scene_xml, gt_path, dict(),
+                      experiment_name, gt_render_name, 0, check_done=lambda: os.path.exists(gt_path))
+
+    """ NLOS renders """
+
+    scan_type, laser_lookats, capture_data = \
+        __write_metadata_and_get_laser_lookats(args, scene_config)
+
+    pbar = tqdm(
+        enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
+        file=TQDMLogRedirect(), ascii=True, total=len(laser_lookats))
+    for i, (laser_lookat_x, laser_lookat_y) in pbar:
+        try:
+            hdr_path, is_dir = mitsuba_backend.partial_laser_path(
+                partial_results_dir, experiment_name, laser_lookat_x, laser_lookat_y)
+            if is_dir and not os.path.exists(hdr_path):
+                os.mkdir(hdr_path)
+        except OSError as exc:
+            raise AssertionError(f'Invalid permissions: {exc}') from exc
+        defines = {
+            'laser_lookat_x': laser_lookat_x,
+            'laser_lookat_y': laser_lookat_y,
+        }
+        log_path = os.path.join(
+            log_dir,
+            f'{experiment_name}_L[{laser_lookat_x}][{laser_lookat_y}].log')
+        render_name = f'Laser {i + 1} of {len(laser_lookats)}'
+
+        __run_mitsuba(args, log_path, mitsuba_backend, nlos_scene_xml, hdr_path, defines,
+                      experiment_name, render_name, 0, check_done=lambda: os.path.exists(hdr_path))
+
+        if scan_type == 'exhaustive' and i == 0:
+            size_bytes = os.path.getsize(hdr_path)
+            final_size_gb = size_bytes * len(laser_lookats) / 2**30
+            pbar.set_description(
+                f'Rendering {experiment_name} ({scan_type}, estimated size: {final_size_gb:.2f} GB)...')
+
+    if args.dry_run:
+        return
+
+    """ Generate final HDF5 file"""
+
+    log(LogLevel.INFO, 'Reading partial results and generating HDF5 file...')
+    try:
+        capture_data = __merge_gt_results(
+            args, mitsuba_backend, capture_data, gt_path)
+        capture_data = __merge_nlos_results(
+            args, mitsuba_backend, capture_data, partial_results_dir, experiment_name, scan_type, laser_lookats)
+    except RenderException:
+        if num_retries >= 10:
+            raise AssertionError(
+                f'Failed to read partial results after {num_retries} retries')
+        # TODO(diego): Mitsuba sometimes fails to write some images,
+        # it seems like some sort of race condition
+        # If there is a partial result missing, just re-launch for now
+        mitsuba_backend.remove_transient_image(hdr_path)
+        log(LogLevel.INFO,
+            f'We missed some partial results (iteration {i} failed because: {exc}), re-launching...')
+        return _main_render(config_path, args, num_retries=num_retries + 1)
+
+    hdf5_path = os.path.join(root_dir, f'{experiment_name}.hdf5')
+    tal.io.write_capture(hdf5_path, capture_data,
+                         file_format=FileFormat.HDF5_TAL)
+    log(LogLevel.INFO, f'Stored result in {hdf5_path}')
+
+    if not args.keep_partial_results:
+        log(LogLevel.INFO,
+            f'Cleaning partial results in {partial_results_dir}...')
+        shutil.rmtree(partial_results_dir, ignore_errors=True)
+        log(LogLevel.INFO, f'All clean.')
+
+    os.remove(progress_file)
+
+    return hdf5_path
+
+
+def render_nlos_scene(config_path, args):
+    mitsuba_backend, scene_config, config_path = \
+        _read_config_and_init_mitsuba_variant(config_path, args)
+
+    root_dir, partial_results_dir, steady_dir, log_dir, progress_file = \
+        _check_progress_and_create_folders(config_path, args)
+
+    try:
+        return _main_render(config_path, args,
+                            mitsuba_backend, scene_config,
+                            root_dir, partial_results_dir, steady_dir, log_dir,
+                            progress_file)
     except KeyboardInterrupt:
         delete = None
         while delete is None:
@@ -518,5 +525,5 @@ def render_nlos_scene(config_path, args, num_retries=0):
             except KeyboardInterrupt:
                 pass
         if delete:
-            shutil.rmtree(root_dir)
+            shutil.rmtree(root_dir, ignore_errors=True)
             os.remove(progress_file)

@@ -71,6 +71,8 @@ def solve(data: NLOSCaptureData,
         If True, shows a progress bar with estimated time remaining.
     """
     from tal.reconstruct.util import convert_to_N_3, convert_reconstruction_from_N_3
+    if projector_focus is not None:
+        projector_focus = np.array(projector_focus)
     H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3, _, __ = \
         convert_to_N_3(data, volume_xyz, volume_format)
 
