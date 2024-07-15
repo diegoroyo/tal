@@ -111,7 +111,7 @@ def get_materials():
     }
 
 
-def get_scene_xml(config, random_seed=0, quiet=False):
+def get_scene_xml(config, random_seed=0):
     import os
     import tal
     from tal.util import fdent
@@ -295,7 +295,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
         name = g('name')
         is_relay_wall = name == relay_wall_name
-        if is_relay_wall and g('mesh')['type'] != 'rectangle' and not quiet:
+        if is_relay_wall and g('mesh')['type'] != 'rectangle':
             log(LogLevel.WARNING, 'Relay wall does not work well with meshes that are '
                 'not of type "rectangle" because of wrong UV mapping. '
                 'Please make sure that you know what you are doing')
@@ -492,62 +492,57 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         command = ['/bin/bash', '-c',
                    f'source "{setpath_location}" && {" ".join(command)}']
 
-    if args.quiet:
-        # simplified version, block until done rendering
-        mitsuba_process = subprocess.Popen(
-            command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    else:
-        # need to pass the command through stdbuf to be able to read the progress bar
-        command = ['stdbuf', '-o0'] + command
-        mitsuba_process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    # need to pass the command through stdbuf to be able to read the progress bar
+    command = ['stdbuf', '-o0'] + command
+    mitsuba_process = subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-        # read the progress bar and pass the info to the user through a tqdm bar
-        # this is totally not overengineering-trust me-this saves so much time
-        progress_re = re.compile(
-            r'Rendering \[(=* *)\] \([\d\.]+\w+, ETA: ([\d\.]+\w+)\)')
-        read_opl = defines.get('auto_detect_bins', False)
-        if read_opl:
-            opl_output = ''
-            opl_re = re.compile(
-                r'limits: \[(\d+\.\d+), \d+\.\d+\] with bin width (\d+\.\d+)')
-        with tqdm(desc=experiment_name, total=100, ascii=True, leave=False,
-                  file=TQDMLogRedirect(),
-                  bar_format='{desc} |{bar}| [{n:.2f}%{postfix}] ') as pbar:
-            output = None
-            while output is None or len(output) > 0:
-                output = mitsuba_process.stdout.read(160)
-                try:
-                    output = output.decode('utf-8')
-                except UnicodeDecodeError:
-                    continue
-                if logfile is not None:
-                    logfile.write(output)
-                    logfile.flush()
-                if read_opl:
-                    opl_output += output
-                    matches = opl_re.findall(opl_output)
-                    if len(matches) > 0:
-                        start_opl, bin_width_opl = matches[-1]
-                        start_opl = float(start_opl)
-                        bin_width_opl = float(bin_width_opl)
-                        log(LogLevel.INFO, 'Auto-detected histogram: '
-                            f'start_opl={start_opl:.4f}, bin_width_opl={bin_width_opl:.6f}')
-                        defines.update(start_opl=start_opl)
-                        defines.update(bin_width_opl=bin_width_opl)
-                        read_opl = False
-                        del opl_output
-                matches = progress_re.findall(output)
+    # read the progress bar and pass the info to the user through a tqdm bar
+    # this is totally not overengineering-trust me-this saves so much time
+    progress_re = re.compile(
+        r'Rendering \[(=* *)\] \([\d\.]+\w+, ETA: ([\d\.]+\w+)\)')
+    read_opl = defines.get('auto_detect_bins', False)
+    if read_opl:
+        opl_output = ''
+        opl_re = re.compile(
+            r'limits: \[(\d+\.\d+), \d+\.\d+\] with bin width (\d+\.\d+)')
+    with tqdm(desc=experiment_name, total=100, ascii=True, leave=False,
+              file=TQDMLogRedirect(),
+              bar_format='{desc} |{bar}| [{n:.2f}%{postfix}] ') as pbar:
+        output = None
+        while output is None or len(output) > 0:
+            output = mitsuba_process.stdout.read(160)
+            try:
+                output = output.decode('utf-8')
+            except UnicodeDecodeError:
+                continue
+            if logfile is not None:
+                logfile.write(output)
+                logfile.flush()
+            if read_opl:
+                opl_output += output
+                matches = opl_re.findall(opl_output)
                 if len(matches) > 0:
-                    progress, eta = matches[-1]
-                    completed = progress.count('=')
-                    not_completed = progress.count(' ')
-                    progress = 100 * completed / (completed + not_completed)
-                    pbar.update(progress - pbar.n)
-                    pbar.set_postfix_str(f'ETA: {eta}')
-                    if not_completed == 0:
-                        break
-                    time.sleep(1)
+                    start_opl, bin_width_opl = matches[-1]
+                    start_opl = float(start_opl)
+                    bin_width_opl = float(bin_width_opl)
+                    log(LogLevel.INFO, 'Auto-detected histogram: '
+                        f'start_opl={start_opl:.4f}, bin_width_opl={bin_width_opl:.6f}')
+                    defines.update(start_opl=start_opl)
+                    defines.update(bin_width_opl=bin_width_opl)
+                    read_opl = False
+                    del opl_output
+            matches = progress_re.findall(output)
+            if len(matches) > 0:
+                progress, eta = matches[-1]
+                completed = progress.count('=')
+                not_completed = progress.count(' ')
+                progress = 100 * completed / (completed + not_completed)
+                pbar.update(progress - pbar.n)
+                pbar.set_postfix_str(f'ETA: {eta}')
+                if not_completed == 0:
+                    break
+                time.sleep(1)
 
     # wait for the process to end
     mitsuba_process.communicate()

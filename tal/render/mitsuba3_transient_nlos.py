@@ -124,7 +124,7 @@ def get_materials():
     }
 
 
-def get_scene_xml(config, random_seed=0, quiet=False):
+def get_scene_xml(config, random_seed=0):
     import os
     import tal
     from tal.util import fdent
@@ -342,7 +342,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
         name = g('name')
         is_relay_wall = name == relay_wall_name
-        if is_relay_wall and g('mesh')['type'] != 'rectangle' and not quiet:
+        if is_relay_wall and g('mesh')['type'] != 'rectangle':
             log(LogLevel.WARNING, 'Relay wall does not work well with meshes that are '
                 'not of type "rectangle" because of wrong UV mapping. '
                 'Please make sure that you know what you are doing')
@@ -516,7 +516,7 @@ def get_scene_xml(config, random_seed=0, quiet=False):
 
 
 def run_mitsuba(scene_xml_path, hdr_path, defines,
-                experiment_name, logfile, args, sensor_index=0, queue=None):
+                experiment_name, args, pipe_output, sensor_index=0):
     try:
         import mitsuba as mi
         import mitransient as mitr
@@ -526,8 +526,8 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         import sys
         import os
 
-        sys.stdout = queue
-        sys.stderr = queue
+        sys.stdout = pipe_output
+        sys.stderr = pipe_output
         if os.name == 'posix':
             # Nice only available in posix systems
             os.nice(args.nice)
@@ -569,16 +569,13 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         if isinstance(integrator, TransientADIntegrator):
             integrator.prepare_transient(scene, sensor_index)
 
-            progress_bar = None
-            if not args.quiet:
-                progress_bar = tqdm(total=100, desc=experiment_name,
-                                    file=TQDMLogRedirect(),
-                                    ascii=True, leave=False)
+            progress_bar = tqdm(total=100, desc=experiment_name,
+                                file=TQDMLogRedirect(),
+                                ascii=True, leave=False)
 
             def update_progress(p):
-                if not args.quiet:
-                    progress_bar.n = int(p * 100)
-                    progress_bar.refresh()
+                progress_bar.n = int(p * 100)
+                progress_bar.refresh()
 
             steady_image, transient_image = integrator.render(
                 scene, progress_callback=update_progress)
@@ -591,8 +588,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             if result.ndim == 4:
                 # sum all channels
                 result = np.sum(result, axis=-1)
-            if not args.quiet:
-                progress_bar.close()
+            progress_bar.close()
             del steady_image, transient_image, progress_bar
         else:
             image = integrator.render(scene, sensor_index)
@@ -602,10 +598,9 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
 
         del result, scene, integrator
     except Exception as e:
-        queue.write(e)
-
-    sys.stdout = sys.__stdout__
-    sys.stderr = sys.__stderr__
+        print('/!\ Mitsuba process threw an exception:', e, file=sys.stderr)
+    finally:
+        pipe_output.close()
 
 
 def read_mitsuba_bitmap(path: str):

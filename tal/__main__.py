@@ -95,9 +95,6 @@ def main():
     render_parser.add_argument('-n', '--nice',
                                type=int, default=0, required=False,
                                help='Change +/- in nice factor. Positive values = lower priority. Negative values = higher priority (needs sudo)')
-    render_parser.add_argument('-q', '--quiet',
-                               dest='quiet', action='store_true',
-                               help='Disable progress bars and other verbose outputs')
     render_parser.add_argument('-g', '--gpu',
                                dest='gpus', nargs='*', type=int, default=[], required=False,
                                help='Select which GPUs should be used by Mitsuba via the CUDA_VISIBLE_DEVICES env. variable')

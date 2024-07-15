@@ -69,7 +69,7 @@ def write_hdf5(filename: str, capture_data: dict):
         if value is None:
             file[key] = h5py.Empty(float)
         elif isinstance(value, dict):
-            file[key] = yaml.dump(value)
+            file[key] = yaml.dump(value, Dumper=yaml.CDumper)
         elif isinstance(value, Enum):
             dt = h5py.enum_dtype(dict((item.name, item.value)
                                  for item in value.__class__), basetype='i')
@@ -242,7 +242,7 @@ class NLOSCaptureData:
             if key not in own_dict_keys:
                 raise AssertionError(f'raw_data contains unknown key: {key}')
             if key == 'scene_info' and not isinstance(value, h5py.Empty):
-                value = yaml.load(value, Loader=yaml.Loader)
+                value = yaml.load(value, Loader=yaml.CLoader)
 
             setattr(self, key, value)
 
