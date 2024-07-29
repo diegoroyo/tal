@@ -1,5 +1,5 @@
 ##
-# Mitsuba
+# Mitsuba and Monte Carlo integrator settings
 ##
 mitsuba_variant: $default_mitsuba_variant$  # see mitsuba for possible types
 integrator_max_depth: -1
@@ -10,6 +10,10 @@ integrator_nlos_hidden_geometry_sampling: false
 integrator_nlos_hidden_geometry_sampling_do_rroulette: false
 integrator_nlos_hidden_geometry_sampling_includes_relay_wall: true
 sample_count: 1_000_000
+
+##
+# Histograms
+##
 account_first_and_last_bounces: false
 num_bins: 4096
 bin_width_opl: 0.003
@@ -43,6 +47,11 @@ laser_aperture_start_x: 0  # 0: left, 1: right of relay wall
 laser_aperture_start_y: 0  # 0: top, 1: bottom of relay wall
 laser_aperture_end_x: 1
 laser_aperture_end_y: 1
+laser_emission_mode: rgb   # mono, rgb, spectrum
+# see https://mitsuba.readthedocs.io/en/latest/src/key_topics/scene_format.html#rgb-colors
+# mono expects a single float value, rgb expects three float values separated by commas
+# spectrum expects a wavelength:intensity list separated by commas e.g. "400:1, 700:1"
+laser_emission: 1.0, 1.0, 1.0
 
 ##
 # Geometry (valid for hidden geometry or relay wall)

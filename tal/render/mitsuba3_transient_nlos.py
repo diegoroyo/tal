@@ -269,14 +269,33 @@ def get_scene_xml(config, random_seed=0):
             </film>
         </sensor>''')
 
-    laser_nlos = fdent(f'''\
+    laser_x = v('laser_x')
+    laser_y = v('laser_y')
+    laser_z = v('laser_z')
+    laser_fov = 0.2 if v('integrator_nlos_laser_sampling') else 2
+    if v('laser_emission_mode') == 'mono':
+        laser_emission = '<spectrum name="irradiance" value="{value}"/>'
+    elif v('laser_emission_mode') == 'rgb':
+        laser_emission = '<rgb name="irradiance" value="{value}"/>'
+    elif v('laser_emission_mode') == 'spectrum':
+        laser_emission = '<spectrum name="irradiance" value="{value}"/>'
+    else:
+        raise AssertionError(
+            'laser_emission_mode should be one of {mono|rgb|spectrum}')
+    laser_emission = laser_emission.format(value=v('laser_emission'))
+
+    laser_nlos = fdent('''\
         <emitter type="projector" id="laser">
             <transform name="to_world">
-                <translate x="{v('laser_x')}" y="{v('laser_y')}" z="{v('laser_z')}"/>
+                <translate x="{laser_x}"
+                           y="{laser_y}"
+                           z="{laser_z}"/>
             </transform>
-            <rgb name="irradiance" value="1.0, 1.0, 1.0"/>
-            <float name="fov" value="{0.2 if v('integrator_nlos_laser_sampling') else 2}"/>
-        </emitter>''')
+            {laser_emission}
+            <float name="fov" value="{laser_fov}"/>
+        </emitter>''',
+                       laser_x=laser_x, laser_y=laser_y, laser_z=laser_z,
+                       laser_emission=laser_emission, laser_fov=laser_fov)
 
     if v('scan_type') == 'confocal':
         film_width = 1
