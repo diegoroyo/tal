@@ -45,6 +45,7 @@ def get_name():
 
 def get_scene_version():
     import mitsuba as mi
+    mi.set_variant('scalar_rgb')
     return mi.__version__
 
 
@@ -273,16 +274,18 @@ def get_scene_xml(config, random_seed=0):
     laser_y = v('laser_y')
     laser_z = v('laser_z')
     laser_fov = 0.2 if v('integrator_nlos_laser_sampling') else 2
-    if v('laser_emission_mode') == 'mono':
+    laser_emission_mode = v('laser_emission_mode') or 'rgb'
+    laser_emission_value = v('laser_emission') or '1.0, 1.0, 1.0'
+    if laser_emission_mode == 'mono':
         laser_emission = '<spectrum name="irradiance" value="{value}"/>'
-    elif v('laser_emission_mode') == 'rgb':
+    elif laser_emission_mode == 'rgb':
         laser_emission = '<rgb name="irradiance" value="{value}"/>'
-    elif v('laser_emission_mode') == 'spectrum':
+    elif laser_emission_mode == 'spectrum':
         laser_emission = '<spectrum name="irradiance" value="{value}"/>'
     else:
         raise AssertionError(
             'laser_emission_mode should be one of {mono|rgb|spectrum}')
-    laser_emission = laser_emission.format(value=v('laser_emission'))
+    laser_emission = laser_emission.format(value=laser_emission_value)
 
     laser_nlos = fdent('''\
         <emitter type="projector" id="laser">

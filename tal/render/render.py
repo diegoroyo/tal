@@ -262,11 +262,13 @@ def __write_metadata_and_get_laser_lookats(args, scene_config):
     return scan_type, laser_lookats, capture_data
 
 
-def __run_mitsuba(args, log_path, mitsuba_backend, scene_xml, hdr_path, defines, experiment_name, render_name, sensor_index,
-                  check_done=lambda: False):
+def __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, scene_xml, hdr_path, defines,
+                  experiment_name, render_name, sensor_index, check_done=lambda: False):
     if check_done():
         log(LogLevel.INFO, f'Skipping {render_name} for {experiment_name}')
         return
+    if not args.dry_run:
+        mitsuba_backend.set_variant(mitsuba_variant)
 
     class StdoutPipe:
         def __init__(self, pipe, logfile=None):
@@ -389,6 +391,7 @@ def _main_render(config_path, args,
     steady_scene_xml, ground_truth_scene_xml, nlos_scene_xml = \
         __write_scene_xmls(args, mitsuba_backend, scene_config, root_dir)
     experiment_name = scene_config['name']
+    mitsuba_variant = scene_config['mitsuba_variant']
 
     """ Steady state + ground truth """
 
@@ -404,7 +407,7 @@ def _main_render(config_path, args,
             log_path = os.path.join(
                 log_dir, f'{experiment_name}_{render_name}.log')
 
-            __run_mitsuba(args, log_path, mitsuba_backend, steady_scene_xml, hdr_path, dict(),
+            __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, steady_scene_xml, hdr_path, dict(),
                           experiment_name, render_name, sensor_index, check_done=lambda: os.path.exists(ldr_path))
 
             if not args.dry_run:
@@ -422,7 +425,7 @@ def _main_render(config_path, args,
         log_path = os.path.join(
             log_dir, f'{experiment_name}_{gt_render_name}.log')
 
-        __run_mitsuba(args, log_path, mitsuba_backend, ground_truth_scene_xml, gt_path, dict(),
+        __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, ground_truth_scene_xml, gt_path, dict(),
                       experiment_name, gt_render_name, 0, check_done=lambda: os.path.exists(gt_path))
 
     """ NLOS renders """
@@ -450,7 +453,7 @@ def _main_render(config_path, args,
             f'{experiment_name}_L[{laser_lookat_x}][{laser_lookat_y}].log')
         render_name = f'Laser {i + 1} of {len(laser_lookats)}'
 
-        __run_mitsuba(args, log_path, mitsuba_backend, nlos_scene_xml, hdr_path, defines,
+        __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, nlos_scene_xml, hdr_path, defines,
                       experiment_name, render_name, 0, check_done=lambda: os.path.exists(hdr_path))
 
         if scan_type == 'exhaustive' and i == 0:
