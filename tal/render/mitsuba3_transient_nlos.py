@@ -190,14 +190,14 @@ def get_scene_xml(config, random_seed=0):
     dummy_lights_and_geometry_steady = fdent(f'''\
         <!-- Colored spheres to mark the laser and sensor positions -->
         <shape type="sphere">
-            <point name="center" x="{v('sensor_x')}" y="{v('sensor_y')}" z="{v('sensor_z')}"/>
+            <point name="center" x="{v('laser_x')}" y="{v('laser_y')}" z="{v('laser_z')}"/>
             <float name="radius" value="0.05"/>
             <bsdf type="diffuse" id="red">
                 <rgb name="reflectance" value="1.0, 0.0, 0.0"/>
             </bsdf>
         </shape>
         <shape type="sphere">
-            <point name="center" x="{v('laser_x')}" y="{v('laser_y')}" z="{v('laser_z')}"/>
+            <point name="center" x="{v('sensor_x')}" y="{v('sensor_y')}" z="{v('sensor_z')}"/>
             <float name="radius" value="0.05"/>
             <bsdf type="diffuse" id="blue">
                 <rgb name="reflectance" value="0.0, 0.0, 1.0"/>

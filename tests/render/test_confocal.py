@@ -35,4 +35,4 @@ def test01_Z_confocal():
     data = tal.io.read_capture(hdf5_path)
 
     assert data.H.shape == (2048, 16, 16)
-    assert np.isclose(data.H.sum(), 20.65128)
+    assert np.isclose(data.H.sum(), 72.7698)

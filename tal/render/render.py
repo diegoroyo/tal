@@ -283,6 +283,10 @@ def __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, scene_xml, h
             if logfile is not None:
                 self.logfile.write(data)
 
+        def flush(self):
+            if self.logfile is not None and not self.logfile.closed:
+                self.logfile.flush()
+
         def close(self):
             if self.pipe is not None:
                 self.pipe.send(None)
@@ -310,9 +314,8 @@ def __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, scene_xml, h
     # as they can fill your RAM in exhaustive scans
     run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, scene_xml, hdr_path, defines,
                             render_name, args, output, sensor_index)
-    if run_in_different_process:
+    if not run_in_different_process:
         run_mitsuba_f()
-        pipe_r.close()
     else:
         process = multiprocessing.Process(target=run_mitsuba_f)
         try:

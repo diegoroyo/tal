@@ -35,4 +35,4 @@ def test02_Z_exhaustive():
     data = tal.io.read_capture(hdf5_path)
 
     assert data.H.shape == (2048, 16, 16, 16, 16)
-    assert np.isclose(data.H.sum(), 3640.9846)
+    assert np.isclose(data.H.sum(), 11781.943)

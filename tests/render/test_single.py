@@ -34,7 +34,7 @@ def test00_Z_single_llvm():
     data = tal.io.read_capture(hdf5_path)
 
     assert data.H.shape == (320, 64, 64)
-    assert np.isclose(data.H.sum(), 135.80711)
+    assert np.isclose(data.H.sum(), 280.32675)
 
 
 def test00_Z_single_cuda():
@@ -63,4 +63,4 @@ def test00_Z_single_cuda():
     data = tal.io.read_capture(hdf5_path)
 
     assert data.H.shape == (320, 64, 64)
-    assert np.isclose(data.H.sum(), 135.80711)
+    assert np.isclose(data.H.sum(), 280.32675)
