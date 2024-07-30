@@ -42,15 +42,16 @@ def log(level: LogLevel, message: str, **kwargs):
     """
     Logs a message to the console.
     """
+    import sys
     if level.value >= _log_level.value:
         # TODO add pretty colors (see libcpp-common) :^)
-        print(message, **kwargs)
+        print(message, **kwargs, file=sys.__stdout__)
 
 
 def TQDMLogRedirect():
     import sys
     if LogLevel.PROGRESS.value >= _log_level.value:
-        return sys.stderr
+        return sys.__stderr__
     else:
         return EmptyLogRedirect()
 

@@ -20,7 +20,7 @@ def test02_Z_exhaustive():
         'threads': os.cpu_count() - 1,
         'seed': 0,
         'nice': 0,
-        'gpu': None,
+        'gpus': None,
         'dry_run': False,
         'do_steady_renders': True,
         'do_ground_truth_renders': True,

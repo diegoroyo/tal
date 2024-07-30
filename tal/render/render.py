@@ -270,34 +270,49 @@ def __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, scene_xml, h
     if not args.dry_run:
         mitsuba_backend.set_variant(mitsuba_variant)
 
-    class StdoutPipe:
-        def __init__(self, pipe, logfile=None):
+    class Tee:
+        def __init__(self, pipe=None, logfile=None):
             self.pipe = pipe
             self.logfile = logfile
 
         def write(self, data):
-            self.pipe.send(data)
+            if self.pipe is None:
+                log(LogLevel.INFO, data)
+            else:
+                self.pipe.send(data)
             if logfile is not None:
                 self.logfile.write(data)
 
         def close(self):
-            self.pipe.send(None)
-            self.pipe.close()
-            if logfile is not None:
+            if self.pipe is not None:
+                self.pipe.send(None)
+                self.pipe.close()
+            if self.logfile is not None:
+                self.logfile.flush()
                 self.logfile.close()
 
-    pipe_r, pipe_w = multiprocessing.Pipe()
     logfile = None
     if args.do_logging and not args.dry_run:
         logfile = open(log_path, 'w')
+
+    run_in_different_process = \
+        os.name != 'nt' and not mitsuba_variant.startswith('cuda')
+
+    pipe_w = None
+    if run_in_different_process:
+        # NOTE: Windows does not support multiprocessing
+        # and CUDA is not initalized if its run on a different process
+        pipe_r, pipe_w = multiprocessing.Pipe()
+
+    output = Tee(pipe_w, logfile)
     # NOTE: something here has a memory leak (probably Mitsuba-related)
     # We run Mitsuba in a separate process to ensure that the leaks do not add up
     # as they can fill your RAM in exhaustive scans
     run_mitsuba_f = partial(mitsuba_backend.run_mitsuba, scene_xml, hdr_path, defines,
-                            render_name, args, StdoutPipe(pipe_w, logfile), sensor_index)
-    if os.name == 'nt':
-        # NOTE: Windows does not support multiprocessing
+                            render_name, args, output, sensor_index)
+    if run_in_different_process:
         run_mitsuba_f()
+        pipe_r.close()
     else:
         process = multiprocessing.Process(target=run_mitsuba_f)
         try:
@@ -315,10 +330,6 @@ def __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, scene_xml, h
         except KeyboardInterrupt:
             process.terminate()
             raise KeyboardInterrupt
-
-    if args.do_logging and not args.dry_run:
-        logfile.flush()
-        logfile.close()
 
 
 class RenderException(Exception):
