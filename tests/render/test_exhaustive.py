@@ -8,7 +8,8 @@ def change_test_dir(request, monkeypatch):
     monkeypatch.chdir(_EXPERIMENT_FOLDER)
 
 
-def test00_Z_single():
+@pytest.mark.slow
+def test02_Z_exhaustive():
     import tal
     from tal.render import render_nlos_scene
     import numpy as np
