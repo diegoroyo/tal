@@ -347,3 +347,56 @@ class NLOSCaptureData:
             data_out.laser_grid_normals[(*slices, ...)]
 
         return data_out
+
+    def get_subset_of_laser_points_data(self, *args):
+        """
+        If your data has more than one illumination point, you can use this function
+        to obtain the data for a smaller number of illumination points.
+
+        The args specify the indices of the laser points in the same format as
+        the impulse response H or the laser positions laser_grid_xyz.
+
+        e.g. If H_format = (T, Lx, Ly, Sx, Sy), then args = ([5,6], [10]) will return
+             the impulse response at (T, 5, 10, Sx, Sy) and (T, 6, 10, Sx, Sy).
+
+        """
+        n_indices = len(args)
+
+        if n_indices == 1:
+            assert self.H_format == HFormat.T_Li_Si and self.laser_grid_format == GridFormat.N_3, \
+                'Number of indices must match H_format and laser_grid_format'
+            il = np.array(args[0])
+            assert np.all(0 <= il) and \
+                np.all(il < self.laser_grid_xyz.shape[0]) and \
+                np.all(il < self.laser_grid_normals.shape[0]) and \
+                np.all(il < self.H.shape[1]), \
+                'Index out of bounds'
+            slices = np.index_exp[il]
+        elif n_indices == 2:
+            assert self.H_format == HFormat.T_Lx_Ly_Sx_Sy and self.laser_grid_format == GridFormat.X_Y_3, \
+                'Number of indices must match H_format and laser_grid_format'
+            ilx, ily = np.array(args[0]), np.array(args[1])
+            assert np.all(0 <= ilx) and np.all(0 <= ily) and \
+                np.all(ilx < self.laser_grid_xyz.shape[0]) and \
+                np.all(ily < self.laser_grid_xyz.shape[1]) and \
+                np.all(ilx < self.laser_grid_normals.shape[0]) and \
+                np.all(ily < self.laser_grid_normals.shape[1]) and \
+                np.all(ilx < self.H.shape[1]) and \
+                np.all(ily < self.H.shape[2]), \
+                'Index out of bounds'
+            slices = np.ix_(ilx, ily)
+        else:
+            raise AssertionError('Invalid number of indices')
+
+        from copy import deepcopy
+        data_out = deepcopy(self)
+        # cannot use * operator directly inside slice [...]
+        # as it is not supported until python 3.11
+        # for now it's rewritten by wrapping everything inside a tuple
+        data_out.H = data_out.H[(slice(None), *slices, ...)]
+        data_out.laser_grid_xyz = \
+            data_out.laser_grid_xyz[(*slices, ...)]
+        data_out.laser_grid_normals = \
+            data_out.laser_grid_normals[(*slices, ...)]
+
+        return data_out
