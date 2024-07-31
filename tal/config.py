@@ -26,9 +26,9 @@ class Config(Enum):
          lambda s: os.path.isdir(s))
     MITSUBA3_TRANSIENT_NLOS_FOLDER = \
         ('MITSUBA3_TRANSIENT_NLOS_FOLDER',
-         'Location of Mitsuba 3 (not mitransient) installation folder',
+         'Path to your compiled Mitsuba 3 (not mitransient). If you installed mitsuba from pip, write \'pip\'',
          '',
-         lambda s: os.path.isdir(s))
+         lambda s: os.path.isdir(s) or s == 'pip')
     LOG_LEVEL = \
         ('LOG_LEVEL',
          f'Logging level ({", ".join(LogLevel.__members__)})',
@@ -75,6 +75,10 @@ def ask_for_config(param_name: Config, force_ask=True):
                 param_value = default_value
             if not is_valid(param_value):
                 log(LogLevel.PROMPT, 'Invalid value.')
+        # custom interaction for MITSUBA3_TRANSIENT_NLOS parameter
+        # where the user notifies that it has installed mitsuba 3 through pip
+        if param_value == 'pip':
+            param_value = ''
         config_dict[param_name] = param_value
         write_config(config_dict)
     return config_dict[param_name]

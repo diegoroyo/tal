@@ -22,9 +22,7 @@ def _get_setpath_location():
     return setpath_location
 
 
-try:
-    import mitsuba
-except ModuleNotFoundError:
+def add_mitsuba_to_path():
     import sys
     import subprocess
     setpath_location = _get_setpath_location()
@@ -36,7 +34,13 @@ except ModuleNotFoundError:
         (key, _, value) = line.partition('=')
         if key == 'PYTHONPATH':
             for directory in value.split(':')[:-1]:
-                sys.path.append(directory)
+                sys.path.insert(0, directory)
+
+
+from tal.config import read_config, Config
+custom_path = read_config().get(Config.MITSUBA3_TRANSIENT_NLOS_FOLDER.value[0], None)
+if custom_path:
+    add_mitsuba_to_path()
 
 
 def get_name():

@@ -140,16 +140,28 @@ def main():
             ask_for_config(
                 Config.MITSUBA2_TRANSIENT_NLOS_FOLDER, force_ask=True)
         elif version == '3':
-            log(LogLevel.INFO, 'Checking if mitsuba can be imported...')
-            try:
-                import mitsuba
-                log(LogLevel.INFO, 'OK mitsuba can be imported')
-            except ModuleNotFoundError:
-                log(LogLevel.PROMPT, 'mitsuba cannot be imported. '
-                    'This can happen if you run a custom installation. '
-                    'Please point to the mitsuba3 (not mitransient) folder:')
-                ask_for_config(
-                    Config.MITSUBA3_TRANSIENT_NLOS_FOLDER, force_ask=True)
+            ask_for_config(
+                Config.MITSUBA3_TRANSIENT_NLOS_FOLDER, force_ask=True)
+            found = False
+            while not found:
+                log(LogLevel.INFO, 'Checking if Mitsuba 3 can be found...')
+                try:
+                    import mitsuba as mi
+                    log(LogLevel.INFO, f'OK Mitsuba 3 can be found (without setpath.sh at {mi.__file__})')
+                    found = True
+                except ModuleNotFoundError:
+                    from tal.render.mitsuba3_transient_nlos import add_mitsuba_to_path
+                    add_mitsuba_to_path()
+                    try:
+                        import mitsuba as mi
+                        log(LogLevel.INFO, f'OK Mitsuba 3 can be found (with setpath.sh at {mi.__file__})')
+                        found = True
+                    except ModuleNotFoundError:
+                        log(LogLevel.PROMPT, 'Mitsuba 3 cannot be found. '
+                            'Please install Mitsuba 3 using \'pip install mitsuba\' (and write \'pip\' in the next prompt) '
+                            'or compile Mitsuba 3 and point to your installation folder:')
+                        ask_for_config(
+                            Config.MITSUBA3_TRANSIENT_NLOS_FOLDER, force_ask=True)
         else:
             raise AssertionError(
                 f'Invalid MITSUBA_VERSION={version}, must be one of (2, 3)')
