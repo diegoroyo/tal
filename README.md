@@ -74,6 +74,7 @@ optional arguments:
 
 You will need to have [mitransient](https://github.com/diegoroyo/mitransient) installed in your PC. You can install just via `pip install mitransient` or follow their README for custom installation instructions.
 
+> [!IMPORTANT]
 > On the first run of `tal render`, it will ask you if you have installed Mitsuba 2 (mitsuba2-transient-nlos) or 3 (mitransient aka. mitsuba3-transient-nlos), and (only if you have compiled Mitsuba youself) the location of your installation folder: for Mitsuba 2, please use the root folder of the repo (i.e. `/path/to/mitsuba2-transient-nlos`); for Mitsuba 3 you'll have to use the root folder of your custom mitsuba instalation (i.e. `/path/to/mitsuba3`). **If at any time you need to switch from Mitsuba 2 to 3 or vice-versa, or want to switch your installation folder, please use the `tal config` command.**
 
 `mitransient` must be installed in your device. On your first `tal render <scene>` command, it will detect (or ask you) where your installation folder is located, and will execute the necessary `mitsuba` commands and generate the specified scene XML files.
