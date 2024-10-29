@@ -84,7 +84,6 @@ def create_nlos_scene(folder_name, args):
         f.write(default_yaml_data)
         f.write(default_material_data)
 
-    if not args.quiet:
-        log(LogLevel.INFO, f'Success! Now:\n'
-            f'1) Edit the configuration file in {config_name}\n'
-            f'2) Render with tal render {config_name}')
+    log(LogLevel.INFO, f'Success! Now:\n'
+        f'1) Edit the configuration file in {config_name}\n'
+        f'2) Render with tal render {config_name}')
