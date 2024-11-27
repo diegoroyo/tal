@@ -40,9 +40,11 @@ def plot3d(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
         scalars = color
         if scalars.ndim > 2:
             scalars = scalars.reshape(-1, 4)
+        mapper = 'gpu'
     else:
         scalars = None
         cmap = color
+        mapper = None
 
     # Normalize the data so it is possible to plot it with the plotter
     norm_data_to_plot = (data_to_plot - np.min(data_to_plot)) * 255 \
@@ -59,6 +61,7 @@ def plot3d(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
                          scalars=scalars,
                          cmap=cmap,
                          opacity=opacity,
+                         mapper = mapper,
                          name='data_by_time')
 
         p.add_slider_widget(volume_by_time,
@@ -71,6 +74,7 @@ def plot3d(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
                      scalars=scalars,
                      cmap=cmap,
                      opacity=opacity,
+                     mapper = mapper,
                      name='full_data')
 
     # Select the initial camera
