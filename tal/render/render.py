@@ -341,7 +341,7 @@ class RenderException(Exception):
 
 def __merge_gt_results(args, mitsuba_backend, capture_data, gt_path):
     if not args.do_ground_truth_renders:
-        return
+        return capture_data
 
     gt_image = mitsuba_backend.read_mitsuba_bitmap(gt_path)
     depth = gt_image[:, :, 0:3]
@@ -430,12 +430,12 @@ def _main_render(config_path, args,
         render_steady('back_view', 0)
         render_steady('side_view', 1)
 
+    gt_render_name = 'ground_truth'
+    gt_ext = mitsuba_backend.get_hdr_extension()
+    gt_path = os.path.join(partial_results_dir,
+                           f'{experiment_name}_{gt_render_name}.{gt_ext}')
     if args.do_ground_truth_renders:
-        gt_render_name = 'ground_truth'
         log(LogLevel.INFO, f'{gt_render_name} for {experiment_name}...')
-        gt_ext = mitsuba_backend.get_hdr_extension()
-        gt_path = os.path.join(partial_results_dir,
-                               f'{experiment_name}_{gt_render_name}.{gt_ext}')
         log_path = os.path.join(
             log_dir, f'{experiment_name}_{gt_render_name}.log')
 
