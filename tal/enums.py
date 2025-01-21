@@ -170,6 +170,9 @@ class CameraSystem(Enum):
         Transient camera. Computes a video of the scene (t >= 0).
         The returned reconstruction will have an extra time dimension.
 
+    TRANSIENT_T0
+        Transient at t = 0.
+
     PROJECTOR_CAMERA
         Projector camera. If you have multiple illumination points in your data,
         this camera system will focus the illumination to a point in the hidden
@@ -177,6 +180,9 @@ class CameraSystem(Enum):
 
     PROJECTOR_CAMERA_T0
         Projector camera at t = 0.
+
+    PROJECTOR_ONLY
+        Similar to projector_camera, only propagate the illumination aperture.
     """
     DIRECT_LIGHT = 0  # evaluate confocal time gated at t=0
     CONFOCAL_TIME_GATED = 1  # pulsed focused light
@@ -186,18 +192,30 @@ class CameraSystem(Enum):
     TRANSIENT_T0 = 5  # evaluate transient at t=0
     # STEADY_STATE = 6  # NYI (integrate transient over time), also add to functions below
     # PHOTO_CAMERA = 7  # NYI (single-freq imaging), also add to functions below
+    PROJECTOR_ONLY = 8
 
     def bp_accounts_for_d_2(self) -> bool:
         return self in [CameraSystem.DIRECT_LIGHT,
                         CameraSystem.PROJECTOR_CAMERA,
                         CameraSystem.PROJECTOR_CAMERA_T0,
+                        CameraSystem.PROJECTOR_ONLY,
                         CameraSystem.CONFOCAL_TIME_GATED]
+
+    def bp_accounts_for_d_3(self) -> bool:
+        return self in [CameraSystem.DIRECT_LIGHT,
+                        CameraSystem.CONFOCAL_TIME_GATED,
+                        CameraSystem.PROJECTOR_CAMERA,
+                        CameraSystem.PROJECTOR_CAMERA_T0,
+                        CameraSystem.TRANSIENT,
+                        CameraSystem.TRANSIENT_T0]
 
     def is_transient(self) -> bool:
         return self in [CameraSystem.TRANSIENT,
                         CameraSystem.CONFOCAL_TIME_GATED,
-                        CameraSystem.PROJECTOR_CAMERA]
+                        CameraSystem.PROJECTOR_CAMERA,
+                        CameraSystem.PROJECTOR_ONLY]
 
     def implements_projector(self) -> bool:
         return self in [CameraSystem.PROJECTOR_CAMERA,
-                        CameraSystem.PROJECTOR_CAMERA_T0]
+                        CameraSystem.PROJECTOR_CAMERA_T0,
+                        CameraSystem.PROJECTOR_ONLY]

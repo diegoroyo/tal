@@ -243,30 +243,31 @@ def backproject_pf_multi_frequency(
         else:
             d_2 = np.float32(0.0)
 
-        if optimize_camera_convolutions:
-            rsx = nvx + nsx - 1
-            rsy = nvy + nsy - 1
-            sensor_grid_xyz = sensor_grid_xyz.reshape((nsx, nsy, 3))
-            s_dx = sensor_grid_xyz[1, 0, ...] - \
-                sensor_grid_xyz[0, 0, ...]
-            s_dy = sensor_grid_xyz[0, 1, ...] - \
-                sensor_grid_xyz[0, 0, ...]
+        if camera_system.bp_accounts_for_d_3():
+            if optimize_camera_convolutions:
+                rsx = nvx + nsx - 1
+                rsy = nvy + nsy - 1
+                sensor_grid_xyz = sensor_grid_xyz.reshape((nsx, nsy, 3))
+                s_dx = sensor_grid_xyz[1, 0, ...] - \
+                    sensor_grid_xyz[0, 0, ...]
+                s_dy = sensor_grid_xyz[0, 1, ...] - \
+                    sensor_grid_xyz[0, 0, ...]
 
-            p0 = volume_xyz_i[0, 0, ...] - \
-                sensor_grid_xyz[-1, -1, ...]
+                p0 = volume_xyz_i[0, 0, ...] - \
+                    sensor_grid_xyz[-1, -1, ...]
 
-            i_vals, j_vals = np.meshgrid(
-                np.arange(rsx), np.arange(rsy), indexing='ij')
-            i_vals = i_vals.reshape((rsx, rsy, 1))
-            j_vals = j_vals.reshape((rsx, rsy, 1))
-            p0 = p0.reshape((1, 1, 3))
-            s_dx = s_dx.reshape((1, 1, 3))
-            s_dy = s_dy.reshape((1, 1, 3))
-            d_3 = np.linalg.norm(
-                p0 + s_dx * i_vals + s_dy * j_vals, axis=-1).astype(np.float32)
-            d_3 = np.fft.ifftshift(d_3)
-        else:
-            d_3 = distance(volume_xyz_i, sensor_grid_xyz)
+                i_vals, j_vals = np.meshgrid(
+                    np.arange(rsx), np.arange(rsy), indexing='ij')
+                i_vals = i_vals.reshape((rsx, rsy, 1))
+                j_vals = j_vals.reshape((rsx, rsy, 1))
+                p0 = p0.reshape((1, 1, 3))
+                s_dx = s_dx.reshape((1, 1, 3))
+                s_dy = s_dy.reshape((1, 1, 3))
+                d_3 = np.linalg.norm(
+                    p0 + s_dx * i_vals + s_dy * j_vals, axis=-1).astype(np.float32)
+                d_3 = np.fft.ifftshift(d_3)
+            else:
+                d_3 = distance(volume_xyz_i, sensor_grid_xyz)
 
         invsq_2 = 1
         invsq_3 = 1
@@ -308,24 +309,25 @@ def backproject_pf_multi_frequency(
                 H_0_w *= rsd_014
                 del rsd_014
 
-                rsd_3 = np.exp(np.complex64(2j * np.pi) * d_3 * frequency)
-                rsd_3 *= invsq_3
-                if optimize_camera_convolutions:
-                    H_0_w = H_0_w.reshape((nl, nsx, nsy))
-                    rsd_3 = rsd_3.reshape((1, rsx, rsy))
-                    H_0_w_fft = np.fft.fft2(
-                        H_0_w, axes=(1, 2), s=(rsx, rsy))
-                    rsd_3_fft = np.fft.fft2(
-                        rsd_3, axes=(1, 2), s=(rsx, rsy))
-                    H_0_w_fft *= rsd_3_fft
-                    H_0_w = np.fft.ifft2(H_0_w_fft, axes=(1, 2))
-                    H_0_w = H_0_w[:, :nvx, :nvy]
-                    H_0_w = H_0_w.reshape((nl, nvi))
-                else:
-                    H_0_w = H_0_w.reshape((nl, 1, ns))
-                    H_0_w = H_0_w * rsd_3.reshape((1, nvi, ns))
-                    H_0_w = H_0_w.sum(axis=2)
-                del rsd_3
+                if camera_system.bp_accounts_for_d_3():
+                    rsd_3 = np.exp(np.complex64(2j * np.pi) * d_3 * frequency)
+                    rsd_3 *= invsq_3
+                    if optimize_camera_convolutions:
+                        H_0_w = H_0_w.reshape((nl, nsx, nsy))
+                        rsd_3 = rsd_3.reshape((1, rsx, rsy))
+                        H_0_w_fft = np.fft.fft2(
+                            H_0_w, axes=(1, 2), s=(rsx, rsy))
+                        rsd_3_fft = np.fft.fft2(
+                            rsd_3, axes=(1, 2), s=(rsx, rsy))
+                        H_0_w_fft *= rsd_3_fft
+                        H_0_w = np.fft.ifft2(H_0_w_fft, axes=(1, 2))
+                        H_0_w = H_0_w[:, :nvx, :nvy]
+                        H_0_w = H_0_w.reshape((nl, nvi))
+                    else:
+                        H_0_w = H_0_w.reshape((nl, 1, ns))
+                        H_0_w = H_0_w * rsd_3.reshape((1, nvi, ns))
+                        H_0_w = H_0_w.sum(axis=2)
+                    del rsd_3
 
                 if camera_system.bp_accounts_for_d_2():
                     rsd_2 = np.exp(np.complex64(2j * np.pi) * d_2 * frequency)
