@@ -87,12 +87,16 @@ def backproject(H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_sha
         else:
             d_2_i = d_2
         sensor_grid_xyz_i = sensor_grid_xyz[:, :, subrange_s, :]
-        d_3 = distance(volume_xyz, sensor_grid_xyz_i)
+        d_3 = 0
+        if camera_system.bp_accounts_for_d_3():
+            d_3 = distance(volume_xyz, sensor_grid_xyz_i)
         d_4_i = d_4[:, :, subrange_s]
 
         invsq = 1
         if compensate_invsq:
             def c(d):
+                if isinstance(d, int) and d == 0:
+                    return 1
                 term = np.ones_like(d)
                 epsilon = 1e-4
                 term[d > epsilon] = d[d > epsilon] ** 2
