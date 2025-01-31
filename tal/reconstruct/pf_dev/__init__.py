@@ -37,6 +37,7 @@ def solve(data: NLOSCaptureData,
                                  NLOSCaptureData.VolumeXYZType] = None,
           progress: bool = True,
           compensate_invsq: bool = False,
+          skip_H_fft: bool = False,
           try_optimize_convolutions: bool = True) -> Union[NLOSCaptureData.SingleReconstructionType,
                                                            NLOSCaptureData.ExhaustiveReconstructionType]:
     """
@@ -70,12 +71,17 @@ def solve(data: NLOSCaptureData,
         When projector_focus = volume_xyz, this will yield
             a NLOSCaptureData.ExhaustiveReconstructionType with all possible projector_focus points.
 
+    progress
+        If True, shows a progress bar with estimated time remaining.
+
     compensate_invsq
         If True, the inverse square falloff of light is compensated for, i.e., objects further away
         from the relay wall will appear brighter in the reconstruction.
 
-    progress
-        If True, shows a progress bar with estimated time remaining.
+    skip_H_fft
+        If True, data.H is assumed to already be in the frequency domain. This can be useful
+        if you intend to call this function multiple times
+        (e.g. with different projector_focus points)
 
     try_optimize_convolutions
         When volume_xyz consists of depth-slices (Z-slices) that are 
@@ -105,6 +111,7 @@ def solve(data: NLOSCaptureData,
         optimize_projector_convolutions, optimize_camera_convolutions,
         data.laser_xyz, data.sensor_xyz,
         compensate_invsq=compensate_invsq,
+        skip_H_fft=skip_H_fft,
         progress=progress)
 
     return convert_reconstruction_from_N_3(data, reconstructed_volume_n3,

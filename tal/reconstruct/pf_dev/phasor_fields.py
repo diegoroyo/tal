@@ -14,6 +14,7 @@ def backproject_pf_multi_frequency(
         optimize_projector_convolutions, optimize_camera_convolutions,
         laser_xyz=None, sensor_xyz=None,
         compensate_invsq=False,
+        skip_H_fft=False,
         progress=False):
 
     assert not is_laser_paired_to_sensor, 'tal.reconstruct.pf_dev does not support confocal or custom captures. ' \
@@ -82,7 +83,8 @@ def backproject_pf_multi_frequency(
     freq_max_idx = np.minimum(nf // 2, int(np.ceil(mean_idx + 3 * sigma_idx)))
 
     weights = np.fft.fft(K)[freq_min_idx:freq_max_idx+1].astype(np.complex64)
-    freqs = np.fft.fftfreq(nf, d=delta_t)[freq_min_idx:freq_max_idx+1].astype(np.float32)
+    freqs = np.fft.fftfreq(nf, d=delta_t)[
+        freq_min_idx:freq_max_idx+1].astype(np.float32)
     freq_idxs = np.arange(freq_min_idx, freq_max_idx+1, dtype=np.int32)
     log(LogLevel.INFO, 'tal.reconstruct.pf_dev: '
         f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
@@ -197,35 +199,43 @@ def backproject_pf_multi_frequency(
             (n_projector_points, nva, nvz),
             dtype=np.complex64)
 
-    H_0_w = np.zeros_like(H_0, dtype=np.complex64)
-    range_s = np.arange(ns)
+    if skip_H_fft:
+        assert np.isclose(d_014, 0.0) and np.isclose(invsq_14, 1), \
+            'skip_H_fft is only supported when d_014=0 and invsq_14=1'
+        H_0_w = H_0
+    else:
+        H_0_w = np.zeros_like(H_0, dtype=np.complex64)
+        range_s = np.arange(ns)
 
-    def fft_and_compensate_014(subrange_s):
-        H_0_w = np.fft.fft(H_0[:, :, subrange_s], axis=0)
-        if not np.isclose(d_014, 0.0):
-            frequencies = np.fft.fftfreq(nf, d=delta_t).astype(np.float32)
-            frequencies[:freq_min_idx] = 0
-            frequencies[freq_max_idx+1:] = 0
-            rsd_014 = np.exp(np.complex64(2j * np.pi) * d_014.reshape(1, nl, ns) * frequencies.reshape(nf, 1, 1))
-            rsd_014 *= invsq_14.reshape(1, nl, ns)
-            H_0_w *= rsd_014
-            del rsd_014
-        elif not np.isclose(invsq_14, 1):
-            H_0_w *= invsq_14.reshape(1, nl, ns)
-        return H_0_w
+        def fft_and_compensate_014(subrange_s):
+            H_0_w = np.fft.fft(H_0[:, :, subrange_s], axis=0)
+            if not np.isclose(d_014, 0.0):
+                frequencies = np.fft.fftfreq(nf, d=delta_t).astype(np.float32)
+                frequencies[:freq_min_idx] = 0
+                frequencies[freq_max_idx+1:] = 0
+                rsd_014 = np.exp(
+                    np.complex64(2j * np.pi) * d_014.reshape(1, nl, ns) * frequencies.reshape(nf, 1, 1))
+                rsd_014 *= invsq_14.reshape(1, nl, ns)
+                H_0_w *= rsd_014
+                del rsd_014
+            elif not np.isclose(invsq_14, 1):
+                H_0_w *= invsq_14.reshape(1, nl, ns)
+            return H_0_w
 
-    get_resources().split_work(
-        fft_and_compensate_014,
-        data_in=range_s,
-        data_out=H_0_w,
-        slice_dims=(0, 2),
-    )
+        get_resources().split_work(
+            fft_and_compensate_014,
+            data_in=range_s,
+            data_out=H_0_w,
+            slice_dims=(0, 2),
+        )
 
     propagation_mode = 'divide_frequencies' if optimize_projector_convolutions or optimize_camera_convolutions else 'divide_volume'
     if propagation_mode == 'divide_frequencies':
-        log(LogLevel.INFO, 'tal.reconstruct.pf_dev: Will use divide_frequencies implementation')
+        log(LogLevel.INFO,
+            'tal.reconstruct.pf_dev: Will use divide_frequencies implementation')
     elif propagation_mode == 'divide_volume':
-        log(LogLevel.INFO, 'tal.reconstruct.pf_dev: Will use divide_volume implementation')
+        log(LogLevel.INFO,
+            'tal.reconstruct.pf_dev: Will use divide_volume implementation')
     else:
         raise AssertionError('Unknown propagation mode')
 
@@ -316,16 +326,17 @@ def backproject_pf_multi_frequency(
                 freqs_i = freqs[subrange_w]
                 weights_i = weights[subrange_w]
 
-                H_1_w = np.zeros((nwi, n_projector_points, nva), dtype=np.complex64)
+                H_1_w = np.zeros(
+                    (nwi, n_projector_points, nva), dtype=np.complex64)
 
                 fw_iterator = enumerate(zip(freq_idxs_i, freqs_i, weights_i))
                 if progress:
                     fw_iterator = tqdm(fw_iterator,
-                                        desc='tal.reconstruct.pf_dev divide-frequency',
-                                        file=TQDMLogRedirect(),
-                                        total=nwi,
-                                        position=0,
-                                        leave=True)
+                                       desc='tal.reconstruct.pf_dev divide-frequency',
+                                       file=TQDMLogRedirect(),
+                                       total=nwi,
+                                       position=0,
+                                       leave=True)
 
                 for i_w, (f_idx, frequency, weight) in fw_iterator:
                     if np.isclose(weight, 0.0):
@@ -335,7 +346,8 @@ def backproject_pf_multi_frequency(
                     H_p = H_0_w[f_idx]
 
                     if camera_system.bp_accounts_for_d_3():
-                        rsd_3 = np.exp(np.complex64(2j * np.pi) * d_3 * frequency)
+                        rsd_3 = np.exp(
+                            np.complex64(2j * np.pi) * d_3 * frequency)
                         rsd_3 *= invsq_3
                         if optimize_camera_convolutions:
                             H_p = H_p.reshape((nl, nsx, nsy))
@@ -355,7 +367,8 @@ def backproject_pf_multi_frequency(
                         del rsd_3
 
                     if camera_system.bp_accounts_for_d_2():
-                        rsd_2 = np.exp(np.complex64(2j * np.pi) * d_2 * frequency)
+                        rsd_2 = np.exp(
+                            np.complex64(2j * np.pi) * d_2 * frequency)
                         rsd_2 *= invsq_2
                         if projector_focus_mode == 'exhaustive':
                             assert optimize_projector_convolutions, \
@@ -371,7 +384,8 @@ def backproject_pf_multi_frequency(
                             H_p = np.fft.ifft2(H_p_fft, axes=(0, 1))
                             H_p = H_p[:npfx, :npfy, :, :]
                         else:
-                            assert projector_focus_mode in ['single', 'confocal']
+                            assert projector_focus_mode in ['single',
+                                                            'confocal']
                             H_p = H_p.reshape((nl, nva))
                             H_p *= rsd_2.reshape((nl, nva))
                             H_p = H_p.sum(axis=0)
@@ -393,23 +407,25 @@ def backproject_pf_multi_frequency(
             )
 
         elif propagation_mode == 'divide_volume':
-            assert not camera_system.bp_accounts_for_d_2() or projector_focus_mode in ['single', 'confocal']
+            assert not camera_system.bp_accounts_for_d_2() or \
+                projector_focus_mode in ['single', 'confocal']
 
             def work_dividing_volume(subrange_v):
                 nvi = len(subrange_v)
                 d_2_i = d_2[:, subrange_v, :]
                 d_3_i = d_3[:, subrange_v, :]
 
-                H_1_w = np.zeros((nw, n_projector_points, nvi), dtype=np.complex64)
+                H_1_w = np.zeros((nw, n_projector_points, nvi),
+                                 dtype=np.complex64)
 
                 fw_iterator = zip(freq_idxs, freqs, weights)
                 if progress:
                     fw_iterator = tqdm(fw_iterator,
-                                        desc='tal.reconstruct.pf_dev divide-volume',
-                                        file=TQDMLogRedirect(),
-                                        total=nvi,
-                                        position=0,
-                                        leave=True)
+                                       desc='tal.reconstruct.pf_dev divide-volume',
+                                       file=TQDMLogRedirect(),
+                                       total=nw,
+                                       position=0,
+                                       leave=True)
 
                 for f_idx, frequency, weight in fw_iterator:
                     if np.isclose(weight, 0.0):
@@ -419,7 +435,8 @@ def backproject_pf_multi_frequency(
                     H_p = H_0_w[f_idx]
 
                     if camera_system.bp_accounts_for_d_3():
-                        rsd_3 = np.exp(np.complex64(2j * np.pi) * d_3_i * frequency)
+                        rsd_3 = np.exp(
+                            np.complex64(2j * np.pi) * d_3_i * frequency)
                         rsd_3 *= invsq_3
                         H_p = H_p.reshape((nl, 1, ns))
                         H_p = H_p * rsd_3.reshape((1, nvi, ns))
@@ -427,7 +444,8 @@ def backproject_pf_multi_frequency(
                         del rsd_3
 
                     if camera_system.bp_accounts_for_d_2():
-                        rsd_2 = np.exp(np.complex64(2j * np.pi) * d_2_i * frequency)
+                        rsd_2 = np.exp(
+                            np.complex64(2j * np.pi) * d_2_i * frequency)
                         rsd_2 *= invsq_2
                         H_p = H_p.reshape((nl, nvi))
                         H_p *= rsd_2.reshape((nl, nvi))
@@ -453,12 +471,13 @@ def backproject_pf_multi_frequency(
             raise AssertionError('Unknown propagation mode')
 
         del d_2, d_3
-        if i_z == nvz - 1:
+        if not skip_H_fft and i_z == nvz - 1:
             del H_0_w
 
         def ifft_slice(subrange_v):
             H_1_w_i = H_1_w[:, :, subrange_v]
-            H_1_w_i = np.pad(H_1_w_i, ((freq_min_idx, nf - freq_max_idx - 1), (0, 0), (0, 0)), 'constant')
+            H_1_w_i = np.pad(H_1_w_i,
+                             ((freq_min_idx, nf - freq_max_idx - 1), (0, 0), (0, 0)), 'constant')
 
             if camera_system.is_transient():
                 return np.fft.ifft(H_1_w_i, axis=0)[padding:-padding, ...]
