@@ -4,6 +4,10 @@ from tal.config import get_resources
 from tal.log import log, LogLevel, TQDMLogRedirect
 from tqdm import tqdm
 
+def _get_padding(wl_sigma, delta_t):
+    t_6sigma = int(np.ceil(6 * wl_sigma / delta_t))
+    padding = 2 * t_6sigma
+    return padding
 
 def backproject_pf_multi_frequency(
         H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_shape,
@@ -61,8 +65,7 @@ def backproject_pf_multi_frequency(
 
     """ Phasor fields filter """
 
-    t_6sigma = int(np.ceil(6 * wl_sigma / delta_t))
-    padding = 2 * t_6sigma
+    padding = _get_padding(wl_sigma, delta_t)
     # FIXME(diego) if we want to convert a circular convolution to linear,
     # this should be nt + t_6sigma - 1 instead of nt + 4 * t_6sigma or even nt + 2 * t_6sigma
     # I have found cases where it fails even with nt + 2 * t_6sigma (Z, 0th pixel)
@@ -90,12 +93,20 @@ def backproject_pf_multi_frequency(
         f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
     nw = len(weights)
 
-    if border == 'zero':
-        # only pad temporal dimension
+    if skip_H_fft:
+        # NOTE: this is kind of a hack. When pre-computing the FFT you need to pad the signal
+        # before. But if you pass a padded H then it messes up the nt and nf variables.
+        # So the precompute_fft function removes the last values (they are not used anyway)
+        # and it's re-padded here.
         H_0 = np.pad(H_0,
-                     ((padding, padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
+                     ((0, 2 * padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
     else:
-        raise AssertionError('Implemented only for border="zero"')
+        if border == 'zero':
+            # only pad temporal dimension
+            H_0 = np.pad(H_0,
+                        ((padding, padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
+        else:
+            raise AssertionError('Implemented only for border="zero"')
 
     """ Distance calculation and propagation """
 

@@ -82,6 +82,7 @@ def solve(data: NLOSCaptureData,
         If True, data.H is assumed to already be in the frequency domain. This can be useful
         if you intend to call this function multiple times
         (e.g. with different projector_focus points)
+        See also tal.reconstruct.pf_dev.precompute_fft
 
     try_optimize_convolutions
         When volume_xyz consists of depth-slices (Z-slices) that are 
@@ -117,3 +118,34 @@ def solve(data: NLOSCaptureData,
     return convert_reconstruction_from_N_3(data, reconstructed_volume_n3,
                                            volume_xyz, volume_format,
                                            camera_system, projector_focus)
+
+def precompute_fft(data, wl_sigma):
+    """
+    Computes the FFT of H with the necessary (zero) padding for the pf_dev.solve function.
+    For more information see tal.reconstruct.pf_dev.solve (especially skip_H_fft)
+    """
+    import numpy as np
+    from tal.config import get_resources
+    from tal.reconstruct.pf_dev.phasor_fields import _get_padding
+
+    nt, other = data.H.shape[0], data.H.shape[1:]
+
+    padding = _get_padding(wl_sigma, data.delta_t)
+
+    H_result = np.pad(data.H,
+                      ((padding, padding),) + ((0, 0),) * (data.H.ndim - 1),
+                      'constant')
+
+    na = np.prod(other)
+    H_result = H_result.reshape(nt + 2 * padding, na).astype(np.complex64)
+
+    range_all = np.arange(na)
+    get_resources().split_work(
+        lambda subrange_a: np.fft.fft(H_result[:, subrange_a], axis=0),
+        data_in=range_all,
+        data_out=H_result,
+        slice_dims=(0, 1),
+    )
+
+    # signal is cropped to fit nt bins
+    return H_result.reshape(nt + 2 * padding, *other)[:nt, ...]

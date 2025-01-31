@@ -140,25 +140,3 @@ def get_volume_project_rw(data: NLOSCaptureData, depths: Union[float, list]):
         raise AssertionError('This function only works with GridFormat.X_Y_3')
 
     return volume_xyz
-
-
-def fft(H):
-    import numpy as np
-    from tal.config import get_resources
-
-    nt, other = H.shape[0], H.shape[1:]
-    na = np.prod(other)
-
-    H = H.reshape(nt, na)
-    H_w = np.zeros_like(H, dtype=np.complex64)
-
-    range_all = np.arange(na)
-    get_resources().split_work(
-        lambda subrange_a: np.fft.fft(H[:, subrange_a]),
-        data_in=range_all,
-        data_out=H_w,
-        slice_dims=(0, 1),
-    )
-
-    H_w = H_w.reshape(nt, *other)
-    return H_w
