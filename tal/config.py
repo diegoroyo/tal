@@ -224,21 +224,38 @@ class ResourcesConfig:
 
         if old_downscale is None:
             log(LogLevel.INFO, f'tal.resources: Using {cpus} CPU processes '
-                f'and downscale {downscale}.')
+                f'and downscale {downscale}')
         else:
             log(LogLevel.WARNING, f'tal.resources: Using {cpus} CPU processes '
-                f'and downscale {downscale} (instead of {old_downscale}).')
+                f'and downscale {downscale} (instead of {old_downscale})')
 
         with ThreadPoolExecutor(max_workers=cpus) as pool:
             try:
                 futures = []
-                for in_slice in in_slices:
-                    futures.append(pool.submit(f_work, data_in[in_slice]))
+                for in_slice, out_slice in zip(in_slices, out_slices):
+                    if out_slice_dim is None:
+                        # result needs to be added to data_out later
+                        # there would be a race condition if we added it now
+                        futures.append(pool.submit(f_work, data_in[in_slice]))
+                    else:
+                        # result can be added to data_out now
+                        # there is no race condition
+                        def _process_chunk(i_slice, o_slice):
+                            data_out[o_slice] = f_work(data_in[i_slice])
+
+                        futures.append(pool.submit(
+                            lambda i_slice=in_slice, o_slice=out_slice: 
+                                _process_chunk(i_slice, o_slice)
+                        ))
 
                 pool.shutdown(wait=True)
-                for i, (f, out_slice) in tqdm(enumerate(zip(futures, out_slices)),
-                                              total=len(futures), desc='tal.resources progress', file=TQDMLogRedirect()):
-                    data_out[out_slice] += f.result()
+                for i, (f, out_slice) in tqdm(enumerate(zip(futures, out_slices)), total=len(futures),
+                                 desc='tal.resources progress', file=TQDMLogRedirect()):
+                    # see comment above - either add data now or it was added before
+                    if out_slice_dim is None:
+                        data_out[out_slice] += f.result()
+                    else:
+                        f.result()
                     if self.callback is not None:
                         self.callback(data_out, i, len(futures))
             # NOTE(diego): See TODO about memory limit above
