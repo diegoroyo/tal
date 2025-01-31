@@ -141,14 +141,17 @@ def solve(data: NLOSCaptureData, wavefactor: float, wave_cycles: float,
         H = np.pad(H, ((t_pad, 0), (0, 0), (0, 0)), 'minimum')
     T = data.delta_t*np.arange(H.shape[0])
 
+    # Extract the parameters
+    S = data.sensor_grid_xyz
+    L = data.laser_grid_xyz
+
+    # It is assumed regular sampling points
+    reshaped_S = S.reshape(-1, 3)
+    sampling_distance = np.linalg.norm(reshaped_S[0] - reshaped_S[1])
     # TODO(pablo) correct volume
     V = volume
-    S = data.sensor_grid_xyz
-    L = np.zeros((1, 3), float)
 
-    # FIXME(pablo): Minimun distance assumes ordered points
-    reshaped_S = S.reshape(-1, 3)
-    wavelength = wavefactor*np.linalg.norm(reshaped_S[0] - reshaped_S[1])
+    wavelength = wavefactor*sampling_distance
 
     return reconstruct(H, T, S, L, V, wavelength, wave_cycles, res_in_freq,
                        n_threads, verbose)
