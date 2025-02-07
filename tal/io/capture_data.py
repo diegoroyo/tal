@@ -288,15 +288,16 @@ class NLOSCaptureData:
         assert downscale > 1, 'downscale must be > 1'
         assert self.H_format in [HFormat.T_Sx_Sy], \
             'Only implemented for HFormat.T_Sx_Sy'
+        
         nt, nsx, nsy = self.H.shape
+        if self.is_confocal():
+            self.laser_grid_xyz = self.laser_grid_xyz.reshape(
+                (nsx // downscale, downscale, nsy // downscale, downscale, 3)).mean(axis=(1, 3))
         self.H = self.H.reshape(
             (nt, nsx // downscale, downscale, nsy // downscale, downscale)).sum(axis=(2, 4))
         self.sensor_grid_xyz = self.sensor_grid_xyz.reshape(
             (nsx // downscale, downscale, nsy // downscale, downscale, 3)).mean(axis=(1, 3))
         
-        if self.is_confocal():
-            self.laser_grid_xyz = self.laser_grid_xyz.reshape(
-            (nsx // downscale, downscale, nsy // downscale, downscale, 3)).mean(axis=(1, 3))
         log(LogLevel.INFO,
             f'Downscaled from {nsx}x{nsy} to {nsx // downscale}x{nsy // downscale}')
 
