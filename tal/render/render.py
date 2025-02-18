@@ -160,7 +160,7 @@ def __write_metadata_and_get_laser_lookats(args, scene_config):
             scene_config['laser_lookat_x'] or sensor_width / 2
         laser_lookat_y = \
             scene_config['laser_lookat_y'] or sensor_height / 2
-        laser_lookats.append((laser_lookat_x, laser_lookat_y))
+        laser_lookats.append((0, 0, laser_lookat_x, laser_lookat_y))
     elif scan_type == 'exhaustive' or scan_type == 'confocal':
         assert not (scan_type == 'confocal' and
                     (laser_width != sensor_width or
@@ -182,7 +182,7 @@ def __write_metadata_and_get_laser_lookats(args, scene_config):
                 # finally store in sensor space (0, sensor_width)
                 laser_lookat_x *= sensor_width
                 laser_lookat_y *= sensor_height
-                laser_lookats.append((laser_lookat_x, laser_lookat_y))
+                laser_lookats.append((x, y, laser_lookat_x, laser_lookat_y))
     else:
         raise AssertionError(
             'Invalid scan_type, must be one of {single|exhaustive|confocal}')
@@ -361,24 +361,21 @@ def __merge_nlos_results(args, mitsuba_backend, capture_data, partial_results_di
         hdr_path, _ = mitsuba_backend.partial_laser_path(
             partial_results_dir,
             experiment_name,
-            *laser_lookats[0])
+            *laser_lookats[0][0:2])
         capture_data.H = mitsuba_backend.read_transient_image(hdr_path)
     elif scan_type == 'exhaustive' or scan_type == 'confocal':
-        laser_width = capture_data.H.shape[1]
-
-        e_laser_lookats = enumerate(laser_lookats)
         if len(laser_lookats) > 1:
-            e_laser_lookats = tqdm(
-                e_laser_lookats, desc='Merging partial results...',
+            laser_lookats = tqdm(
+                laser_lookats, desc='Merging partial results...',
                 file=TQDMLogRedirect(), ascii=True, total=len(laser_lookats))
         try:
-            for i, (laser_lookat_x, laser_lookat_y) in e_laser_lookats:
-                x = i % laser_width
-                y = i // laser_width
+            for laser_lookat_ix, laser_lookat_iy, _, __ in laser_lookats:
+                x = laser_lookat_ix
+                y = laser_lookat_iy
                 hdr_path, _ = mitsuba_backend.partial_laser_path(
                     partial_results_dir,
                     experiment_name,
-                    laser_lookat_x, laser_lookat_y)
+                    laser_lookat_ix, laser_lookat_iy)
                 if scan_type == 'confocal':
                     capture_data.H[:, x:x+1, y:y+1, ...] = \
                         mitsuba_backend.read_transient_image(hdr_path)
@@ -450,21 +447,21 @@ def _main_render(config_path, args,
     pbar = tqdm(
         enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
         file=TQDMLogRedirect(), ascii=True, total=len(laser_lookats))
-    for i, (laser_lookat_x, laser_lookat_y) in pbar:
+    for i, (laser_lookat_ix, laser_lookat_iy, laser_lookat_px, laser_lookat_py) in pbar:
         try:
             hdr_path, is_dir = mitsuba_backend.partial_laser_path(
-                partial_results_dir, experiment_name, laser_lookat_x, laser_lookat_y)
+                partial_results_dir, experiment_name, laser_lookat_ix, laser_lookat_iy)
             if is_dir and not os.path.exists(hdr_path):
                 os.mkdir(hdr_path)
         except OSError as exc:
             raise AssertionError(f'Invalid permissions: {exc}') from exc
         defines = {
-            'laser_lookat_x': laser_lookat_x,
-            'laser_lookat_y': laser_lookat_y,
+            'laser_lookat_x': laser_lookat_px,
+            'laser_lookat_y': laser_lookat_py,
         }
         log_path = os.path.join(
             log_dir,
-            f'{experiment_name}_L[{laser_lookat_x}][{laser_lookat_y}].log')
+            f'{experiment_name}_L[{laser_lookat_ix}][{laser_lookat_iy}].log')
         render_name = f'Laser {i + 1} of {len(laser_lookats)}'
 
         __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, nlos_scene_xml, hdr_path, defines,
