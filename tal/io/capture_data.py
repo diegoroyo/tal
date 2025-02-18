@@ -26,11 +26,13 @@ class LazyDataset:
         return getattr(self.dataset, name)
 
 
-def read_hdf5(filename: str) -> dict:
+def read_hdf5(filename: str, skip_H: bool = False) -> dict:
     raw_data = h5py.File(filename, 'r')
 
     def parse(key, value):
-        if isinstance(value, h5py.Empty):
+        if skip_H and key == 'H':
+            value = None
+        elif isinstance(value, h5py.Empty):
             value = None
         elif isinstance(value, h5py.Group):
             value = {k: parse(k, v) for k, v in value.items()}
@@ -63,7 +65,8 @@ def read_hdf5(filename: str) -> dict:
     return raw_data
 
 
-def write_hdf5(filename: str, capture_data: dict):
+def write_hdf5(filename: str, capture_data: dict, compression_level: int = False):
+    assert 0 <= compression_level <= 9, 'Compression level must be an integer between 0 and 9'
     file = h5py.File(filename, 'w')
     for key, value in capture_data.items():
         if value is None:
@@ -75,6 +78,8 @@ def write_hdf5(filename: str, capture_data: dict):
                                  for item in value.__class__), basetype='i')
             ds = file.create_dataset(key, (1,), dtype=dt)
             ds[0] = value.value
+        elif compression_level > 0 and key == 'H':
+            file.create_dataset(key, data=value, compression='gzip', compression_opts=compression_level)
         else:
             file[key] = value
     file.close()
@@ -211,7 +216,7 @@ class NLOSCaptureData:
             '_start') + 1: variables.index('_end')]
         return variables
 
-    def __init__(self, filename: str = None, file_format: FileFormat = FileFormat.AUTODETECT):
+    def __init__(self, filename: str = None, file_format: FileFormat = FileFormat.AUTODETECT, skip_H: bool = False):
         if filename is None:
             return
 
@@ -228,7 +233,7 @@ class NLOSCaptureData:
                 os.path.dirname(final_path), aux_filename)
 
         assert os.path.isfile(final_path), f'Does not exist: {final_path}'
-        raw_data = read_hdf5(final_path)
+        raw_data = read_hdf5(final_path, skip_H)
         if file_format == FileFormat.AUTODETECT:
             file_format = detect_dict_format(raw_data)
 
