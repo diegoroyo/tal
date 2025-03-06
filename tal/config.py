@@ -226,7 +226,7 @@ class ResourcesConfig:
             log(LogLevel.INFO, f'tal.resources: Using {cpus} CPU processes '
                 f'and downscale {downscale}')
         else:
-            log(LogLevel.WARNING, f'tal.resources: Using {cpus} CPU processes '
+            log(LogLevel.INFO, f'tal.resources: Using {cpus} CPU processes '
                 f'and downscale {downscale} (instead of {old_downscale})')
 
         with ThreadPoolExecutor(max_workers=cpus) as pool:
