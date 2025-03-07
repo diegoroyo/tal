@@ -1,3 +1,4 @@
+from tal.config import read_config, Config
 from tal.log import log, LogLevel, TQDMLogRedirect
 
 # pyright: reportMissingImports=false
@@ -37,8 +38,8 @@ def add_mitsuba_to_path():
                 sys.path.insert(0, directory)
 
 
-from tal.config import read_config, Config
-custom_path = read_config().get(Config.MITSUBA3_TRANSIENT_NLOS_FOLDER.value[0], None)
+custom_path = read_config().get(
+    Config.MITSUBA3_TRANSIENT_NLOS_FOLDER.value[0], None)
 if custom_path:
     add_mitsuba_to_path()
 
@@ -622,7 +623,11 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
 
         del result, scene, integrator
     except Exception as e:
+        import traceback
         print('/!\ Mitsuba process threw an exception:', e, file=sys.stderr)
+        print('', file=sys.stderr)
+        print('Traceback:', file=sys.stderr)
+        print(traceback.format_exc(), file=sys.stderr)
     finally:
         pipe_output.close()
 
