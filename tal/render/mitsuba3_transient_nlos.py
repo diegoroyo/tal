@@ -593,8 +593,6 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
 
         # prepare
         if isinstance(integrator, TransientADIntegrator):
-            integrator.prepare_transient(scene, sensor_index)
-
             progress_bar = tqdm(total=100, desc=experiment_name,
                                 file=TQDMLogRedirect(),
                                 ascii=True, leave=False)
@@ -604,7 +602,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
                 progress_bar.refresh()
 
             steady_image, transient_image = integrator.render(
-                scene, progress_callback=update_progress)
+                scene, sensor=sensor_index, progress_callback=update_progress)
             result = np.array(transient_image)
             if result.ndim == 2:
                 nt, nc = result.shape
@@ -617,7 +615,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             progress_bar.close()
             del steady_image, transient_image, progress_bar
         else:
-            image = integrator.render(scene, sensor_index)
+            image = integrator.render(scene, sensor=sensor_index)
             result = np.array(image)
 
         np.save(hdr_path, result)
