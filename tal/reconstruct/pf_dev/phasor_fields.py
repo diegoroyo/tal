@@ -4,10 +4,12 @@ from tal.config import get_resources
 from tal.log import log, LogLevel, TQDMLogRedirect
 from tqdm import tqdm
 
+
 def _get_padding(wl_sigma, delta_t):
     t_6sigma = int(np.ceil(6 * wl_sigma / delta_t))
     padding = 2 * t_6sigma
     return padding
+
 
 def backproject_pf_multi_frequency(
         H_0, laser_grid_xyz, sensor_grid_xyz, volume_xyz, volume_xyz_shape,
@@ -104,7 +106,7 @@ def backproject_pf_multi_frequency(
         if border == 'zero':
             # only pad temporal dimension
             H_0 = np.pad(H_0,
-                        ((padding, padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
+                         ((padding, padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
         else:
             raise AssertionError('Implemented only for border="zero"')
 
@@ -221,16 +223,37 @@ def backproject_pf_multi_frequency(
         def fft_and_compensate_014(subrange_s):
             H_0_w = np.fft.fft(H_0[:, :, subrange_s], axis=0)
             if not np.isclose(d_014, 0.0):
+                if d_014.size == 1:
+                    d_014_reshaped = np.repeat(
+                        np.repeat(d_014.reshape(1, 1, 1),
+                                  repeats=nl, axis=1),
+                        repeats=ns, axis=2)
+                    invsq_14_reshaped = np.repeat(
+                        np.repeat(invsq_14.reshape(1, 1, 1),
+                                  repeats=nl, axis=1),
+                        repeats=ns, axis=2)
+                else:
+                    d_014_reshaped = d_014.reshape(1, nl, ns)
+                    invsq_14_reshaped = invsq_14.reshape(1, nl, ns)
+
                 frequencies = np.fft.fftfreq(nf, d=delta_t).astype(np.float32)
                 frequencies[:freq_min_idx] = 0
                 frequencies[freq_max_idx+1:] = 0
-                rsd_014 = np.exp(
-                    np.complex64(2j * np.pi) * d_014.reshape(1, nl, ns) * frequencies.reshape(nf, 1, 1))
-                rsd_014 *= invsq_14.reshape(1, nl, ns)
+                rsd_014 = np.exp(np.complex64(2j * np.pi) *
+                                 d_014_reshaped[..., subrange_s] *
+                                 frequencies.reshape(nf, 1, 1))
+                rsd_014 *= invsq_14_reshaped[..., subrange_s]
                 H_0_w *= rsd_014
                 del rsd_014
             elif not np.isclose(invsq_14, 1):
-                H_0_w *= invsq_14.reshape(1, nl, ns)
+                if invsq_14.size == 1:
+                    invsq_14_reshaped = np.repeat(
+                        np.repeat(invsq_14.reshape(1, 1, 1),
+                                  repeats=nl, axis=1),
+                        repeats=ns, axis=2)
+                else:
+                    invsq_14_reshaped = invsq_14.reshape(1, nl, ns)
+                H_0_w *= invsq_14_reshaped[..., subrange_s]
             return H_0_w
 
         get_resources().split_work(
@@ -254,6 +277,7 @@ def backproject_pf_multi_frequency(
         if optimize_projector_convolutions:
             projector_focus_i = projector_focus.reshape((npfx, npfy, 3))
         else:
+            # FIXME does not work for multiple Z slices
             projector_focus_i = projector_focus
         if optimize_camera_convolutions:
             volume_xyz_i = volume_xyz.reshape(

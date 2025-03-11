@@ -1,3 +1,4 @@
+from tal.config import read_config, Config
 from tal.log import log, LogLevel, TQDMLogRedirect
 
 # pyright: reportMissingImports=false
@@ -37,8 +38,8 @@ def add_mitsuba_to_path():
                 sys.path.insert(0, directory)
 
 
-from tal.config import read_config, Config
-custom_path = read_config().get(Config.MITSUBA3_TRANSIENT_NLOS_FOLDER.value[0], None)
+custom_path = read_config().get(
+    Config.MITSUBA3_TRANSIENT_NLOS_FOLDER.value[0], None)
 if custom_path:
     add_mitsuba_to_path()
 
@@ -593,8 +594,6 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
 
         # prepare
         if isinstance(integrator, TransientADIntegrator):
-            integrator.prepare_transient(scene, sensor_index)
-
             progress_bar = tqdm(total=100, desc=experiment_name,
                                 file=TQDMLogRedirect(),
                                 ascii=True, leave=False)
@@ -604,7 +603,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
                 progress_bar.refresh()
 
             steady_image, transient_image = integrator.render(
-                scene, progress_callback=update_progress)
+                scene, sensor=sensor_index, progress_callback=update_progress)
             result = np.array(transient_image)
             if result.ndim == 2:
                 nt, nc = result.shape
@@ -617,14 +616,18 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             progress_bar.close()
             del steady_image, transient_image, progress_bar
         else:
-            image = integrator.render(scene, sensor_index)
+            image = integrator.render(scene, sensor=sensor_index)
             result = np.array(image)
 
         np.save(hdr_path, result)
 
         del result, scene, integrator
     except Exception as e:
+        import traceback
         print('/!\ Mitsuba process threw an exception:', e, file=sys.stderr)
+        print('', file=sys.stderr)
+        print('Traceback:', file=sys.stderr)
+        print(traceback.format_exc(), file=sys.stderr)
     finally:
         pipe_output.close()
 
