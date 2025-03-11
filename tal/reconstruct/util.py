@@ -32,6 +32,93 @@ def _infer_volume_format(volume_xyz, volume_format, do_log=True):
     return volume_format
 
 
+def can_parallel_convolution(data: NLOSCaptureData, 
+                             volume_xyz: NLOSCaptureData.VolumeXYZType,
+                             grid_selection: str):
+    """
+    Return true if the grid selection can use parallel convolutions with 
+    respect the volume volume_xyz
+    - param data             : See tal.io.NLOSCaptureData
+    - param volume_xyz       : Reconstruction volume positions
+    - param grid_selection   : Selection of the grid. Must be either 'sensor' or
+                               'laser'
+    """
+    v_format = _infer_volume_format(volume_xyz, VolumeFormat.UNKNOWN,
+                                    do_log=True)
+    epsilon = 1e-5
+    # Select the grid
+    G = None
+    if grid_selection not in ['laser', 'sensor']:
+        raise ValueError(f'grid_selection must be either \'laser\' or \'sensor\'. Received {grid_selection}')
+    elif grid_selection == 'laser':
+        # Check the laser formats
+        log(LogLevel.TRACE, f"tal.util.can_parallel_convolution: Using laser")
+        if data.laser_grid_format != GridFormat.X_Y_3:
+            log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Not planar laser grid")
+            return False    # Not parallel format
+        if data.H_format != HFormat.T_Lx_Ly_Sx_Sy:
+            log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Not enough histograms")
+            return False
+        G = data.laser_grid_xyz
+    elif grid_selection == 'sensor':
+        # Check the sensor formats
+        log(LogLevel.TRACE, f"tal.util.can_parallel_convolution: Using sensor")
+        if data.sensor_grid_format != GridFormat.X_Y_3:
+            log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Not planar sensor grid")
+            return False    # Not parallel format
+        if data.H_format not in [HFormat.T_Sx_Sy, HFormat.T_Lx_Ly_Sx_Sy]:
+            log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Not enough histograms")
+        G = data.sensor_grid_xyz
+
+    if v_format in [VolumeFormat.X_Y_3, VolumeFormat.X_Y_Z_3]:
+        # Take the first planar volume if it is a tensor
+        V = volume_xyz
+        if v_format == VolumeFormat.X_Y_Z_3:
+            log(LogLevel.TRACE, f"tal.util.can_parallel_convolution: Taking first slide of the volume")
+            V = volume_xyz[:,:,0,:]
+        
+        # Check the spacing grid
+        delta_v = np.array([V[0,0] - V[-1, 0],V[0,0] - V[0, -1]]).swapaxes(0,1)\
+                 / np.array(V.shape)[:2]
+        delta_g = np.array([G[0,0] - G[-1, 0],G[0,0] - G[0, -1]]).swapaxes(0,1)\
+                 / np.array(G.shape)[:2]
+        if np.any(np.abs(delta_v - delta_g) > epsilon):
+            log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Different spacing between grid and volume.")
+            return False
+
+        # Check if parallel vectors
+        g_i = G[0,0] - G[-1, 0] 
+        g_i_n = g_i/np.linalg.norm(g_i)
+        g_j = G[0,0] - G[0, -1]
+        g_j_n = g_j/np.linalg.norm(g_j)
+        v_i = V[0,0] - V[-1, 0]
+        v_i_n = v_i/np.linalg.norm(v_i)
+        v_j = V[0,0] - V[0, -1]
+        v_j_n = v_j/np.linalg.norm(v_j)
+
+        if np.dot(g_i_n, v_i_n) < 1 - epsilon or \
+            np.dot(g_j_n, v_j_n) < 1 - epsilon:
+            log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Grid and volume are not coplanar.")
+            # Planes are not parallel
+            return False
+        
+        # Corner differences
+        corners = np.array([G[0,0] - V[0,0], G[-1,0] - V[-1,0], 
+                            G[0,-1] - V[0,-1], G[-1,-1] - V[-1,-1]])
+        corners*=np.array([[1, 1, 1], [1,-1,1], [-1, 1, 1], [-1, -1, 1]])
+        if np.all(np.abs(corners - corners[0]) < epsilon):
+            return True
+        else:
+            log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Volume is not center with the grid.")
+
+    else:
+        log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Volume format {v_format}")
+
+    return False
+    
+
+
+
 def convert_to_N_3(data: NLOSCaptureData,
                    volume_xyz: NLOSCaptureData.VolumeXYZType,
                    volume_format: VolumeFormat = VolumeFormat.UNKNOWN,
@@ -252,7 +339,7 @@ def convert_reconstruction_from_N_3(data: NLOSCaptureData,
     if camera_system.is_transient():
         shape = (data.H.shape[data.H_format.time_dim()],)
     else:
-        shape = ()
+        shape = ()  
 
     assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
 

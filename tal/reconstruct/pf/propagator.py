@@ -5,257 +5,385 @@ File        :   propagator.py
 Description :   Interface of propagation to use with Phasor Fields solver, and
                 RSD implementations for Parallel and non Parallel planes
 """
+from tal.io.capture_data import NLOSCaptureData
+from tal.enums import CameraSystem, VolumeFormat
+from tal.reconstruct.util import can_parallel_convolution
+from tal.reconstruct.filters import HFilter
+from tal.log import log, LogLevel
+
+import pyfftw.interfaces.numpy_fft as np_fft
 
 import numpy as np
-from threading import Lock
-from tal.reconstruct.pf.rsd_kernel import RSD_kernel
-from typing import Tuple, Union
 
+from warnings import warn
+
+import pyfftw
+
+class PropParams(object):
+    """
+    Parameters for the propagation with the Phasor Fields.
+    """
+    def __init__(self, V:np.ndarray, Vp:np.ndarray|None = None,
+                 volume_format: VolumeFormat = VolumeFormat.N_3, 
+                 camera_system: CameraSystem = CameraSystem.DIRECT_LIGHT,
+                 force_by_point: bool = False, confocal_capture: bool = False):
+        """
+        Parameters for the propagation of Phasor Fields
+        :param V                : Volume definition for the Phasor Fields 
+                                  propagation.
+        :param Vp               : If proyection camera_system is 
+                                  tal.enum.CameraSystem.PROJECTOR_X or 
+                                  tal.enum.CameraSystem.PROJECTOR_ONLY, 
+                                  propagates the illumination only to this
+                                  points. Only tal.enum.VolumeFormat.N_3 
+                                  supported.
+        :param volume_format    : Define the format of V. See doc in 
+                                  tal.enum.VolumeFormat.
+        :param camera_system    : Define the camera format for the propagation.
+                                  See doc in tal.enum.CameraSystem
+        :param force_by_point   : Iff true, only point to point propagation 
+                                  will be used.
+        :param confocal_capture : Indicate if the data is confocal or not.
+        """
+        self.V = V
+        self.Vp = Vp
+        self.volume_format = volume_format
+        self.camera_system = camera_system
+        self.force_by_point = force_by_point
+        self.confocal_capture = confocal_capture
 
 class Propagator(object):
     """
-    Propagation interface
+    Propagator for Phasor Fields
     """
+    def __init__(self, filter: HFilter, params: PropParams):
+        self.params = params
+        self.filter = filter
 
-    def propagate(self, fH: np.ndarray, P: np.ndarray,
-                  V: np.ndarray,  wl_v: np.ndarray,
-                  P_axis: Union[int, Tuple[int]] = None,
-                  V_axis: Union[int, Tuple[int]] = None) -> np.ndarray:
+        self.__iterator_x = None
+        self.confocal_capture = False
+        
+
+    def configure(self, data: NLOSCaptureData):
+        log(LogLevel.INFO, "tal.reconstruct.pf.phasor_fields: Configuring the PF propagator.")
+        if data.is_confocal() and not self.confocal_capture:
+            warn('Detected confocal capture, but not indicated in the parameters. Parameters will be modified')
+            self.params.confocal_capture = True 
+
+        # Can the propagation be done by planar convolutions?
+        s_parallel = can_parallel_convolution(data, self.params.V, 'sensor') \
+                        and not self.params.force_by_point
+        l_parallel = can_parallel_convolution(data, self.params.V, 'laser') \
+                        and not self.params.force_by_point
+        
+        # Set the target coordinates
+        if s_parallel or l_parallel:
+            self.__iterator_x = np.moveaxis(self.params.V, 2, 0)
+            iterator_z = self.__iterator_x[:,0,0,2]
+            if s_parallel:
+                self.__iterator_s = iterator_z
+            else:
+                self.__iterator_s = self.__iterator_x
+            if l_parallel:
+                self.__iterator_l = iterator_z
+            else:
+                self.__iterator_l = self.__iterator_x
+        else:
+            self.__iterator_x = self.params.V.reshape(-1,3)
+            self.__iterator_s = self.__iterator_x
+            self.__iterator_l = self.__iterator_x
+
+        # Configure the propagators
+        # Sensor propagators
+        self.propagator_S = PropagatorCore.dummy()  # Null propagator
+        self.S_prop_axes = None
+        if self.params.camera_system != CameraSystem.PROJECTOR_ONLY:
+            twice_prop = self.params.confocal_capture \
+                            and self.params.camera_system in \
+                                    [CameraSystem.CONFOCAL_TIME_GATED,
+                                     CameraSystem.DIRECT_LIGHT]
+            self.propagator_S = PropagatorCore(data.sensor_grid_xyz,
+                                            self.filter.omega,
+                                            self.__iterator_s,
+                                            by_point = not s_parallel,
+                                            target_shape = self.__iterator_x.shape[1:3],
+                                            twice = twice_prop)
+            self.S_prop_axes = (1,2)
+
+
+        # Laser propagators
+        self.propagator_L = PropagatorCore.dummy()
+        self.L_prop_axes = None
+        if self.params.camera_system in [CameraSystem.PROJECTOR_CAMERA,
+                                         CameraSystem.PROJECTOR_CAMERA_T0,
+                                         CameraSystem.PROJECTOR_ONLY]:
+            # Propagate to Vp points
+            # TODO: this is ineficent. Find better way to store it
+            proy_dim = self.params.Vp.ndim
+            tile_shape = (self.__iterator_x.shape[0],) + (1,)*proy_dim
+            self.__iterator_l = np.tile(self.params.Vp, tile_shape)
+            self.propagator_L = PropagatorCore(data.laser_grid_xyz,
+                                                self.filter.omega,
+                                                self.__iterator_l,
+                                                by_point = True)
+            self.L_prop_axes = (-2, -1)
+                
+        elif self.params.camera_system in [CameraSystem.DIRECT_LIGHT,
+                                           CameraSystem.CONFOCAL_TIME_GATED] \
+             and not self.params.confocal_capture:
+            
+            self.propagator_L = PropagatorCore(data.laser_grid_xyz,
+                                            self.filter.omega,
+                                            self.__iterator_l,
+                                            by_point = not l_parallel,
+                                            target_shape = self.__iterator_x.shape[1:3],
+                                            twice = False)
+            self.L_prop_axes = (-2, -1)
+            
+        log(LogLevel.DEBUG, f"tal.reconstruct.pf.phasor_fields.configure: Using sensor propagator {self.propagator_S}")
+        log(LogLevel.DEBUG, f"tal.reconstruct.pf.phasor_fields.configure: Using laser propagator {self.propagator_L}")
+        #### Configure the return signal
+        self.store_time = True
+        if self.params.camera_system in [CameraSystem.DIRECT_LIGHT, 
+                                         CameraSystem.PROJECTOR_CAMERA_T0, 
+                                         CameraSystem.TRANSIENT_T0]:
+            log(LogLevel.DEBUG, "tal.reconstruct.pf.phasor_fields.configure: Reconstruction at t=0")
+            # Return the reconstruction at t=0
+            self.store_time = False
+            self.to_time = self.t0
+        else:
+            log(LogLevel.DEBUG, "tal.reconstruct.pf.phasor_fields.configure: Reconstruction with complete time domain.")
+            # Return the reconstruction with the temporal signal
+            self.to_time = self.expand_fourier
+            
+
+    def propagate_v(self, fH, iter_v:np.nditer):
+        # Apply the propagation
+        expected_shape = self.__iterator_x.shape[1:-1] + (iter_v.shape[0],)
+        if self.store_time:
+            expected_shape = (self.filter.n_w,) + expected_shape
+     
+        result = np.zeros(expected_shape, dtype=np.complex128)
+        for i, iter in enumerate(iter_v):
+            result[..., i] = self.apply(fH, iter)
+
+        return result
+
+    def iter_size(self):
+        return self.__iterator_x.shape[0]
+
+    def static_proyect(self, fH, data):
+        # Static proyection to a fix set of points
+        if self.proyected_fH is None:  
+            axis = np.arange(-(data.laser_grid_xyz.ndim - 1), 0)
+            self.proyected_fH = np.sum(
+                                    fH * Propagator.RSD_prop(data.laser_grid_xyz,
+                                                             self.params.Vp,
+                                                             self.filter.omega),
+                                        axis = axis)
+        return self.proyected_fH
+        
+    def expand_fourier(self, fV):
+        # Expand the fourier indices given the filter
+        full_fV = np.zeros((self.filter.n_w,) + fV.shape[1:], dtype=np.complex128)
+        full_fV[self.filter.indices] = fV
+        return np.fft.ifft(full_fV, axis = 0)      
+
+    def t0(self, fV):
+        return np.sum(fV, axis = 0)     
+
+
+    def apply(self, fH, i):
+        return self.to_time(
+                    self.propagator_L.apply(
+                                    self.propagator_S.apply(fH, i, self.S_prop_axes),
+                            i, axes = self.L_prop_axes))
+
+
+class PropagatorCore:
+    """
+    Given a grid or a list of points, it returns a propagation function that 
+    can be later applied to the iterator i
+    """
+    def __init__(self, o_coords: np.ndarray, ang_freqs: np.ndarray,
+                 target: np.ndarray, by_point: bool = False, 
+                 target_shape: tuple = None, twice: bool = False):
         """
-        Propagate from P to V the value fH, where fH is the impulse response at
-        P in the Fourier domain, and wl_v is the array of wavelengths for each
-        fH component
-        @param self     : Propagator subclass implementation
-        @param fH       : Impulse response in the Fourier domain
-        @param P        : Coordinates of the fH samples
-        @param V        : Coordinates to propagate fH
-        @param wl_v     : Array of wavelengths for each fH Fourier component
-        @param P_axis   : Axis of fH which represents P. If None, axis is 
-                          assumed to be the last one
-        @param V_axis   : Axis of fH which represents V. If None, it is assumed
-                          there is no axis representing V. It use the axis to
-                          partially propagations (e.g. propagation from sensors
-                          but not from light sources)
-        @return         : The propagation of fH to the V coordinates
+        Return a RSD propagation, by point or planar, given the origin 
+        coordinates and the target cooordinates for the given frequencies.
+        - o_coords      : (m,n,3) or (m,3) array of the origin coordinates
+        - ang_freqs     : (f) array with the angular frequencies value
+        - target        : (m,n,3) or (m,3) or (d) array of targets. It might be a
+                          tensor of coordinates or an array of depths.
+        - by_point      : If false, it return a planar RSD.
+        - target_shape  : If by_point is False, it set this shape for the 
+                          reconstruction target with planar RSD
+        - twice         : If true, it assumes the propagation twice (as in 
+                          confocal captures)
         """
-        raise NotImplementedError('Subclasses should implement propagate')
+        self.omega = ang_freqs
+        self._prop_func = None  
+        if by_point:
+            self._o_coords = o_coords
+            self._t_iterator = target
+            if twice:
+                self._propagator = self.RSD_prop_sq
+            else:
+                self._propagator = self.RSD_prop
+
+            self._prop_func = self.__by_point_prop
+        else:
+            assert o_coords.ndim == 3 and o_coords.shape[-1] == 3,\
+                    f"Unknown o_coords format of shape {o_coords.shape}"
+            self._t_iterator = target
+            self._zero_depth_RSD_coords = \
+                        PropagatorCore.__zero_RSD_kernel_coords(o_coords,
+                                                                target_shape)
+            if twice:
+                self._propagator = self.RSD_kernel_sq
+            else:
+                self._propagator = self.RSD_kernel
+
+            self._prop_func = self.__planar_prop
+
+ 
+
+    def __planar_prop(self, fH:np.ndarray, i:int, axes:tuple = (1,2)):
+        """
+        Given a fourier domain input, it propagates to the propagator at index i
+        the given axes by planes
+        - fH: (f, m, n) array, with f being the number of frequencies
+        - i : Integer to select the propagator index
+        - axes: Axes to apply fH propagation
+        """
+        K = self._propagator(i)
+        return np.fft.ifft2(
+                    np.fft.fft2(fH,s = K.shape[1:], axes = axes)\
+                    *np.fft.fft2(K,axes = (1,2))
+                )[:, -fH.shape[axes[0]]:, -fH.shape[axes[1]]:]
+
+    def __by_point_prop(self, fH:np.ndarray, i:int, axes:tuple=None):
+        """
+        Given a fourier domain input, it propagates to the propagator at index i
+        the given axes by planes
+        - fH: (f, m, n) array, with f being the number of frequencies
+        - i : Integer to select the propagator index
+        - axes: Unused argument
+        """
+        sum_axes = tuple(np.arange(self._o_coords.ndim - 1))
+        return np.sum(fH * self._propagator(i), axis = sum_axes)
+
+
+    def RSD_kernel(self, i:int):
+        """
+        Given the coordinates at z distance = 0 from a grid, it extracts the 
+        RSD kernel to propagate at a plane at z at omega frequencies
+        """
+        dist = np.linalg.norm(self._zero_depth_RSD_coords\
+                                 + np.array([0,0,self._t_iterator[i]]), 
+                              axis = -1)
+        omega = self.omega.reshape((-1,) + (1,) * dist.ndim)
+        return np.exp(omega*1j * dist)/dist
+    
+
+    def RSD_kernel_sq(self, i:int):
+        """
+        Given the coordinates at z distance = 0 from a grid, it extracts the 
+        RSD kernel to propagate at a plane at z at omega frequencies squared
+        """
+        dist = np.linalg.norm(self._zero_depth_RSD_coords\
+                                 + np.array([0,0,self._t_iterator[i]]), 
+                              axis = -1)
+        omega = self.omega.reshape((-1,) + (1,) * dist.ndim)
+        return (np.exp(omega*1j * dist)/dist) ** 2
+    
+
+    def RSD_prop(self, i: int):
+        """
+        Given a grid and a list of points x, it returns the propagator with omega 
+        frequencies
+        """
+        ndim = self._o_coords.ndim - 1
+        pre_x_shape = self._t_iterator[i].shape
+        rshp_x = self._t_iterator[i].reshape((1,)*(ndim + 1) + pre_x_shape)
+        dist = np.linalg.norm(rshp_x -  self._o_coords, axis = -1)
+        omega_rshp = self.omega.reshape((-1,) + (1,) * ndim)
+        return np.exp(omega_rshp*1j * dist)/dist
+    
+
+    def RSD_prop_sq(self, i: int):
+        """
+        Given a grid and a list of points x, it returns the propagator with omega 
+        frequencies squared
+        """
+        ndim = self._o_coords.ndim - 1
+        pre_x_shape = self._t_iterator[i].shape
+        rshp_x = self.t_iterator[i].reshape((1,)*ndim + pre_x_shape)
+        dist = np.linalg.norm(rshp_x -  self.o_coords, axis = -1)
+        omega_rshp = self.omega.reshape((-1,) + (1,) * dist.ndim)
+        return (np.exp(omega_rshp*1j * dist)/dist)**2
+    
 
     @staticmethod
-    def reshape_data(fH: np.ndarray, P: np.ndarray, V: np.ndarray,
-                     axis: Union[int, Tuple[int]]):
+    def __zero_RSD_kernel_coords(coords, t_shape = None):
         """
-        Reshape the data to the needed form for the propagation implementations
+        Given coords, it calculate the coordinates for the kernel at distance 0.
+        :param coords : The reference coordinates
+        :param t_shape: The target shape (it must be bigger than coord.shape)
+        :return       : Numpy.ndarray 
         """
-        raise NotImplementedError('Subclasses should implement reshape_data')
+        assert coords.ndim == 3 and coords.shape[2] == 3, "Unknown coordinates"
+        # Shape of the coordinates
+        ni, nj, _ = coords.shape
+        # Estimate the delta between planes
+        dist_i = np.linalg.norm(coords[0,0] - coords[-1,0])
+        delta_i = dist_i/ni
+        dist_j = np.linalg.norm(coords[0,0] - coords[0,-1])
+        delta_j = dist_j/nj
 
-    # Reorder the results to match the given data
+        # Target shape, to use bigger kernels
+        if t_shape is None:
+            target_shape = (ni*2-1, nj*2-1)
+        else: 
+            target_shape = (t_shape[0]*2-1, t_shape[1]*2-1) 
 
+        # The coordinates of the kernel at distance 0
+        vi = np.linspace(-delta_i*(target_shape[0]//2) - delta_i, 
+                         delta_i*(target_shape[0]//2) + delta_i,
+                         target_shape[0])
+        vj = np.linspace(-delta_j*(target_shape[1]//2) - delta_j, 
+                         delta_j*(target_shape[1]//2) + delta_j,
+                         target_shape[1])
+
+        z_RSD_coords = np.moveaxis(np.array(np.meshgrid(vi, vj, [0], 
+                                            indexing = 'ij') ), 0, -1)[:,:,0,:]
+        return z_RSD_coords
+    
+
+    def prop_info(self):
+        info_msg = ""
+        if self._prop_func == self.__planar_prop:
+            info_msg += "Planar RSD propagator"
+        elif self._prop_func == self.__by_point_prop:
+            info_msg += "By point RSD propagator"
+        else:
+            info_msg += "Not defined propagator"
+        
+        if self._propagator in [self.RSD_kernel_sq, self.RSD_kernel_sq]:
+            info_msg += " squared."
+        else:
+            info_msg += "."
+        return info_msg
+    
+    def __str__(self):
+        return self.prop_info()
+
+    def apply(self, fH, i, axes):
+        # Apply the propagator
+        return self._prop_func(fH, i, axes)
+    
     @staticmethod
-    def reshape_result(fI: np.ndarray, fH: np.ndarray, V: np.ndarray,
-                       w_axis: int,
-                       P_axis: Union[int, Tuple[int]],
-                       V_axis: Union[int, Tuple[int]]):
-
-        # Reshape to the corresponding shape. By axis: frequency, fH
-        # uncorresponding to P shape, V shape
-        V_l_axis = V_axis
-        if V_l_axis is None:
-            I_shape = tuple(np.delete(np.array(fH.shape), P_axis)) \
-                + tuple(np.array(V.shape)[:-1])
-            V_l_axis = tuple(np.arange(- V.ndim + 1, 0))
-        else:
-            I_shape = tuple(np.delete(np.array(fH.shape), P_axis + V_axis)) \
-                + tuple(np.array(V.shape)[:-1])
-        # Move the axis of frequencies to the beginning
-        fI_aux = np.moveaxis(fI, w_axis, 0)
-        # Reshape the data
-        I = fI_aux.reshape(I_shape)
-        return I
-
-    @staticmethod
-    def check_shapes(fH: np.ndarray, P: np.ndarray,
-                     V: np.ndarray,  wl_v: np.ndarray,
-                     P_axis: Union[int, Tuple[int]],
-                     V_axis: Union[int, Tuple[int]]):
-        """
-        Check the shapes of all the input data
-        """
-        # Reshape to arrays all the data
-        V_shape = np.array(V.shape)
-        P_shape = np.array(P.shape)
-        fH_shape = np.array(fH.shape)
-
-        assert np.all(fH_shape[np.array(P_axis)] == P_shape[:-1]), \
-            "fH and P are not the same shape"
-        if V_axis is not None:
-            assert np.all(fH_shape[np.array(V_axis)] == V_shape[:-1]), \
-                "Indicated axis for V in H, but shapes are not the same"
-        assert wl_v.shape[0] == fH.shape[0], \
-            'number of frequencies does not match in the first axis of fH'
-        assert V_shape[-1] == 3, "propagate do not support this data format"
-        assert P_shape[-1] == 3, "propagate do not support this data format"
-
-        return (V_shape, P_shape, fH_shape)
-
-    @staticmethod
-    def axis_value(axis):
-        """
-        Return a value given axis. Iff None returns axis -1
-        """
-        if axis is None:
-            return (-1,)
-        else:
-            return axis
-
-
-class RSD_propagator(Propagator):
-    """
-    Propagation using Rayleigh-Sommerfeld Diffraction
-    """
-
-    def __init__(self):
-        super().__init__()
-
-    def propagate(self, fH: np.ndarray, P: np.ndarray,
-                  V: np.ndarray,  wl_v: np.ndarray,
-                  P_axis: Union[int, Tuple[int]] = None,
-                  V_axis: Union[int, Tuple[int]] = None) -> np.ndarray:
-        """
-        Overrides propagate. It uses a RSD propagation. It collapses the 
-        given axis, and add new ones of size V
-        """
-        # Extract the axis and check the shapes
-        P_l_axis = RSD_propagator.axis_value(P_axis)
-        RSD_propagator.check_shapes(fH, P, V, wl_v, P_l_axis, V_axis)
-        # Reshape the data to the needed form
-        V_a, P_a, fH_a = RSD_propagator.reshape_data(
-            fH, P, V, P_l_axis, V_axis)
-        # calculate distances from P to all V
-        dist = np.linalg.norm(P_a - V_a, axis=-1)
-        # RSD kernel calculation
-        RSD_k = RSD_kernel.RSD_kernel_w(dist, wl_v)
-        # Propagate the light, and focus on the voxel
-        I_a = np.sum(fH_a*RSD_k, axis=-2)
-        I = RSD_propagator.reshape_result(I_a, fH, V, -2, P_l_axis, V_axis)
-
-        return I
-
-    @staticmethod
-    def reshape_data(fH: np.ndarray, P: np.ndarray, V: np.ndarray,
-                     P_axis: Union[int, Tuple[int]],
-                     V_axis: Union[int, Tuple[int]]):
-        # Reshape all the data to an array of 3d coordinates
-        V_a = V.reshape(1, -1, 3)
-        P_a = P.reshape(-1, 1, 3)
-        if V_axis is not None:
-            fH_new_shape = np.append(np.delete(fH.shape, P_axis + V_axis),
-                                     [P_a.shape[0], V_a.shape[1]])
-        else:
-            fH_new_shape = np.append(np.delete(fH.shape, P_axis),
-                                     [P_a.shape[0], 1])
-        # Reshape fH to match the P
-        fH_a = fH
-        fH_a = np.moveaxis(fH_a, P_axis, np.arange(-len(P_axis), 0))
-
-        # Reshape fH to match the V
-        if V_axis is not None:
-            fH_a = np.moveaxis(fH_a, V_axis, np.arange(-len(V_axis), 0))
-
-        fH_a = fH_a.reshape(fH_new_shape)
-        fH_a = np.moveaxis(fH_a, 0, -3)    # move the axis of frequencies
-        return V_a, P_a, fH_a
-
-
-class RSD_parallel_propagator(Propagator):
-    """
-    Propagation using Rayleigh-Sommerfeld Diffraction for parallel planes
-    """
-
-    def __init__(self, P: np.ndarray, V: np.ndarray, w_a: np.ndarray):
-        super().__init__()
-        # Creates the kernel. It check parallel planes
-        self.K_rsd = RSD_kernel(V, P, w_a)
-        assert P.ndim == 3, "P has to contain the 3d coordinates in a plane"
-        assert V.ndim == 3 or V.ndim == 4, \
-            "V has to contain the 3d coordinates as volume or plane"
-        self.__P = P
-        self.__V = V
-        if self.__V.ndim == 4:
-            self.__V_z_idx = {}
-            for hdz, V_z in enumerate(self.__V):
-                self.__V_z_idx[str(V_z[0, 0])] = hdz
-        self.__w_a = w_a
-        self.__fH = None
-        self.lock = Lock()
-
-    def set_fH(self, fH, P_axis, V_axis):
-        """
-        Set the new impulse response value to performance the propagation
-        """
-        self.__fH = fH
-        ffH = np.fft.fft2(fH, s=self.K_rsd.kernel_shape(), axes=P_axis)
-        # Reorder the data to do easier the operations
-        ffH = np.moveaxis(ffH, P_axis, [-2, -1])
-        # Reorder the frecuencies
-        self.ffH = np.moveaxis(ffH, 0, -3)
-        if V_axis is not None:
-            ffH = np.moveaxis(ffH, V_axis, np.arange(-len(V_axis), 0))
-
-    def propagate(self, fH: np.ndarray, P: np.ndarray,
-                  V: np.ndarray,  wl_v: np.ndarray,
-                  P_axis: Union[int, Tuple[int]] = None,
-                  V_axis: Union[int, Tuple[int]] = None) -> np.ndarray:
-        """
-        Override of propagate in Propagate. Optimized for parallel planes
-        """
-        # Check the data and types
-        assert P is self.__P, "P is not the same used for initialization"
-        assert wl_v is self.__w_a, \
-            "wl_v is not the same used for initialization"
-        if V.ndim == 3 and self.__V.ndim == 4:
-            assert V.base is self.__V, \
-                "V is not the part of the one used for initialization"
-            idx_plane = [self.__V_z_idx[str(V[0, 0])]]
-        elif V.ndim == 3 and self.__V.ndim == 3:
-            assert V is self.__V, \
-                "V is not the same used for initialization"
-            idx_plane = [0]
-        elif V.ndim == 4:
-            assert V is self.__V, \
-                "V is not the same used for initialization"
-            idx_plane = range(V.shape[0])
-        else:
-            raise "propagate does not support this data"
-
-        # Check the axis
-        if P_axis is None:
-            P_l_axis = [-2, -1]
-        else:
-            P_l_axis = P_axis
-
-        with self.lock:
-            if self.__fH is None or self.__fH is not fH:
-                self.set_fH(fH, P_l_axis, V_axis)
-
-        # Space to store results
-        fI_pre_shape = tuple(np.array(self.ffH.shape)[:-3])
-        if V.ndim == 3:
-            fI_shape = fI_pre_shape + (len(wl_v), 1, V.shape[0], V.shape[1])
-        else:   # V.ndim == 4
-            fI_shape = fI_pre_shape + (len(wl_v), V.shape[0],
-                                       V.shape[1], V.shape[2])
-        fI = np.zeros(fI_shape, dtype=np.complex128)
-
-        # Propagate with the RSD kernel
-        for idx_fI, plane_id in enumerate(idx_plane):
-            K = self.K_rsd.get_f_RSD_kernel_i(plane_id)
-            fI_padded = np.fft.ifft2(K * self.ffH)
-            fI[..., idx_fI, :, :] = fI_padded[...,
-                                              -fI_shape[-2]:, -fI_shape[-1]:]
-
-        # Squeeze unnedded axes
-        if V.ndim == 3:
-            fI = np.squeeze(fI, axis=-3)
-
-        return RSD_parallel_propagator.reshape_result(fI, fH, V, -V.ndim,
-                                                      P_l_axis, V_axis)
+    def dummy():
+        a = PropagatorCore(None, None, None, by_point = True)
+        a._prop_func = lambda fH, i, axes: fH
+        return a

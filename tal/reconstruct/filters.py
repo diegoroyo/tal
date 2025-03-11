@@ -5,6 +5,90 @@ from tal.log import log, LogLevel, TQDMLogRedirect
 import numpy as np
 from tqdm import tqdm
 
+from nptyping import NDArray, Shape
+
+class HFilter:
+    """
+    Contains a filter to apply on the captured data histograms
+    """
+
+    NDArray[Shape['Nf'], np.float32]
+
+    def __init__(self, filter_name, plot_filter = False, **params):
+        if filter_name == 'pf':
+            self.gaussian_package_filter(**params)
+        else:
+            self.weights = None     # Frequency weights
+            self.indices = None     # Indices of important frequencies after filtering
+            self.omega = None       # Angular freq of important indices
+            self.n_w = None         # Number of total frequencies
+
+    def is_configured(self):
+        """
+        Return true if the filter is configured 
+        """
+        if self.weights is not None and self.indices is not None \
+            and self.omega is not None and self.n_w is not None:
+            return True
+        else:
+            return False
+    
+    def gaussian_package_filter(self, delta_t: float, n_w: int, lambda_c: float, 
+                                cycles: float, **params):
+        """
+        Define a gaussian package filter
+        - delta_t   : Spacing between time bins
+        - n_w       : Number of frequencies in the complete FFT
+        - lambda_c  : Central wavelength of the package
+        - cycles    : Number of cycles to represent 99.74% of the pulse
+        """
+        self.n_w = n_w
+        sigma = cycles*lambda_c / 6             # Gaussian sigma
+        w_c = 1 / lambda_c                      # Central frequency
+        w = np.fft.fftfreq(n_w, delta_t)        # All frequencies
+        # To control division by 0
+        w[0] = 1e-30
+        wavelengths = 1 / w                     # All wavelengths
+        # Correct 0 and inf values
+        wavelengths[0] = np.inf
+        w[0] = 0.0
+        # Frequency distances to central frequency in rad/s
+        delta_w = 2*np.pi*(w - w_c)
+        # Gaussian pulse for reconstruction
+        self.weights = np.exp(-sigma**2*delta_w**2/2)*np.sqrt(2*np.pi)*sigma
+
+        # Central freq and sigma to k up to numpy fft
+        central_k = delta_t * n_w * w_c
+        sigma_k = delta_t * n_w / (2*np.pi*sigma)
+
+        # Interest indicies in range [mu-3sigma, mu+3sigma]
+        min_k = np.round(central_k - 3*sigma_k)
+        max_k = np.round(central_k + 3*sigma_k)
+        # Indices in the gaussian pulse
+        self.indices = np.arange(min_k, max_k+1, dtype=int)
+        self.omega = w[self.indices]*2*np.pi
+
+
+    def apply(self, data: NLOSCaptureData, fourier: bool = True) -> NLOSCaptureData.HType:
+        """
+        Apply the filter to the NLOSCaptureData included. The filter must be
+        defined beforehand
+        - data: See tal.io.capture_data
+        - fourier: If true, return the histograms in the fourier domain. 
+                   Otherwise it return it in the time domain.   
+        """
+        H = data.H
+        assert H.shape[0] == self.n_w,\
+            f"Filter not defined for {H.shape[0]} time bins."
+        w_new_shape = (-1,) + (1,)*(H.ndim - 1)
+        Hk = np.fft.fft(H, axis = 0) * self.weights.reshape(w_new_shape)
+        if fourier:
+            return Hk[self.indices]
+        else:
+            return np.fft.ifft(Hk, axis = 0)
+
+
+
 
 def filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, progress, **kwargs):
     if isinstance(data, NLOSCaptureData):
