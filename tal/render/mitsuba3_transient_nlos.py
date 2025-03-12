@@ -609,6 +609,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
                 nt, nc = result.shape
                 result = result.reshape((nt, 1, 1, nc))
             result = np.moveaxis(result, 2, 0)
+            result = np.swapaxes(result, 1, 2)
             # result has shape (nt, nx, ny, nchannels)
             if result.ndim == 4:
                 # sum all channels
