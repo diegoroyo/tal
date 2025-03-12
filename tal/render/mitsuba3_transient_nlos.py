@@ -319,6 +319,56 @@ def get_scene_xml(config, random_seed=0):
     else:
         raise AssertionError(
             'scan_type should be one of {single|confocal|exhaustive}')
+    histogram_mode = v('histogram_mode') or 'time'
+    if histogram_mode == 'time':
+        film_xml = fdent('''\
+            <film type="transient_hdr_film">
+                <integer name="width" value="{film_width}"/>
+                <integer name="height" value="{film_height}"/>
+
+                <integer name="temporal_bins" value="{num_bins}"/>
+                <!-- <boolean name="auto_detect_bins" value="{auto_detect_bins}"/> -->
+                <float name="bin_width_opl" value="{bin_width_opl}"/>
+                <float name="start_opl" value="{start_opl}"/>
+                <rfilter type="box">
+                    <!-- <float name="radius" value="0.5"/> -->
+                </rfilter>
+            </film>''',
+                         film_width=film_width,
+                         film_height=film_height,
+                         num_bins=v('num_bins'),
+                         auto_detect_bins=v('auto_detect_bins'),
+                         bin_width_opl=v('bin_width_opl'),
+                         start_opl=v('start_opl'))
+    elif histogram_mode == 'frequency':
+        assert v('wl_mean') is not None, 'wl_mean must be specified'
+        assert v('wl_sigma') is not None, 'wl_sigma must be specified'
+        film_xml = fdent('''\
+            <film type="phasor_hdr_film">
+                <integer name="width" value="{film_width}"/>
+                <integer name="height" value="{film_height}"/>
+                <!-- <boolean name="auto_detect_bins" value="{auto_detect_bins}"/> -->
+
+                <float name="wl_mean" value="{wl_mean}"/>
+                <float name="wl_sigma" value="{wl_sigma}"/>
+                <integer name="temporal_bins" value="{num_bins}"/>
+                <float name="bin_width_opl" value="{bin_width_opl}"/>
+                <float name="start_opl" value="{start_opl}"/>
+                <rfilter type="box">
+                    <!-- <float name="radius" value="0.5"/> -->
+                </rfilter>
+            </film>''',
+                         film_width=film_width,
+                         film_height=film_height,
+                         auto_detect_bins=v('auto_detect_bins'),
+                         wl_mean=v('wl_mean'),
+                         wl_sigma=v('wl_sigma'),
+                         num_bins=v('num_bins'),
+                         bin_width_opl=v('bin_width_opl'),
+                         start_opl=v('start_opl'))
+    else:
+        raise AssertionError(
+            'histogram_mode should be one of {time|frequency}')
     sensor_nlos = fdent('''\
         <sensor type="nlos_capture_meter">
             <sampler type="independent">
@@ -331,18 +381,7 @@ def get_scene_xml(config, random_seed=0):
             <point name="sensor_origin" x="{sensor_x}"
                                         y="{sensor_y}"
                                         z="{sensor_z}"/>
-            <film type="transient_hdr_film">
-                <integer name="width" value="{film_width}"/>
-                <integer name="height" value="{film_height}"/>
-
-                <integer name="temporal_bins" value="{num_bins}"/>
-                <!-- <boolean name="auto_detect_bins" value="{auto_detect_bins}"/> -->
-                <float name="bin_width_opl" value="{bin_width_opl}"/>
-                <float name="start_opl" value="{start_opl}"/>
-                <rfilter type="box">
-                    <!-- <float name="radius" value="0.5"/> -->
-                </rfilter>
-            </film>
+            {film_xml}
         </sensor>''',
                         sample_count=v('sample_count'),
                         random_seed=random_seed,
@@ -352,12 +391,7 @@ def get_scene_xml(config, random_seed=0):
                         sensor_x=v('sensor_x'),
                         sensor_y=v('sensor_y'),
                         sensor_z=v('sensor_z'),
-                        film_width=film_width,
-                        film_height=film_height,
-                        num_bins=v('num_bins'),
-                        auto_detect_bins=v('auto_detect_bins'),
-                        bin_width_opl=v('bin_width_opl'),
-                        start_opl=v('start_opl'))
+                        film_xml=film_xml)
 
     materials = get_materials()
     shapes_steady = []
@@ -550,6 +584,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         import numpy as np
         from tqdm import tqdm
         from mitransient.integrators.common import TransientADIntegrator
+        from mitransient.films.phasor_hdr_film import PhasorHDRFilm
         import sys
         import os
 
@@ -614,6 +649,9 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             if result.ndim == 4:
                 # sum all channels
                 result = np.sum(result, axis=-1)
+            if isinstance(scene.sensors()[0].film(), PhasorHDRFilm):
+                # convert (real, imag) to complex
+                result = result[::2, ...] + 1j * result[1::2, ...]
             progress_bar.close()
             del steady_image, transient_image, progress_bar
         else:

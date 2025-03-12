@@ -20,7 +20,7 @@ def backproject_pf_multi_frequency(
         optimize_projector_convolutions, optimize_camera_convolutions,
         laser_xyz=None, sensor_xyz=None,
         compensate_invsq=False,
-        skip_H_fft=False,
+        skip_H_fft=False, skip_H_padding=False, nt=None,
         progress=False):
 
     assert not is_laser_paired_to_sensor, 'tal.reconstruct.pf_dev does not support confocal or custom captures. ' \
@@ -67,6 +67,9 @@ def backproject_pf_multi_frequency(
 
     """ Phasor fields filter """
 
+    if skip_H_padding:
+        assert nt is not None, 'nt is required when skip_H_padding is set'
+
     padding = _get_padding(wl_sigma, delta_t)
     # FIXME(diego) if we want to convert a circular convolution to linear,
     # this should be nt + t_6sigma - 1 instead of nt + 4 * t_6sigma or even nt + 2 * t_6sigma
@@ -91,6 +94,8 @@ def backproject_pf_multi_frequency(
     freqs = np.fft.fftfreq(nf, d=delta_t)[
         freq_min_idx:freq_max_idx+1].astype(np.float32)
     freq_idxs = np.arange(freq_min_idx, freq_max_idx+1, dtype=np.int32)
+    if skip_H_padding:
+        freq_idxs -= freq_min_idx  # convert to (0, nw-1) range
     log(LogLevel.INFO, 'tal.reconstruct.pf_dev: '
         f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
     nw = len(weights)
@@ -100,8 +105,9 @@ def backproject_pf_multi_frequency(
         # before. But if you pass a padded H then it messes up the nt and nf variables.
         # So the precompute_fft function removes the last values (they are not used anyway)
         # and it's re-padded here.
-        H_0 = np.pad(H_0,
-                     ((0, 2 * padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
+        if not skip_H_padding:
+            H_0 = np.pad(H_0,
+                         ((0, 2 * padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
     else:
         if border == 'zero':
             # only pad temporal dimension
