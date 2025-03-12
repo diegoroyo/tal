@@ -393,6 +393,27 @@ def backproject_pf_multi_frequency(
                         H_p = H_p.reshape((nva, nva))
                         del rsd_2
 
+                    if camera_system.bp_accounts_for_d_3():
+                        rsd_3 = np.exp(
+                            np.complex64(2j * np.pi) * d_3 * frequency)
+                        rsd_3 *= invsq_3
+                        if optimize_camera_convolutions:
+                            H_p = H_p.reshape((nl, nsx, nsy))
+                            rsd_3 = rsd_3.reshape((1, rsx, rsy))
+                            H_p_fft = np.fft.fft2(
+                                H_p, axes=(1, 2), s=(rsx, rsy))
+                            rsd_3_fft = np.fft.fft2(
+                                rsd_3, axes=(1, 2), s=(rsx, rsy))
+                            H_p_fft *= rsd_3_fft
+                            H_p = np.fft.ifft2(H_p_fft, axes=(1, 2))
+                            H_p = H_p[:, :nvx, :nvy]
+                            H_p = H_p.reshape((nl, nva))
+                        else:
+                            H_p = H_p.reshape((nl, 1, ns))
+                            H_p = H_p * rsd_3.reshape((1, nva, ns))
+                            H_p = H_p.sum(axis=2)
+                        del rsd_3
+
                     # test
                     rsd_i = np.exp(
                         np.complex64(-2j * np.pi) * d_i * frequency)
@@ -403,27 +424,6 @@ def backproject_pf_multi_frequency(
                     #     np.complex64(2j * np.pi) * d_i * frequency)
                     # H_p = H_p.reshape((nva))
                     # H_p *= rsd_i.reshape((nva))
-
-                    if camera_system.bp_accounts_for_d_3():
-                        rsd_3 = np.exp(
-                            np.complex64(2j * np.pi) * d_3 * frequency)
-                        rsd_3 *= invsq_3
-                        if optimize_camera_convolutions:
-                            H_p = H_p.reshape((nsx, nsy))
-                            rsd_3 = rsd_3.reshape((rsx, rsy))
-                            H_p_fft = np.fft.fft2(
-                                H_p, axes=(0, 1), s=(rsx, rsy))
-                            rsd_3_fft = np.fft.fft2(
-                                rsd_3, axes=(0, 1), s=(rsx, rsy))
-                            H_p_fft *= rsd_3_fft
-                            H_p = np.fft.ifft2(H_p_fft, axes=(0, 1))
-                            H_p = H_p[:nvx, :nvy]
-                            H_p = H_p.reshape((nva))
-                        else:
-                            H_p = H_p.reshape((nl, 1, ns))
-                            H_p = H_p * rsd_3.reshape((1, nva, ns))
-                            H_p = H_p.sum(axis=2)
-                        del rsd_3
 
                     H_1_w[i_w, ...] = H_p * weight
 

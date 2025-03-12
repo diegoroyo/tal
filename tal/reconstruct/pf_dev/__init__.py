@@ -37,6 +37,7 @@ def solve(data: NLOSCaptureData,
                                  NLOSCaptureData.VolumeXYZType] = None,
           progress: bool = True,
           compensate_invsq: bool = False,
+          imaginary_illumination_xyz: np.ndarray = None,
           skip_H_fft: bool = False,
           try_optimize_convolutions: bool = True) -> Union[NLOSCaptureData.SingleReconstructionType,
                                                            NLOSCaptureData.ExhaustiveReconstructionType]:
@@ -113,11 +114,14 @@ def solve(data: NLOSCaptureData,
         data.laser_xyz, data.sensor_xyz,
         compensate_invsq=compensate_invsq,
         skip_H_fft=skip_H_fft,
-        progress=progress)
+        progress=progress,
+        imaginary_illumination_xyz=imaginary_illumination_xyz)
 
+    return reconstructed_volume_n3
     return convert_reconstruction_from_N_3(data, reconstructed_volume_n3,
                                            volume_xyz, volume_format,
                                            camera_system, projector_focus)
+
 
 def precompute_fft(data, wl_sigma):
     """
