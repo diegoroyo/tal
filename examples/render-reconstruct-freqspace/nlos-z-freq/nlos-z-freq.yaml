@@ -1,75 +1,81 @@
+# TAL v0.20.0 NLOS scene description file: https://github.com/diegoroyo/tal
+# Created on 2025/03/12 10:30 with experiment name "nlos-z-freq"
+#
+# All commented variables show their default value
+# To render the scene with this configuration, execute:
+#   [python3 -m] tal render /media/pleiades/vault/projects/202206-tal/code/examples/render-reconstruct-freqspace/nlos-z-freq/nlos-z-freq.yaml
+name: nlos-z-freq
+
 ##
 # Mitsuba and Monte Carlo integrator settings
 ##
-mitsuba_variant: $default_mitsuba_variant$  # see mitsuba for possible types
-integrator_max_depth: -1
-integrator_filter_bounces: -1
-integrator_discard_direct_paths: false
-integrator_nlos_laser_sampling: true
-integrator_nlos_hidden_geometry_sampling: false
-integrator_nlos_hidden_geometry_sampling_do_rroulette: false
-integrator_nlos_hidden_geometry_sampling_includes_relay_wall: true
+mitsuba_variant: llvm_ad_mono  # see mitsuba for possible types
+#integrator_max_depth: -1
+#integrator_filter_bounces: -1
+#integrator_discard_direct_paths: false
+#integrator_nlos_laser_sampling: true
+integrator_nlos_hidden_geometry_sampling: true
+#integrator_nlos_hidden_geometry_sampling_do_rroulette: false
+integrator_nlos_hidden_geometry_sampling_includes_relay_wall: false
 sample_count: 1_000_000
 
 ##
 # Histograms
 ##
-account_first_and_last_bounces: false
+#account_first_and_last_bounces: false
 num_bins: 4096
 bin_width_opl: 0.003
 start_opl: 0.0
-auto_detect_bins: false
-histogram_mode: time  # time or frequency
+#auto_detect_bins: false
+histogram_mode: frequency  # time or frequency
 # --- for histogram_mode=frequency
-wl_mean: null
-wl_sigma: null
+wl_mean: 0.06
+wl_sigma: 0.06
 
 ##
 # Laser and sensor
 ##
 scan_type: single  # single, confocal or exhaustive
-sensor_x: -0.5
-sensor_y: 0.0
-sensor_z: 0.25
-laser_x: -0.5
-laser_y: 0.0
-laser_z: 0.25
-sensor_width: 256
-sensor_height: 256
+#sensor_x: -0.5
+#sensor_y: 0.0
+#sensor_z: 0.25
+#laser_x: -0.5
+#laser_y: 0.0
+#laser_z: 0.25
+sensor_width: 64
+sensor_height: 64
 # --- for scan_type=single
 # if set to null, laser points to the center pixel
 # if set to a number, laser points to that pixel (e.g. center = 128, 128)
-laser_lookat_x: null
-laser_lookat_y: null
+#laser_lookat_x: null
+#laser_lookat_y: null
 # --- for scan_type=confocal/exhaustive
-laser_width: 32
-laser_height: 32
+#laser_width: 32
+#laser_height: 32
 # these next four variables specify the scanned area of the relay wall
 # they are in UV coordinates, where (0, 0) is the top-left corner and (1, 1) is the bottom-right corner
 # by default they cover the whole relay wall i.e. (0, 0) to (1, 1)
-laser_aperture_start_x: 0  # 0: left, 1: right of relay wall
-laser_aperture_start_y: 0  # 0: top, 1: bottom of relay wall
-laser_aperture_end_x: 1
-laser_aperture_end_y: 1
-laser_emission_mode: rgb   # mono, rgb, spectrum
+#laser_aperture_start_x: 0  # 0: left, 1: right of relay wall
+#laser_aperture_start_y: 0  # 0: top, 1: bottom of relay wall
+#laser_aperture_end_x: 1
+#laser_aperture_end_y: 1
+#laser_emission_mode: rgb   # mono, rgb, spectrum
 # see https://mitsuba.readthedocs.io/en/latest/src/key_topics/scene_format.html#rgb-colors
 # mono expects a single float value, rgb expects three float values separated by commas
 # spectrum expects a wavelength:intensity list separated by commas e.g. "400:1, 700:1"
-laser_emission: 1.0, 1.0, 1.0
+#laser_emission: 1.0, 1.0, 1.0
 
 ##
 # Geometry (valid for hidden geometry or relay wall)
 ##
 geometry:
 - name: Z
-  description: >
-    Hidden geometry of the scene
   mesh:
     type: obj
     filename: ./Z.obj
   displacement_x: 0.0
   displacement_y: 0.0
-  displacement_z: 0.0  # using default RW settings this corresponds to depth
+  displacement_z: 1.0  # using default RW settings this corresponds to depth
   rot_degrees_x: 0.0
   rot_degrees_y: 0.0
   rot_degrees_z: 0.0
@@ -102,3 +108,19 @@ relay_wall: relay_wall  # must correspond to a geometry name above
 # (variables e.g. $alpha are substituted)
 ##
 
+#| id: white
+#| <bsdf type="diffuse">
+#|     <rgb name="reflectance" value="1.0, 1.0, 1.0"/>
+#| </bsdf>
+
+#| id: copper
+#| alpha: $alpha
+#| <bsdf type="roughconductor">
+#|     <string name="material" value="Cu"/>
+#|     <string name="distribution" value="beckmann"/>
+#|     <float name="alpha" value="$alpha"/>
+#| </bsdf>
+
+#| id: custom
+#| text: $text
+#| $text
