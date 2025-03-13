@@ -38,6 +38,8 @@ def solve(data: NLOSCaptureData,
           progress: bool = True,
           compensate_invsq: bool = False,
           skip_H_fft: bool = False,
+          skip_H_padding: bool = False,
+          nt: int = None,
           try_optimize_convolutions: bool = True) -> Union[NLOSCaptureData.SingleReconstructionType,
                                                            NLOSCaptureData.ExhaustiveReconstructionType]:
     """
@@ -78,10 +80,13 @@ def solve(data: NLOSCaptureData,
         If True, the inverse square falloff of light is compensated for, i.e., objects further away
         from the relay wall will appear brighter in the reconstruction.
 
-    skip_H_fft
+    skip_H_fft, skip_H_padding
         If True, data.H is assumed to already be in the frequency domain. This can be useful
         if you intend to call this function multiple times
         (e.g. with different projector_focus points)
+        If you used tal.reconstruct.pf_dev.precompute_fft you need to set skip_H_padding=False,
+        else you need to set skip_H_padding=True.
+        If you set skip_H_padding=True, you need to set nt too.
         See also tal.reconstruct.pf_dev.precompute_fft
 
     try_optimize_convolutions
@@ -112,12 +117,13 @@ def solve(data: NLOSCaptureData,
         optimize_projector_convolutions, optimize_camera_convolutions,
         data.laser_xyz, data.sensor_xyz,
         compensate_invsq=compensate_invsq,
-        skip_H_fft=skip_H_fft,
+        skip_H_fft=skip_H_fft, skip_H_padding=skip_H_padding, nt=nt,
         progress=progress)
 
     return convert_reconstruction_from_N_3(data, reconstructed_volume_n3,
                                            volume_xyz, volume_format,
                                            camera_system, projector_focus)
+
 
 def precompute_fft(data, wl_sigma):
     """

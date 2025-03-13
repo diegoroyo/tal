@@ -117,8 +117,6 @@ def can_parallel_convolution(data: NLOSCaptureData,
     return False
     
 
-
-
 def convert_to_N_3(data: NLOSCaptureData,
                    volume_xyz: NLOSCaptureData.VolumeXYZType,
                    volume_format: VolumeFormat = VolumeFormat.UNKNOWN,
@@ -339,17 +337,29 @@ def convert_reconstruction_from_N_3(data: NLOSCaptureData,
     if camera_system.is_transient():
         shape = (data.H.shape[data.H_format.time_dim()],)
     else:
-        shape = ()  
+        shape = ()
 
     assert volume_format.xyz_dim_is_last(), 'Unexpected volume_format'
 
-    is_exhaustive_reconstruction = \
-        camera_system.implements_projector() \
-        and projector_focus is not None and projector_focus.size > 3
+    is_exhaustive_reconstruction = (
+        (   # focus projector at different points in the scene
+            camera_system.implements_projector() \
+            and projector_focus is not None and projector_focus.size > 3
+        )
+        or
+        (   # don't backproject the illumination aperture but have a exhaustive aperture nonetheless
+            not camera_system.bp_accounts_for_d_2() \
+            and data.laser_grid_xyz.size > 3
+            and not data.is_confocal()
+        )
+    )
 
     if is_exhaustive_reconstruction:
         # add an additional shape dimension for the exhaustive reconstruction
-        shape += projector_focus.shape[:-1]
+        if camera_system.bp_accounts_for_d_2():
+            shape += projector_focus.shape[:-1]
+        else:
+            shape += data.laser_grid_xyz.shape[:-1]
 
     shape += volume_xyz.shape[:-1]
 

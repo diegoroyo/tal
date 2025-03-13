@@ -44,6 +44,7 @@ def filter_H(data: _Data,
 
     Available filters and respective arguments:
     - filter_name='pf': Filter certain frequencies, weighted using a Gaussian on the frequency domain
+        FIXME(diego): Update wl_mean/wl_sigma here and scene_defaults.yaml
         * wl_mean: Mean of the Gaussian in the frequency domain
         * wl_sigma: STD of the Gaussian in the frequency domain
         * delta_t: Time interval, must be non-null if not specified through data

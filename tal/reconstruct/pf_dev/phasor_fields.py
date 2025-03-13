@@ -20,11 +20,15 @@ def backproject_pf_multi_frequency(
         optimize_projector_convolutions, optimize_camera_convolutions,
         laser_xyz=None, sensor_xyz=None,
         compensate_invsq=False,
-        skip_H_fft=False,
+        skip_H_fft=False, skip_H_padding=False, nt=None,
         progress=False):
 
     assert not is_laser_paired_to_sensor, 'tal.reconstruct.pf_dev does not support confocal or custom captures. ' \
         'Please use tal.reconstruct.bp or tal.reconstruct.fbp instead.'
+
+    if skip_H_padding:
+        assert skip_H_fft, 'skip_H_fft should be also set when skip_H_padding is set'
+        assert nt is not None, 'nt is required when skip_H_padding is set'
 
     if not optimize_projector_convolutions and not optimize_camera_convolutions and not camera_system.is_transient():
         log(LogLevel.WARNING, 'tal.reconstruct.pf_dev: You have specified a time-gated camera system '
@@ -32,7 +36,8 @@ def backproject_pf_multi_frequency(
             'This will work, but the tal.reconstruct.bp or tal.reconstruct.fbp implementations '
             'are better suited for these cases.')
 
-    nt, nl, ns = H_0.shape
+    nt_, nl, ns = H_0.shape
+    nt_ = nt or nt_
     nv = np.prod(volume_xyz.shape[:-1])  # N or X * Y or X * Y * Z
     if projector_focus is None:
         npf = 0
@@ -67,7 +72,10 @@ def backproject_pf_multi_frequency(
 
     """ Phasor fields filter """
 
-    padding = _get_padding(wl_sigma, delta_t)
+    if skip_H_padding:
+        padding = 0
+    else:
+        padding = _get_padding(wl_sigma, delta_t)
     # FIXME(diego) if we want to convert a circular convolution to linear,
     # this should be nt + t_6sigma - 1 instead of nt + 4 * t_6sigma or even nt + 2 * t_6sigma
     # I have found cases where it fails even with nt + 2 * t_6sigma (Z, 0th pixel)
@@ -91,6 +99,8 @@ def backproject_pf_multi_frequency(
     freqs = np.fft.fftfreq(nf, d=delta_t)[
         freq_min_idx:freq_max_idx+1].astype(np.float32)
     freq_idxs = np.arange(freq_min_idx, freq_max_idx+1, dtype=np.int32)
+    if skip_H_padding:
+        freq_idxs -= freq_min_idx  # convert to (0, nw-1) range
     log(LogLevel.INFO, 'tal.reconstruct.pf_dev: '
         f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
     nw = len(weights)
@@ -100,8 +110,9 @@ def backproject_pf_multi_frequency(
         # before. But if you pass a padded H then it messes up the nt and nf variables.
         # So the precompute_fft function removes the last values (they are not used anyway)
         # and it's re-padded here.
-        H_0 = np.pad(H_0,
-                     ((0, 2 * padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
+        if not skip_H_padding:
+            H_0 = np.pad(H_0,
+                         ((0, 2 * padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
     else:
         if border == 'zero':
             # only pad temporal dimension
@@ -179,7 +190,7 @@ def backproject_pf_multi_frequency(
     if projector_focus_mode == 'exhaustive':
         n_projector_points = npf
     else:
-        n_projector_points = 1
+        n_projector_points = 1 if camera_system.bp_accounts_for_d_2() else nl
 
     d_014 = d_0 + d_1 + d_4
     invsq_14 = 1
@@ -447,8 +458,10 @@ def backproject_pf_multi_frequency(
 
             def work_dividing_volume(subrange_v):
                 nvi = len(subrange_v)
-                d_2_i = d_2[:, subrange_v, :]
-                d_3_i = d_3[:, subrange_v, :]
+                if camera_system.bp_accounts_for_d_2():
+                    d_2_i = d_2[:, subrange_v, :]
+                if camera_system.bp_accounts_for_d_3():
+                    d_3_i = d_3[:, subrange_v, :]
 
                 H_1_w = np.zeros((nw, n_projector_points, nvi),
                                  dtype=np.complex64)
