@@ -9,7 +9,7 @@ name: nlos-z-freq
 ##
 # Mitsuba and Monte Carlo integrator settings
 ##
-mitsuba_variant: llvm_ad_mono  # see mitsuba for possible types
+mitsuba_variant: cuda_mono  # see mitsuba for possible types
 #integrator_max_depth: -1
 #integrator_filter_bounces: -1
 #integrator_discard_direct_paths: false
@@ -17,7 +17,7 @@ mitsuba_variant: llvm_ad_mono  # see mitsuba for possible types
 integrator_nlos_hidden_geometry_sampling: true
 #integrator_nlos_hidden_geometry_sampling_do_rroulette: false
 integrator_nlos_hidden_geometry_sampling_includes_relay_wall: false
-sample_count: 1_000_000
+sample_count: 10_000
 
 ##
 # Histograms

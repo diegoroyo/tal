@@ -26,13 +26,18 @@ def backproject_pf_multi_frequency(
     assert not is_laser_paired_to_sensor, 'tal.reconstruct.pf_dev does not support confocal or custom captures. ' \
         'Please use tal.reconstruct.bp or tal.reconstruct.fbp instead.'
 
+    if skip_H_padding:
+        assert skip_H_fft, 'skip_H_fft should be also set when skip_H_padding is set'
+        assert nt is not None, 'nt is required when skip_H_padding is set'
+
     if not optimize_projector_convolutions and not optimize_camera_convolutions and not camera_system.is_transient():
         log(LogLevel.WARNING, 'tal.reconstruct.pf_dev: You have specified a time-gated camera system '
             'with an arbitrary reconstruction volume (that is not parallel to the relay wall). '
             'This will work, but the tal.reconstruct.bp or tal.reconstruct.fbp implementations '
             'are better suited for these cases.')
 
-    nt, nl, ns = H_0.shape
+    nt_, nl, ns = H_0.shape
+    nt_ = nt or nt_
     nv = np.prod(volume_xyz.shape[:-1])  # N or X * Y or X * Y * Z
     if projector_focus is None:
         npf = 0
@@ -68,9 +73,9 @@ def backproject_pf_multi_frequency(
     """ Phasor fields filter """
 
     if skip_H_padding:
-        assert nt is not None, 'nt is required when skip_H_padding is set'
-
-    padding = _get_padding(wl_sigma, delta_t)
+        padding = 0
+    else:
+        padding = _get_padding(wl_sigma, delta_t)
     # FIXME(diego) if we want to convert a circular convolution to linear,
     # this should be nt + t_6sigma - 1 instead of nt + 4 * t_6sigma or even nt + 2 * t_6sigma
     # I have found cases where it fails even with nt + 2 * t_6sigma (Z, 0th pixel)
