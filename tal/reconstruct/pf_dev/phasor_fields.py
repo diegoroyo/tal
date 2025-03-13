@@ -179,7 +179,7 @@ def backproject_pf_multi_frequency(
     if projector_focus_mode == 'exhaustive':
         n_projector_points = npf
     else:
-        n_projector_points = 1
+        n_projector_points = 1 if camera_system.bp_accounts_for_d_2() else nl
 
     d_014 = d_0 + d_1 + d_4
     invsq_14 = 1
@@ -447,8 +447,10 @@ def backproject_pf_multi_frequency(
 
             def work_dividing_volume(subrange_v):
                 nvi = len(subrange_v)
-                d_2_i = d_2[:, subrange_v, :]
-                d_3_i = d_3[:, subrange_v, :]
+                if camera_system.bp_accounts_for_d_2():
+                    d_2_i = d_2[:, subrange_v, :]
+                if camera_system.bp_accounts_for_d_3():
+                    d_3_i = d_3[:, subrange_v, :]
 
                 H_1_w = np.zeros((nw, n_projector_points, nvi),
                                  dtype=np.complex64)
