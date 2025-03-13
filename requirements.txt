@@ -7,6 +7,7 @@ nptyping>=2.5.0
 numpy>=1.24.2
 numba>=0.54.1
 PyYAML>=6.0
+scipy>=1.15.2
 setuptools>=67.3.3
 tqdm>=4.64.1
 pyvista>=0.38.2
