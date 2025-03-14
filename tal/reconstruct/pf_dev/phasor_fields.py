@@ -37,7 +37,7 @@ def backproject_pf_multi_frequency(
             'are better suited for these cases.')
 
     nt_, nl, ns = H_0.shape
-    nt_ = nt or nt_
+    nt = nt or nt_
     nv = np.prod(volume_xyz.shape[:-1])  # N or X * Y or X * Y * Z
     if projector_focus is None:
         npf = 0
