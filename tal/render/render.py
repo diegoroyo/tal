@@ -484,7 +484,7 @@ def _main_render(config_path, args,
             args, mitsuba_backend, capture_data, gt_path)
         capture_data = __merge_nlos_results(
             args, mitsuba_backend, capture_data, partial_results_dir, experiment_name, scan_type, laser_lookats)
-    except RenderException:
+    except RenderException as exc:
         if num_retries >= 10:
             raise AssertionError(
                 f'Failed to read partial results after {num_retries} retries')
