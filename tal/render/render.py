@@ -128,7 +128,7 @@ def __write_scene_xmls(args, mitsuba_backend, scene_config, root_dir):
     return steady_scene_xml, ground_truth_scene_xml, nlos_scene_xml
 
 
-def __write_metadata_and_get_laser_lookats(args, scene_config):
+def __write_metadata_and_get_laser_lookats(mitsuba_backend, args, scene_config):
     """ Compute laser_lookats """
 
     laser_lookats = []
@@ -220,15 +220,17 @@ def __write_metadata_and_get_laser_lookats(args, scene_config):
         np.array([0, 0, 1]), laser_width, laser_height)
 
     capture_data = NLOSCaptureData()
+    H_length = mitsuba_backend.get_time_dimension_length(scene_config)
+    H_dtype = mitsuba_backend.get_H_dtype(scene_config)
     if scan_type == 'single' or scan_type == 'confocal':
         capture_data.H = np.zeros(
-            (num_bins, sensor_width, sensor_height),
-            dtype=np.float32)
+            (H_length, sensor_width, sensor_height),
+            dtype=H_dtype)
         capture_data.H_format = HFormat.T_Sx_Sy
     elif scan_type == 'exhaustive':
         capture_data.H = np.zeros(
-            (num_bins, laser_width, laser_height, sensor_width, sensor_height),
-            dtype=np.float32)
+            (H_length, laser_width, laser_height, sensor_width, sensor_height),
+            dtype=H_dtype)
         capture_data.H_format = HFormat.T_Lx_Ly_Sx_Sy
     else:
         raise AssertionError(
@@ -385,7 +387,7 @@ def __merge_nlos_results(args, mitsuba_backend, capture_data, partial_results_di
                 else:
                     raise AssertionError
         except Exception as exc:
-            raise RenderException from exc
+            raise RenderException(exc) from exc
     else:
         raise AssertionError(
             'Invalid scan_type, must be one of {single|exhaustive|confocal}')
@@ -442,7 +444,8 @@ def _main_render(config_path, args,
     """ NLOS renders """
 
     scan_type, laser_lookats, capture_data = \
-        __write_metadata_and_get_laser_lookats(args, scene_config)
+        __write_metadata_and_get_laser_lookats(
+            mitsuba_backend, args, scene_config)
 
     pbar = tqdm(
         enumerate(laser_lookats), desc=f'Rendering {experiment_name} ({scan_type})...',
@@ -491,10 +494,13 @@ def _main_render(config_path, args,
         # TODO(diego): Mitsuba sometimes fails to write some images,
         # it seems like some sort of race condition
         # If there is a partial result missing, just re-launch for now
-        mitsuba_backend.remove_transient_image(hdr_path)
-        log(LogLevel.INFO,
+        # mitsuba_backend.remove_transient_image(hdr_path)
+        log(LogLevel.WARNING,
             f'We missed some partial results (iteration {i} failed because: {exc}), re-launching...')
-        return _main_render(config_path, args, num_retries=num_retries + 1)
+        return _main_render(config_path, args,
+                            mitsuba_backend, scene_config,
+                            root_dir, partial_results_dir, steady_dir, log_dir,
+                            progress_file, num_retries=num_retries + 1)
 
     hdf5_path = os.path.join(root_dir, f'{experiment_name}.hdf5')
     tal.io.write_capture(hdf5_path, capture_data,

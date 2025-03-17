@@ -88,6 +88,15 @@ def remove_transient_image(path):
     return
 
 
+def get_time_dimension_length(config):
+    return config['num_bins']
+
+
+def get_H_dtype(config):
+    import numpy as np
+    return np.float32
+
+
 def get_material_keys(s):
     import re
     return list(map(lambda e: e[1:],

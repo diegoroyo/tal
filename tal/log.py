@@ -45,7 +45,7 @@ def log(level: LogLevel, message: str, **kwargs):
     import sys
     if level.value >= _log_level.value:
         # TODO add pretty colors (see libcpp-common) :^)
-        print(message, **kwargs, file=sys.__stdout__)
+        print(message, **kwargs, file=sys.__stdout__, flush=True)
 
 
 def TQDMLogRedirect():
