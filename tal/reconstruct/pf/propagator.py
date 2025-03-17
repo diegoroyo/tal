@@ -11,13 +11,13 @@ from tal.reconstruct.util import can_parallel_convolution
 from tal.reconstruct.filters import HFilter
 from tal.log import log, LogLevel
 
-import pyfftw.interfaces.numpy_fft as np_fft
+# import pyfftw.interfaces.numpy_fft as np_fft
 
 import numpy as np
 
 from warnings import warn
 
-import pyfftw
+# import pyfftw
 
 class PropParams(object):
     """
