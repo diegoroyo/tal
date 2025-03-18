@@ -216,7 +216,7 @@ def backproject_pf_multi_frequency(
 
     if camera_system.is_transient():
         H_1 = np.zeros(
-            (nt, n_projector_points, nva, nvz),
+            (nt_, n_projector_points, nva, nvz),
             dtype=np.complex64)
     else:
         H_1 = np.zeros(
@@ -521,6 +521,11 @@ def backproject_pf_multi_frequency(
         del d_2, d_3
         if not skip_H_fft and i_z == nvz - 1:
             del H_0_w
+
+        if camera_system.is_transient() and skip_H_fft and skip_H_padding:
+            # do not do ifft
+            H_1[..., i_z] = H_1_w
+            continue
 
         def ifft_slice(subrange_v):
             H_1_w_i = H_1_w[:, :, subrange_v]
