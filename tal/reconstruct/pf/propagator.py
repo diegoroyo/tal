@@ -270,8 +270,10 @@ class PropagatorCore:
         - i : Integer to select the propagator index
         - axes: Unused argument
         """
-        sum_axes = tuple(np.arange(self._o_coords.ndim - 1))
-        return np.sum(fH * self._propagator(i), axis = sum_axes)
+        sum_axes = tuple(np.arange(self._o_coords.ndim - 1) + 1)
+        prop = self._propagator(i)
+        fH_rshp = fH.reshape(prop.shape)
+        return np.sum(fH_rshp * prop, axis = sum_axes)
 
 
     def RSD_kernel(self, i:int):
@@ -307,7 +309,7 @@ class PropagatorCore:
         pre_x_shape = self._t_iterator[i].shape
         rshp_x = self._t_iterator[i].reshape((1,)*(ndim + 1) + pre_x_shape)
         dist = np.linalg.norm(rshp_x -  self._o_coords, axis = -1)
-        omega_rshp = self.omega.reshape((-1,) + (1,) * ndim)
+        omega_rshp = self.omega.reshape((-1,) + (1,) * (dist.ndim - 1))
         return np.exp(omega_rshp*1j * dist)/dist
     
 
@@ -320,7 +322,7 @@ class PropagatorCore:
         pre_x_shape = self._t_iterator[i].shape
         rshp_x = self.t_iterator[i].reshape((1,)*ndim + pre_x_shape)
         dist = np.linalg.norm(rshp_x -  self.o_coords, axis = -1)
-        omega_rshp = self.omega.reshape((-1,) + (1,) * dist.ndim)
+        omega_rshp = self.omega.reshape((-1,) + (1,) * (dist.ndim - 1))
         return (np.exp(omega_rshp*1j * dist)/dist)**2
     
 
