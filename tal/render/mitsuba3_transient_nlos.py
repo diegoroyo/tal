@@ -697,6 +697,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         del result, scene, integrator
     except Exception as e:
         import traceback
+        import sys
         print('/!\ Mitsuba process threw an exception:', e, file=sys.stderr)
         print('', file=sys.stderr)
         print('Traceback:', file=sys.stderr)
