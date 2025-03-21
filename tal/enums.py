@@ -60,13 +60,44 @@ class HFormat(Enum):
     T_Lx_Ly_Sx_Sy = 2
     T_Si = 3  # confocal or not
     T_Li_Si = 4
+    F_Sx_Sy = 10  # confocal or not
+    F_Lx_Ly_Sx_Sy = 11
+    F_Si = 12  # confocal or not
+    F_Li_Si = 13
+
+    def to_fourier_domain(self):
+        if self == HFormat.T_Sx_Sy:
+            return HFormat.F_Sx_Sy
+        if self == HFormat.T_Lx_Ly_Sx_Sy:
+            return HFormat.F_Lx_Ly_Sx_Sy
+        if self == HFormat.T_Si:
+            return HFormat.F_Si
+        if self == HFormat.T_Li_Si:
+            return HFormat.F_Li_Si
+        raise ValueError(f'Unexpected HFormat {self}')
+
+    def is_fourier_domain(self) -> bool:
+        return self in [HFormat.F_Sx_Sy,
+                        HFormat.F_Lx_Ly_Sx_Sy,
+                        HFormat.F_Si,
+                        HFormat.F_Li_Si]
+
+    def has_laser_dimensions(self) -> bool:
+        return self in [HFormat.T_Lx_Ly_Sx_Sy,
+                        HFormat.T_Li_Si,
+                        HFormat.F_Lx_Ly_Sx_Sy,
+                        HFormat.F_Li_Si]
 
     def time_dim(self) -> int:
         """ Returns the index of the time (T) dimension. """
         assert self in [HFormat.T_Sx_Sy,
                         HFormat.T_Lx_Ly_Sx_Sy,
                         HFormat.T_Si,
-                        HFormat.T_Li_Si], \
+                        HFormat.T_Li_Si,
+                        HFormat.F_Sx_Sy,
+                        HFormat.F_Lx_Ly_Sx_Sy,
+                        HFormat.F_Si,
+                        HFormat.F_Li_Si], \
             f'Unexpected HFormat {self}'
         return 0
 

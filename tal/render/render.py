@@ -220,18 +220,20 @@ def __write_metadata_and_get_laser_lookats(mitsuba_backend, args, scene_config):
         np.array([0, 0, 1]), laser_width, laser_height)
 
     capture_data = NLOSCaptureData()
+    H_in_frequency_domain = mitsuba_backend.is_H_in_frequency_domain(
+        scene_config)
     H_length = mitsuba_backend.get_time_dimension_length(scene_config)
     H_dtype = mitsuba_backend.get_H_dtype(scene_config)
     if scan_type == 'single' or scan_type == 'confocal':
         capture_data.H = np.zeros(
             (H_length, sensor_width, sensor_height),
             dtype=H_dtype)
-        capture_data.H_format = HFormat.T_Sx_Sy
+        capture_data.H_format = HFormat.F_Sx_Sy if H_in_frequency_domain else HFormat.T_Sx_Sy
     elif scan_type == 'exhaustive':
         capture_data.H = np.zeros(
             (H_length, laser_width, laser_height, sensor_width, sensor_height),
             dtype=H_dtype)
-        capture_data.H_format = HFormat.T_Lx_Ly_Sx_Sy
+        capture_data.H_format = HFormat.F_Lx_Ly_Sx_Sy if H_in_frequency_domain else HFormat.T_Lx_Ly_Sx_Sy
     else:
         raise AssertionError(
             'Invalid scan_type, must be one of {single|exhaustive|confocal}')
@@ -259,6 +261,7 @@ def __write_metadata_and_get_laser_lookats(mitsuba_backend, args, scene_config):
         'tal_version': tal.__version__,
         'config': scene_config,
         'args': vars(args),
+        'original_nt': scene_config['num_bins']
     }
 
     return scan_type, laser_lookats, capture_data

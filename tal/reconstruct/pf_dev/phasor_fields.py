@@ -6,9 +6,33 @@ from tqdm import tqdm
 
 
 def _get_padding(wl_sigma, delta_t):
+    # FIXME(diego) if we want to convert a circular convolution to linear,
+    # this should be nt + t_6sigma - 1 instead of nt + 4 * t_6sigma or even nt + 2 * t_6sigma
+    # I have found cases where it fails even with nt + 2 * t_6sigma (Z, 0th pixel)
     t_6sigma = int(np.ceil(6 * wl_sigma / delta_t))
     padding = 2 * t_6sigma
     return padding
+
+
+def _get_freqs_weights(nf, delta_t, wl_mean, wl_sigma):
+    t_max = delta_t * (nf - 1)
+    t = np.linspace(start=0, stop=t_max, num=nf, dtype=np.float32)
+
+    gaussian_envelope = np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2)
+    K = gaussian_envelope / np.sum(gaussian_envelope) * \
+        np.exp(2j * np.pi * t / wl_mean)
+    K = np.fft.fftshift(K)  # center at zero
+
+    mean_idx = (nf * delta_t) / wl_mean
+    sigma_idx = (nf * delta_t) / (wl_sigma * 6)
+    # shift to center at zero, easier for low negative frequencies
+    freq_min_idx = np.maximum(0, int(np.floor(mean_idx - 3 * sigma_idx)))
+    freq_max_idx = np.minimum(nf // 2, int(np.ceil(mean_idx + 3 * sigma_idx)))
+
+    weights = np.fft.fft(K)[freq_min_idx:freq_max_idx+1].astype(np.complex64)
+    freqs = np.fft.fftfreq(nf, d=delta_t)[
+        freq_min_idx:freq_max_idx+1].astype(np.float32)
+    return freqs, weights, freq_min_idx, freq_max_idx
 
 
 def backproject_pf_multi_frequency(
@@ -19,16 +43,11 @@ def backproject_pf_multi_frequency(
         wl_mean, wl_sigma, border,
         optimize_projector_convolutions, optimize_camera_convolutions,
         laser_xyz=None, sensor_xyz=None,
-        compensate_invsq=False,
-        skip_H_fft=False, skip_H_padding=False, nt=None,
+        compensate_invsq=False, original_nt=None, skip_fft_in=False, skip_fft_out=False,
         progress=False):
 
     assert not is_laser_paired_to_sensor, 'tal.reconstruct.pf_dev does not support confocal or custom captures. ' \
         'Please use tal.reconstruct.bp or tal.reconstruct.fbp instead.'
-
-    if skip_H_padding:
-        assert skip_H_fft, 'skip_H_fft should be also set when skip_H_padding is set'
-        assert nt is not None, 'nt is required when skip_H_padding is set'
 
     if not optimize_projector_convolutions and not optimize_camera_convolutions and not camera_system.is_transient():
         log(LogLevel.WARNING, 'tal.reconstruct.pf_dev: You have specified a time-gated camera system '
@@ -37,7 +56,7 @@ def backproject_pf_multi_frequency(
             'are better suited for these cases.')
 
     nt_, nl, ns = H_0.shape
-    nt = nt or nt_
+    nt = original_nt or nt_
     nv = np.prod(volume_xyz.shape[:-1])  # N or X * Y or X * Y * Z
     if projector_focus is None:
         npf = 0
@@ -72,54 +91,31 @@ def backproject_pf_multi_frequency(
 
     """ Phasor fields filter """
 
-    if skip_H_padding:
+    if border is None:
         padding = 0
-    else:
+    elif border == 'zero':
         padding = _get_padding(wl_sigma, delta_t)
-    # FIXME(diego) if we want to convert a circular convolution to linear,
-    # this should be nt + t_6sigma - 1 instead of nt + 4 * t_6sigma or even nt + 2 * t_6sigma
-    # I have found cases where it fails even with nt + 2 * t_6sigma (Z, 0th pixel)
+    else:
+        raise AssertionError(f"Border must be 'zero' or None, not {border}")
     nf = nt + 2 * padding
 
-    t_max = delta_t * (nf - 1)
-    t = np.linspace(start=0, stop=t_max, num=nf, dtype=np.float32)
-
-    gaussian_envelope = np.exp(-((t - t_max / 2) / wl_sigma) ** 2 / 2)
-    K = gaussian_envelope / np.sum(gaussian_envelope) * \
-        np.exp(2j * np.pi * t / wl_mean)
-    K = np.fft.fftshift(K)  # center at zero
-
-    mean_idx = (nf * delta_t) / wl_mean
-    sigma_idx = (nf * delta_t) / (wl_sigma * 6)
-    # shift to center at zero, easier for low negative frequencies
-    freq_min_idx = np.maximum(0, int(np.floor(mean_idx - 3 * sigma_idx)))
-    freq_max_idx = np.minimum(nf // 2, int(np.ceil(mean_idx + 3 * sigma_idx)))
-
-    weights = np.fft.fft(K)[freq_min_idx:freq_max_idx+1].astype(np.complex64)
-    freqs = np.fft.fftfreq(nf, d=delta_t)[
-        freq_min_idx:freq_max_idx+1].astype(np.float32)
+    freqs, weights, freq_min_idx, freq_max_idx = _get_freqs_weights(
+        nf, delta_t, wl_mean, wl_sigma)
     freq_idxs = np.arange(freq_min_idx, freq_max_idx+1, dtype=np.int32)
-    if skip_H_padding:
+    if skip_fft_in:
         freq_idxs -= freq_min_idx  # convert to (0, nw-1) range
     log(LogLevel.INFO, 'tal.reconstruct.pf_dev: '
         f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
     nw = len(weights)
 
-    if skip_H_fft:
-        # NOTE: this is kind of a hack. When pre-computing the FFT you need to pad the signal
-        # before. But if you pass a padded H then it messes up the nt and nf variables.
-        # So the precompute_fft function removes the last values (they are not used anyway)
-        # and it's re-padded here.
-        if not skip_H_padding:
-            H_0 = np.pad(H_0,
-                         ((0, 2 * padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
+    if border is None:
+        pass
+    elif border == 'zero':
+        # only pad temporal dimension
+        H_0 = np.pad(H_0,
+                     ((padding, padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
     else:
-        if border == 'zero':
-            # only pad temporal dimension
-            H_0 = np.pad(H_0,
-                         ((padding, padding),) + ((0, 0),) * (H_0.ndim - 1), 'constant')
-        else:
-            raise AssertionError('Implemented only for border="zero"')
+        raise AssertionError(f"Border must be 'zero' or None, not {border}")
 
     """ Distance calculation and propagation """
 
@@ -216,16 +212,16 @@ def backproject_pf_multi_frequency(
 
     if camera_system.is_transient():
         H_1 = np.zeros(
-            (nt_, n_projector_points, nva, nvz),
+            (nw if skip_fft_out else nt, n_projector_points, nva, nvz),
             dtype=np.complex64)
     else:
         H_1 = np.zeros(
             (n_projector_points, nva, nvz),
             dtype=np.complex64)
 
-    if skip_H_fft:
+    if skip_fft_in:
         assert np.isclose(d_014, 0.0) and np.isclose(invsq_14, 1), \
-            'skip_H_fft is only supported when d_014=0 and invsq_14=1'
+            'Using data in fourier space is only supported when d_014=0 and invsq_14=1'
         H_0_w = H_0
     else:
         H_0_w = np.zeros_like(H_0, dtype=np.complex64)
@@ -475,7 +471,7 @@ def backproject_pf_multi_frequency(
                                        position=0,
                                        leave=True)
 
-                for f_idx, frequency, weight in fw_iterator:
+                for i_w, (f_idx, frequency, weight) in enumerate(fw_iterator):
                     if np.isclose(weight, 0.0):
                         # H_1_w[f_idx, ...] = 0
                         continue
@@ -501,7 +497,7 @@ def backproject_pf_multi_frequency(
                         H_p = H_p.reshape((n_projector_points, nvi))
                         del rsd_2
 
-                    H_1_w[f_idx - freq_min_idx, ...] = H_p * weight
+                    H_1_w[i_w, ...] = H_p * weight
 
                 return H_1_w
 
@@ -519,10 +515,10 @@ def backproject_pf_multi_frequency(
             raise AssertionError('Unknown propagation mode')
 
         del d_2, d_3
-        if not skip_H_fft and i_z == nvz - 1:
+        if not skip_fft_in and i_z == nvz - 1:
             del H_0_w
 
-        if camera_system.is_transient() and skip_H_fft and skip_H_padding:
+        if skip_fft_out:
             # do not do ifft
             H_1[..., i_z] = H_1_w
             continue
@@ -533,7 +529,10 @@ def backproject_pf_multi_frequency(
                              ((freq_min_idx, nf - freq_max_idx - 1), (0, 0), (0, 0)), 'constant')
 
             if camera_system.is_transient():
-                return np.fft.ifft(H_1_w_i, axis=0)[padding:-padding, ...]
+                if padding == 0:
+                    return np.fft.ifft(H_1_w_i, axis=0)
+                else:
+                    return np.fft.ifft(H_1_w_i, axis=0)[padding:-padding, ...]
             else:
                 return np.fft.ifft(H_1_w_i, axis=0)[padding, ...]
 

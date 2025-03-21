@@ -107,38 +107,40 @@ def remove_transient_image(path):
         os.remove(path)
 
 
-def get_time_dimension_length(config):
+def is_H_in_frequency_domain(config):
+    import numpy as np
     if 'histogram_mode' not in config or config['histogram_mode'] == 'time':
-        return config['num_bins']
+        return False
     elif config['histogram_mode'] == 'frequency':
-        assert 'wl_mean' in config, 'wl_mean must be specified'
-        assert 'wl_sigma' in config, 'wl_sigma must be specified'
-        import numpy as np
-        nt = config['num_bins']
-        delta_t = config['bin_width_opl']
-        wl_mean = config['wl_mean']
-        wl_sigma = config['wl_sigma']
-        mean_idx = (nt * delta_t) / wl_mean
-        sigma_idx = (nt * delta_t) / (wl_sigma * 6)
-        # shift to center at zero, easier for low negative frequencies
-        freq_min_idx = np.maximum(0, int(np.floor(mean_idx - 3 * sigma_idx)))
-        freq_max_idx = np.minimum(
-            nt // 2, int(np.ceil(mean_idx + 3 * sigma_idx)))
-        return freq_max_idx - freq_min_idx + 1
+        return True
     else:
         raise AssertionError(
             'histogram_mode should be one of {time|frequency}')
+
+
+def get_time_dimension_length(config):
+    if not is_H_in_frequency_domain(config):
+        return config['num_bins']
+
+    assert 'wl_mean' in config, 'wl_mean must be specified'
+    assert 'wl_sigma' in config, 'wl_sigma must be specified'
+    import numpy as np
+    nt = config['num_bins']
+    delta_t = config['bin_width_opl']
+    wl_mean = config['wl_mean']
+    wl_sigma = config['wl_sigma']
+    mean_idx = (nt * delta_t) / wl_mean
+    sigma_idx = (nt * delta_t) / (wl_sigma * 6)
+    # shift to center at zero, easier for low negative frequencies
+    freq_min_idx = np.maximum(0, int(np.floor(mean_idx - 3 * sigma_idx)))
+    freq_max_idx = np.minimum(
+        nt // 2, int(np.ceil(mean_idx + 3 * sigma_idx)))
+    return freq_max_idx - freq_min_idx + 1
 
 
 def get_H_dtype(config):
     import numpy as np
-    if 'histogram_mode' not in config or config['histogram_mode'] == 'time':
-        return np.float32
-    elif config['histogram_mode'] == 'frequency':
-        return np.complex64
-    else:
-        raise AssertionError(
-            'histogram_mode should be one of {time|frequency}')
+    return np.complex64 if is_H_in_frequency_domain(config) else np.float32
 
 
 def get_material_keys(s):

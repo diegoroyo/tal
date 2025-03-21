@@ -1,4 +1,3 @@
-from tal.enums import HFormat, GridFormat
 from tal.config import get_resources
 from tal.log import log, LogLevel, TQDMLogRedirect
 import numpy as np

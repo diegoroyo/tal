@@ -79,7 +79,8 @@ def write_hdf5(filename: str, capture_data: dict, compression_level: int = False
             ds = file.create_dataset(key, (1,), dtype=dt)
             ds[0] = value.value
         elif compression_level > 0 and key == 'H':
-            file.create_dataset(key, data=value, compression='gzip', compression_opts=compression_level)
+            file.create_dataset(
+                key, data=value, compression='gzip', compression_opts=compression_level)
         else:
             file[key] = value
     file.close()
@@ -259,24 +260,22 @@ class NLOSCaptureData:
         laser/sensor point can have multiple sensor/laser points associated.
         Some reconstructions algorithms require this information to work properly.
         """
-        if self.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.T_Li_Si]:
+        if self.H_format.has_laser_dimensions():
+            # laser is different to sensor
             return False
-        elif self.H_format in [HFormat.T_Sx_Sy, HFormat.T_Si]:
-            return (self.sensor_grid_format == self.laser_grid_format
-                    and
-                    self.sensor_grid_xyz.shape[:-1] ==
-                    self.laser_grid_xyz.shape[:-1])
-        else:
-            raise AssertionError('Invalid H_format')
+
+        return (self.sensor_grid_format == self.laser_grid_format
+                and
+                self.sensor_grid_xyz.shape[:-1] ==
+                self.laser_grid_xyz.shape[:-1])
 
     def is_confocal(self):
         """ Returns True if H contains confocal data (i.e. Sx and Sy represent both laser and sensor coordinates) """
-        if self.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.T_Li_Si]:
+        if self.H_format.has_laser_dimensions():
+            # laser is different to sensor
             return False
-        elif self.H_format in [HFormat.T_Sx_Sy, HFormat.T_Si]:
-            return np.allclose(self.sensor_grid_xyz, self.laser_grid_xyz)
-        else:
-            raise AssertionError('Invalid H_format')
+
+        return np.allclose(self.sensor_grid_xyz, self.laser_grid_xyz)
 
     def as_dict(self):
         """ Returns a dict containing all the data in this object """
@@ -293,7 +292,7 @@ class NLOSCaptureData:
         assert downscale > 1, 'downscale must be > 1'
         assert self.H_format in [HFormat.T_Sx_Sy], \
             'Only implemented for HFormat.T_Sx_Sy'
-        
+
         nt, nsx, nsy = self.H.shape
         if self.is_confocal():
             self.laser_grid_xyz = self.laser_grid_xyz.reshape(
@@ -302,7 +301,7 @@ class NLOSCaptureData:
             (nt, nsx // downscale, downscale, nsy // downscale, downscale)).sum(axis=(2, 4))
         self.sensor_grid_xyz = self.sensor_grid_xyz.reshape(
             (nsx // downscale, downscale, nsy // downscale, downscale, 3)).mean(axis=(1, 3))
-        
+
         log(LogLevel.INFO,
             f'Downscaled from {nsx}x{nsy} to {nsx // downscale}x{nsy // downscale}')
 
@@ -320,7 +319,7 @@ class NLOSCaptureData:
         n_indices = len(args)
 
         if n_indices == 1:
-            assert self.H_format == HFormat.T_Li_Si and self.laser_grid_format == GridFormat.N_3, \
+            assert self.H_format in [HFormat.T_Li_Si, HFormat.F_Li_Si] and self.laser_grid_format == GridFormat.N_3, \
                 'Number of indices must match H_format and laser_grid_format'
             il = args[0]
             assert 0 <= il and \
@@ -330,7 +329,7 @@ class NLOSCaptureData:
                 'Index out of bounds'
             slices = np.index_exp[il:il+1]
         elif n_indices == 2:
-            assert self.H_format == HFormat.T_Lx_Ly_Sx_Sy and self.laser_grid_format == GridFormat.X_Y_3, \
+            assert self.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.F_Lx_Ly_Sx_Sy] and self.laser_grid_format == GridFormat.X_Y_3, \
                 'Number of indices must match H_format and laser_grid_format'
             ilx, ily = args
             assert 0 <= ilx and 0 <= ily and \
@@ -373,7 +372,7 @@ class NLOSCaptureData:
         n_indices = len(args)
 
         if n_indices == 1:
-            assert self.H_format == HFormat.T_Li_Si and self.laser_grid_format == GridFormat.N_3, \
+            assert self.H_format in [HFormat.T_Li_Si, HFormat.F_Li_Si] and self.laser_grid_format == GridFormat.N_3, \
                 'Number of indices must match H_format and laser_grid_format'
             il = np.array(args[0])
             assert np.all(0 <= il) and \
@@ -383,7 +382,7 @@ class NLOSCaptureData:
                 'Index out of bounds'
             slices = np.index_exp[il]
         elif n_indices == 2:
-            assert self.H_format == HFormat.T_Lx_Ly_Sx_Sy and self.laser_grid_format == GridFormat.X_Y_3, \
+            assert self.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.F_Lx_Ly_Sx_Sy] and self.laser_grid_format == GridFormat.X_Y_3, \
                 'Number of indices must match H_format and laser_grid_format'
             ilx, ily = np.array(args[0]), np.array(args[1])
             assert np.all(0 <= ilx) and np.all(0 <= ily) and \

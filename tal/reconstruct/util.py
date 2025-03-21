@@ -32,7 +32,7 @@ def _infer_volume_format(volume_xyz, volume_format, do_log=True):
     return volume_format
 
 
-def can_parallel_convolution(data: NLOSCaptureData, 
+def can_parallel_convolution(data: NLOSCaptureData,
                              volume_xyz: NLOSCaptureData.VolumeXYZType,
                              grid_selection: str):
     """
@@ -49,14 +49,15 @@ def can_parallel_convolution(data: NLOSCaptureData,
     # Select the grid
     G = None
     if grid_selection not in ['laser', 'sensor']:
-        raise ValueError(f'grid_selection must be either \'laser\' or \'sensor\'. Received {grid_selection}')
+        raise ValueError(
+            f'grid_selection must be either \'laser\' or \'sensor\'. Received {grid_selection}')
     elif grid_selection == 'laser':
         # Check the laser formats
         log(LogLevel.TRACE, f"tal.util.can_parallel_convolution: Using laser")
         if data.laser_grid_format != GridFormat.X_Y_3:
             log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Not planar laser grid")
             return False    # Not parallel format
-        if data.H_format != HFormat.T_Lx_Ly_Sx_Sy:
+        if data.H_format not in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.F_Lx_Ly_Sx_Sy]:
             log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Not enough histograms")
             return False
         G = data.laser_grid_xyz
@@ -64,9 +65,10 @@ def can_parallel_convolution(data: NLOSCaptureData,
         # Check the sensor formats
         log(LogLevel.TRACE, f"tal.util.can_parallel_convolution: Using sensor")
         if data.sensor_grid_format != GridFormat.X_Y_3:
-            log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Not planar sensor grid")
+            log(LogLevel.INFO,
+                f"tal.util.can_parallel_convolution: Not planar sensor grid")
             return False    # Not parallel format
-        if data.H_format not in [HFormat.T_Sx_Sy, HFormat.T_Lx_Ly_Sx_Sy]:
+        if data.H_format not in [HFormat.T_Sx_Sy, HFormat.F_Sx_Sy, HFormat.T_Lx_Ly_Sx_Sy, HFormat.F_Lx_Ly_Sx_Sy]:
             log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Not enough histograms")
         G = data.sensor_grid_xyz
 
@@ -74,48 +76,50 @@ def can_parallel_convolution(data: NLOSCaptureData,
         # Take the first planar volume if it is a tensor
         V = volume_xyz
         if v_format == VolumeFormat.X_Y_Z_3:
-            log(LogLevel.TRACE, f"tal.util.can_parallel_convolution: Taking first slide of the volume")
-            V = volume_xyz[:,:,0,:]
-        
+            log(LogLevel.TRACE,
+                f"tal.util.can_parallel_convolution: Taking first slide of the volume")
+            V = volume_xyz[:, :, 0, :]
+
         # Check the spacing grid
-        delta_v = np.array([V[0,0] - V[-1, 0],V[0,0] - V[0, -1]]).swapaxes(0,1)\
-                 / np.array(V.shape)[:2]
-        delta_g = np.array([G[0,0] - G[-1, 0],G[0,0] - G[0, -1]]).swapaxes(0,1)\
-                 / np.array(G.shape)[:2]
+        delta_v = np.array([V[0, 0] - V[-1, 0], V[0, 0] - V[0, -1]]).swapaxes(0, 1)\
+            / np.array(V.shape)[:2]
+        delta_g = np.array([G[0, 0] - G[-1, 0], G[0, 0] - G[0, -1]]).swapaxes(0, 1)\
+            / np.array(G.shape)[:2]
         if np.any(np.abs(delta_v - delta_g) > epsilon):
             log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Different spacing between grid and volume.")
             return False
 
         # Check if parallel vectors
-        g_i = G[0,0] - G[-1, 0] 
+        g_i = G[0, 0] - G[-1, 0]
         g_i_n = g_i/np.linalg.norm(g_i)
-        g_j = G[0,0] - G[0, -1]
+        g_j = G[0, 0] - G[0, -1]
         g_j_n = g_j/np.linalg.norm(g_j)
-        v_i = V[0,0] - V[-1, 0]
+        v_i = V[0, 0] - V[-1, 0]
         v_i_n = v_i/np.linalg.norm(v_i)
-        v_j = V[0,0] - V[0, -1]
+        v_j = V[0, 0] - V[0, -1]
         v_j_n = v_j/np.linalg.norm(v_j)
 
         if np.dot(g_i_n, v_i_n) < 1 - epsilon or \
-            np.dot(g_j_n, v_j_n) < 1 - epsilon:
+                np.dot(g_j_n, v_j_n) < 1 - epsilon:
             log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Grid and volume are not coplanar.")
             # Planes are not parallel
             return False
-        
+
         # Corner differences
-        corners = np.array([G[0,0] - V[0,0], G[-1,0] - V[-1,0], 
-                            G[0,-1] - V[0,-1], G[-1,-1] - V[-1,-1]])
-        corners*=np.array([[1, 1, 1], [1,-1,1], [-1, 1, 1], [-1, -1, 1]])
+        corners = np.array([G[0, 0] - V[0, 0], G[-1, 0] - V[-1, 0],
+                            G[0, -1] - V[0, -1], G[-1, -1] - V[-1, -1]])
+        corners *= np.array([[1, 1, 1], [1, -1, 1], [-1, 1, 1], [-1, -1, 1]])
         if np.all(np.abs(corners - corners[0]) < epsilon):
             return True
         else:
             log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Volume is not center with the grid.")
 
     else:
-        log(LogLevel.INFO, f"tal.util.can_parallel_convolution: Volume format {v_format}")
+        log(LogLevel.INFO,
+            f"tal.util.can_parallel_convolution: Volume format {v_format}")
 
     return False
-    
+
 
 def convert_to_N_3(data: NLOSCaptureData,
                    volume_xyz: NLOSCaptureData.VolumeXYZType,
@@ -150,25 +154,25 @@ def convert_to_N_3(data: NLOSCaptureData,
 
     is_laser_paired_to_sensor = data.is_laser_paired_to_sensor()
 
-    if data.H_format == HFormat.T_Si:
+    if data.H_format in [HFormat.T_Si, HFormat.F_Si]:
         optimize_projector_convolutions = False
         optimize_camera_convolutions = False
         nt, ns = data.H.shape
         if is_laser_paired_to_sensor:
             nl = ns
         H = data.H.reshape(nt, 1, ns)
-    elif data.H_format == HFormat.T_Sx_Sy:
+    elif data.H_format in [HFormat.T_Sx_Sy, HFormat.F_Sx_Sy]:
         optimize_projector_convolutions = False
         nt, nsx, nsy = data.H.shape
         if is_laser_paired_to_sensor:
             nlx, nly = nsx, nsy
         H = data.H.reshape(nt, 1, nsx * nsy)
-    elif data.H_format == HFormat.T_Li_Si:
+    elif data.H_format in [HFormat.T_Li_Si, HFormat.F_Li_Si]:
         optimize_projector_convolutions = False
         optimize_camera_convolutions = False
         nt, nl, ns = data.H.shape
         H = data.H.reshape(nt, nl, ns)
-    elif data.H_format == HFormat.T_Lx_Ly_Sx_Sy:
+    elif data.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.F_Lx_Ly_Sx_Sy]:
         nt, nlx, nly, nsx, nsy = data.H.shape
         H = data.H.reshape(nt, nlx * nly, nsx * nsy)
     else:
@@ -343,12 +347,12 @@ def convert_reconstruction_from_N_3(data: NLOSCaptureData,
 
     is_exhaustive_reconstruction = (
         (   # focus projector at different points in the scene
-            camera_system.implements_projector() \
+            camera_system.implements_projector()
             and projector_focus is not None and projector_focus.size > 3
         )
         or
         (   # don't backproject the illumination aperture but have a exhaustive aperture nonetheless
-            not camera_system.bp_accounts_for_d_2() \
+            not camera_system.bp_accounts_for_d_2()
             and data.laser_grid_xyz.size > 3
             and not data.is_confocal()
         )

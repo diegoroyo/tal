@@ -37,9 +37,7 @@ def solve(data: NLOSCaptureData,
                                  NLOSCaptureData.VolumeXYZType] = None,
           progress: bool = True,
           compensate_invsq: bool = False,
-          skip_H_fft: bool = False,
-          skip_H_padding: bool = False,
-          nt: int = None,
+          output_frequencies: bool = None,
           try_optimize_convolutions: bool = True) -> Union[NLOSCaptureData.SingleReconstructionType,
                                                            NLOSCaptureData.ExhaustiveReconstructionType]:
     """
@@ -80,15 +78,6 @@ def solve(data: NLOSCaptureData,
         If True, the inverse square falloff of light is compensated for, i.e., objects further away
         from the relay wall will appear brighter in the reconstruction.
 
-    skip_H_fft, skip_H_padding
-        If True, data.H is assumed to already be in the frequency domain. This can be useful
-        if you intend to call this function multiple times
-        (e.g. with different projector_focus points)
-        If you used tal.reconstruct.pf_dev.precompute_fft you need to set skip_H_padding=False,
-        else you need to set skip_H_padding=True.
-        If you set skip_H_padding=True, you need to set nt too.
-        See also tal.reconstruct.pf_dev.precompute_fft
-
     try_optimize_convolutions
         When volume_xyz consists of depth-slices (Z-slices) that are 
             1) coplanar to the XY relay wall, and
@@ -117,7 +106,10 @@ def solve(data: NLOSCaptureData,
         optimize_projector_convolutions, optimize_camera_convolutions,
         data.laser_xyz, data.sensor_xyz,
         compensate_invsq=compensate_invsq,
-        skip_H_fft=skip_H_fft, skip_H_padding=skip_H_padding, nt=nt,
+        original_nt=data.scene_info.get('original_nt', None),
+        skip_fft_in=data.H_format.is_fourier_domain(),
+        skip_fft_out=output_frequencies or (
+            camera_system.is_transient() and data.H_format.is_fourier_domain()),
         progress=progress)
 
     return convert_reconstruction_from_N_3(data, reconstructed_volume_n3,
@@ -125,33 +117,53 @@ def solve(data: NLOSCaptureData,
                                            camera_system, projector_focus)
 
 
-def precompute_fft(data, wl_sigma):
+def convert_data_to_fourier(data, wl_mean, wl_sigma, border='zero'):
     """
-    Computes the FFT of H with the necessary (zero) padding for the pf_dev.solve function.
-    For more information see tal.reconstruct.pf_dev.solve (especially skip_H_fft)
+    Converts H to frequency domain, doing a band-pass filter based on wl-mean and wl-sigma.
+
+    Careful, this does not use any padding. If your temporal signal does not have enough zeros
+    at the edges, the convolution can have some artifacts.
     """
     import numpy as np
     from tal.config import get_resources
-    from tal.reconstruct.pf_dev.phasor_fields import _get_padding
+    from tal.reconstruct.pf_dev.phasor_fields import _get_padding, _get_freqs_weights
+    from tal.log import log, LogLevel
+    assert data.t_start == 0, 'tal.reconstruct.pf_dev: t_start must be 0'
 
     nt, other = data.H.shape[0], data.H.shape[1:]
 
-    padding = _get_padding(wl_sigma, data.delta_t)
-
-    H_result = np.pad(data.H,
-                      ((padding, padding),) + ((0, 0),) * (data.H.ndim - 1),
-                      'constant')
+    if border is None:
+        padding = 0
+        H_fft = data.H
+    elif border == 'zero':
+        padding = _get_padding(wl_sigma, data.delta_t)
+        H_fft = np.pad(data.H,
+                       ((padding, padding),) + ((0, 0),) * (data.H.ndim - 1),
+                       'constant')
+    else:
+        raise AssertionError(f"Border must be 'zero' or None, not {border}")
 
     na = np.prod(other)
-    H_result = H_result.reshape(nt + 2 * padding, na).astype(np.complex64)
+    nf = nt + 2 * padding
+    H_fft = H_fft.reshape(nf, na).astype(np.complex64)
 
     range_all = np.arange(na)
     get_resources().split_work(
-        lambda subrange_a: np.fft.fft(H_result[:, subrange_a], axis=0),
+        lambda subrange_a: np.fft.fft(H_fft[:, subrange_a], axis=0),
         data_in=range_all,
-        data_out=H_result,
+        data_out=H_fft,
         slice_dims=(0, 1),
     )
 
-    # signal is cropped to fit nt bins
-    return H_result.reshape(nt + 2 * padding, *other)[:nt, ...]
+    H_fft = H_fft.reshape(nf, *other)
+
+    freqs, _, freq_min_idx, freq_max_idx = _get_freqs_weights(
+        nf, data.delta_t, wl_mean, wl_sigma)
+    log(LogLevel.INFO, 'tal.reconstruct.pf_dev: '
+        f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
+
+    data.scene_info['original_nt'] = nt
+    data.H = H_fft[freq_min_idx:freq_max_idx+1]
+    data.H_format = data.H_format.to_fourier_domain()
+
+    return data

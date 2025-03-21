@@ -53,6 +53,8 @@ def filter_H(data: _Data,
         for more info. see tal.reconstruct.pf_dev, which outputs the specific range
         of frequencies that are filtered given wl_mean and wl_sigma
     """
+    assert not data.H_format.is_fourier_domain(), \
+        'Filtering is not allowed if your data is in frequency domain. Use time-domain data instead.'
     from tal.reconstruct.filters import filter_H_impl
     return filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, progress, **kwargs)
 
@@ -86,9 +88,9 @@ def compensate_laser_cos_dsqr(data: NLOSCaptureData):
                            data.laser_grid_xyz[i, j, :],
                            data.laser_grid_normals[i, j, :])
 
-    if data.H_format == HFormat.T_Lx_Ly_Sx_Sy:
+    if data.H_format in [HFormat.T_Lx_Ly_Sx_Sy, HFormat.F_Lx_Ly_Sx_Sy]:
         compensate_i_j(*data.laser_grid_xyz.shape[:2])
-    elif data.H_format == HFormat.T_Sx_Sy:
+    elif data.H_format in [HFormat.T_Sx_Sy, HFormat.F_Sx_Sy]:
         if data.is_laser_paired_to_sensor():
             compensate_i_j(*data.sensor_grid_xyz.shape[:2])
         else:
@@ -96,9 +98,9 @@ def compensate_laser_cos_dsqr(data: NLOSCaptureData):
             compensate(data.H,
                        data.laser_grid_xyz.reshape(3),
                        data.laser_grid_normals.reshape(3))
-    elif data.H_format == HFormat.T_Li_Si:
+    elif data.H_format in [HFormat.T_Li_Si, HFormat.F_Li_Si]:
         compensate_i(data.laser_grid_xyz.shape[0])
-    elif data.H_format == HFormat.T_Si:
+    elif data.H_format in [HFormat.T_Si, HFormat.F_Si]:
         if data.is_laser_paired_to_sensor():
             compensate_i(data.sensor_grid_xyz.shape[0])
         else:
@@ -109,6 +111,8 @@ def compensate_laser_cos_dsqr(data: NLOSCaptureData):
     else:
         raise ValueError(
             f'This function is not implemented for H_format={data.H_format}')
+
+    return data
 
 
 def get_volume_min_max_resolution(minimal_pos, maximal_pos, resolution):
