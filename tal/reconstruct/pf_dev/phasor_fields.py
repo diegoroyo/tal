@@ -108,7 +108,7 @@ def backproject_pf_multi_frequency(
         f'Using {len(freqs)} wavelengths from {1 / freqs[-1]:.4f}m to {1 / freqs[0]:.4f}m')
     nw = len(weights)
 
-    if border is None:
+    if skip_fft_in or border is None:
         pass
     elif border == 'zero':
         # only pad temporal dimension
@@ -222,8 +222,10 @@ def backproject_pf_multi_frequency(
     if skip_fft_in:
         assert np.isclose(d_014, 0.0) and np.isclose(invsq_14, 1), \
             'Using data in fourier space is only supported when d_014=0 and invsq_14=1'
+        log(LogLevel.INFO, 'tal.reconstruct.pf_dev: Skipping FFT for H_0')
         H_0_w = H_0
     else:
+        log(LogLevel.INFO, 'tal.reconstruct.pf_dev: Computing FFT for H_0')
         H_0_w = np.zeros_like(H_0, dtype=np.complex64)
         range_s = np.arange(ns)
 
@@ -534,7 +536,11 @@ def backproject_pf_multi_frequency(
                 else:
                     return np.fft.ifft(H_1_w_i, axis=0)[padding:-padding, ...]
             else:
-                return np.fft.ifft(H_1_w_i, axis=0)[padding, ...]
+                if padding == 0:
+                    # first ifft component is the sum of all frequencies
+                    return np.sum(H_1_w_i, axis=0)
+                else:
+                    return np.fft.ifft(H_1_w_i, axis=0)[padding, ...]
 
         range_v = np.arange(nva, dtype=np.int32)
         get_resources().split_work(

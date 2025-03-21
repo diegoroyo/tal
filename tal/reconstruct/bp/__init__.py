@@ -71,7 +71,7 @@ def solve(data: NLOSCaptureData,
         If True, shows a progress bar with estimated time remaining.
     """
     assert not data.H_format.is_fourier_domain(), \
-        'If your data is in the frequency domain, use tal.reconstruct.pf_dev instead'
+        f'If your data is in the frequency domain (H_format = {data.H_format}), use tal.reconstruct.pf_dev instead'
 
     from tal.reconstruct.util import convert_to_N_3, convert_reconstruction_from_N_3
     if projector_focus is not None:

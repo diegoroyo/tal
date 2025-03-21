@@ -54,7 +54,8 @@ def filter_H(data: _Data,
         of frequencies that are filtered given wl_mean and wl_sigma
     """
     assert not data.H_format.is_fourier_domain(), \
-        'Filtering is not allowed if your data is in frequency domain. Use time-domain data instead.'
+        f'Filtering is not allowed if your data is in frequency domain (H_format = {data.H_format}). ' \
+        'Probably your data is already filtered. If you are sure of what you are doing, use time-domain data instead.'
     from tal.reconstruct.filters import filter_H_impl
     return filter_H_impl(data, filter_name, data_format, border, plot_filter, return_filter, progress, **kwargs)
 
