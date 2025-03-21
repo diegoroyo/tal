@@ -35,16 +35,15 @@ def plot3d(data: Union[NLOSCaptureData, NLOSCaptureData.HType],
     if backgroundcolor is not None:
         p.background_color = backgroundcolor
 
+    mapper = 'gpu'
     if isinstance(color, np.ndarray):
         cmap = None
         scalars = color
         if scalars.ndim > 2:
             scalars = scalars.reshape(-1, 4)
-        mapper = 'gpu'
     else:
         scalars = None
         cmap = color
-        mapper = None
 
     # Normalize the data so it is possible to plot it with the plotter
     norm_data_to_plot = (data_to_plot - np.min(data_to_plot)) * 255 \
