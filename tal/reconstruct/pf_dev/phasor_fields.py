@@ -44,6 +44,7 @@ def backproject_pf_multi_frequency(
         optimize_projector_convolutions, optimize_camera_convolutions,
         laser_xyz=None, sensor_xyz=None,
         compensate_invsq=False, original_nt=None, skip_fft_in=False, skip_fft_out=False,
+        x_i=None,
         progress=False):
 
     assert not is_laser_paired_to_sensor, 'tal.reconstruct.pf_dev does not support confocal or custom captures. ' \
@@ -362,6 +363,9 @@ def backproject_pf_multi_frequency(
             invsq_2 = invsq(d_2)
             invsq_3 = invsq(d_3)
 
+        d_i = distance(volume_xyz_i.reshape(
+            1, nva, 1, 3), x_i.reshape(1, 1, 1, 3))
+
         if propagation_mode == 'divide_frequencies':
 
             def work_dividing_frequencies(subrange_w):
@@ -389,27 +393,6 @@ def backproject_pf_multi_frequency(
 
                     H_p = H_0_w[f_idx]
 
-                    if camera_system.bp_accounts_for_d_3():
-                        rsd_3 = np.exp(
-                            np.complex64(2j * np.pi) * d_3 * frequency)
-                        rsd_3 *= invsq_3
-                        if optimize_camera_convolutions:
-                            H_p = H_p.reshape((nl, nsx, nsy))
-                            rsd_3 = rsd_3.reshape((1, rsx, rsy))
-                            H_p_fft = np.fft.fft2(
-                                H_p, axes=(1, 2), s=(rsx, rsy))
-                            rsd_3_fft = np.fft.fft2(
-                                rsd_3, axes=(1, 2), s=(rsx, rsy))
-                            H_p_fft *= rsd_3_fft
-                            H_p = np.fft.ifft2(H_p_fft, axes=(1, 2))
-                            H_p = H_p[:, :nvx, :nvy]
-                            H_p = H_p.reshape((nl, nva))
-                        else:
-                            H_p = H_p.reshape((nl, 1, ns))
-                            H_p = H_p * rsd_3.reshape((1, nva, ns))
-                            H_p = H_p.sum(axis=2)
-                        del rsd_3
-
                     if camera_system.bp_accounts_for_d_2():
                         rsd_2 = np.exp(
                             np.complex64(2j * np.pi) * d_2 * frequency)
@@ -435,6 +418,32 @@ def backproject_pf_multi_frequency(
                             H_p = H_p.sum(axis=0)
                         H_p = H_p.reshape((n_projector_points, nva))
                         del rsd_2
+
+                    rsd_i = np.exp(np.complex64(-2j * np.pi) * d_i * frequency)
+                    H_p = H_p.reshape((n_projector_points, nva))
+                    H_p *= rsd_i.reshape((n_projector_points, 1))
+                    # H_p = H_p.sum(axis=0)
+
+                    if camera_system.bp_accounts_for_d_3():
+                        rsd_3 = np.exp(
+                            np.complex64(2j * np.pi) * d_3 * frequency)
+                        rsd_3 *= invsq_3
+                        if optimize_camera_convolutions:
+                            H_p = H_p.reshape((n_projector_points, nsx, nsy))
+                            rsd_3 = rsd_3.reshape((1, rsx, rsy))
+                            H_p_fft = np.fft.fft2(
+                                H_p, axes=(1, 2), s=(rsx, rsy))
+                            rsd_3_fft = np.fft.fft2(
+                                rsd_3, axes=(1, 2), s=(rsx, rsy))
+                            H_p_fft *= rsd_3_fft
+                            H_p = np.fft.ifft2(H_p_fft, axes=(1, 2))
+                            H_p = H_p[:, :nvx, :nvy]
+                            H_p = H_p.reshape((n_projector_points, nva))
+                        else:
+                            H_p = H_p.reshape((nl, 1, ns))
+                            H_p = H_p * rsd_3.reshape((1, nva, ns))
+                            H_p = H_p.sum(axis=2)
+                        del rsd_3
 
                     H_1_w[i_w, ...] = H_p * weight
 

@@ -38,6 +38,7 @@ def solve(data: NLOSCaptureData,
           progress: bool = True,
           compensate_invsq: bool = False,
           output_frequencies: bool = None,
+          x_i=None,
           try_optimize_convolutions: bool = True) -> Union[NLOSCaptureData.SingleReconstructionType,
                                                            NLOSCaptureData.ExhaustiveReconstructionType]:
     """
@@ -110,6 +111,7 @@ def solve(data: NLOSCaptureData,
         skip_fft_in=data.H_format.is_fourier_domain(),
         skip_fft_out=output_frequencies or (
             camera_system.is_transient() and data.H_format.is_fourier_domain()),
+        x_i=x_i,
         progress=progress)
 
     return convert_reconstruction_from_N_3(data, reconstructed_volume_n3,
