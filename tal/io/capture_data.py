@@ -247,8 +247,11 @@ class NLOSCaptureData:
         for key, value in raw_data.items():
             if key not in own_dict_keys:
                 raise AssertionError(f'raw_data contains unknown key: {key}')
-            if key == 'scene_info' and not isinstance(value, h5py.Empty):
-                value = yaml.load(value, Loader=yaml.CLoader)
+            if key == 'scene_info':
+                if isinstance(value, h5py.Empty) or isinstance(value, dict):
+                    pass
+                else:
+                    value = yaml.load(value, Loader=yaml.CLoader)
 
             setattr(self, key, value)
 
