@@ -339,7 +339,7 @@ def convert_reconstruction_from_N_3(data: NLOSCaptureData,
         volume_xyz, volume_format, do_log=False)
 
     if camera_system.is_transient():
-        shape = (data.H.shape[data.H_format.time_dim()],)
+        shape = (reconstructed_volume_n3.shape[0],)
     else:
         shape = ()
 
