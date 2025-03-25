@@ -96,6 +96,13 @@ def solve(data: NLOSCaptureData,
                        projector_focus=projector_focus,
                        try_optimize_convolutions=try_optimize_convolutions)
 
+    if output_frequencies is None:
+        output_frequencies = (
+            camera_system.is_transient()
+            and
+            data.H_format.is_fourier_domain()
+        )
+
     from tal.reconstruct.pf_dev.phasor_fields import backproject_pf_multi_frequency
     reconstructed_volume_n3 = backproject_pf_multi_frequency(
         H, laser_grid_xyz, sensor_grid_xyz, volume_xyz_n3, volume_xyz.shape[:-1],
@@ -108,8 +115,7 @@ def solve(data: NLOSCaptureData,
         compensate_invsq=compensate_invsq,
         original_nt=data.scene_info.get('original_nt', None),
         skip_fft_in=data.H_format.is_fourier_domain(),
-        skip_fft_out=output_frequencies or (
-            camera_system.is_transient() and data.H_format.is_fourier_domain()),
+        skip_fft_out=output_frequencies,
         progress=progress)
 
     return convert_reconstruction_from_N_3(data, reconstructed_volume_n3,
