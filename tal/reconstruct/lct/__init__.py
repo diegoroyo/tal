@@ -22,6 +22,12 @@ def solve(data: NLOSCaptureData, diffuse_material: bool = False, backprojection 
 
     data
         See tal.io.read_capture
+    diffuse_material
+        If True, the material is considered diffuse, which affects the radiometric scaling.
+    backprojection
+        If True, the reconstruction is done using backprojection.
+    snr
+        The signal-to-noise ratio for the reconstruction, used in the Wiener filter.
     """
     assert data.is_confocal(), \
         "Data must be confocal to use LCT with y-tal"
