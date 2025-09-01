@@ -114,6 +114,16 @@ def main():
                                dest='keep_partial_results', action='store_false',
                                help='Delete the "partial" folder (which stores raw render results) after finishing the render and generating the final HDF5 file')
 
+    # noise simulation commands
+    noise_simulation_parser = subparsers.add_parser(
+        'noise_simulation', help='Simulate noise for already generated capture data', formatter_class=SmartFormatter)
+    noise_simulation_parser.add_argument('-c', '--capture_file',
+                                         type=str, required=True,
+                                         help='Path to the .hdf5 capture file to add noise to')
+    noise_simulation_parser.add_argument('-n', '--noise_config_file',
+                                         type=str, required=True,
+                                         help='Path to the .yaml configuration file for the noise simulation')
+
     # plot commands
     plot_parser = subparsers.add_parser(
         'plot', help='Plot capture data using one of the configured methods', formatter_class=SmartFormatter)
@@ -181,6 +191,17 @@ def main():
             from tal.render import render_nlos_scene
             config_file = config_file[0]
             render_nlos_scene(config_file, args)
+    elif args.command == 'simulate_noise':
+        from tal.noise_simulation import simulate_noise
+        from tal.io import read_capture
+
+        capture_data_path = args.capture_file
+        capture_data = read_capture(capture_data_path)
+        config_path = args.noise_config_file
+
+        simulate_noise(capture_data, config_path, args)
+        print("TODO: not implemented")
+        return
     elif args.command == 'plot':
         import tal.plot
         from tal.io import read_capture
