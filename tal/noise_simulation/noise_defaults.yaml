@@ -1,14 +1,15 @@
 ##
 # SPAD parameters
 ##
-time_jitter_FWHM: 25  # FWHM of the gaussian component of the SPAD's time-jitter, in picoseconds
-time_jitter_tail: 156 # Tail of the exponential decay component of the SPAD's time-jitter, in picoseconds
-time_jitter_path: ''  # Load experimental time-jitter capture from file
+time_jitter_FWHM: 30       # FWHM of the gaussian component of the SPAD's time-jitter, in picoseconds
+time_jitter_tail: 256       # Tail of the exponential decay component of the SPAD's time-jitter, in picoseconds # TODO: ask, parametric or given SPAD properties?
+time_jitter_tail_scale: 0.8 # Relative scale of the peak of the exponential decay in the time-jitter with respect to the gaussian component
+time_jitter_path: ''        # Load experimental time-jitter capture from file
 
 photon_detection_ratio: 0.3 # Ratio of photons that are actually detected
 excess_voltage: 5           # TODO: compute the photon detection ratio from the excess voltage? Do we need this?
 dead_time: 1e3              # Hold-off time of the SPAD after each detected photon, in picoseconds
-exposure_time: 1            # Exposure time for each captured point, in seconds
+exposure_time: 0.001            # Exposure time for each captured point, in seconds
 
 ##
 # External noise
@@ -21,7 +22,7 @@ mu_noise: 0 # ???
 ##
 # Laser
 ##
-laser_jitter_FWHM: 35 # FWHM of the gaussian laser pulse, in picoseconds
+laser_jitter_FWHM: 30 # FWHM of the gaussian laser pulse, in picoseconds
 wavelength: 650       # TODO: Wavelength in nanometers, this should be in the simulation. Ask what do they need it for
 power: 1              # TODO: scalar value. Could be used to scale the simulated signal. Ask what they need it for (maybe they mean powers as in Watts)
 frequency: 20         # Pulse frequency (nº of pulses per second) in MHz

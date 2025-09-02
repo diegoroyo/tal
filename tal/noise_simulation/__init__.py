@@ -9,10 +9,10 @@ This is a private module, it is recommended to use the command line interface in
 See tal noise_simulation -h for more information.
 """
 
-def simulate_noise(captured_data, config_path, args):
+def simulate_noise(capture_data_path, config_path, args):
     """
     It is recommended to use the command line interface instead of calling this function directly.
 
     """
-    from noise_simulation import simulate_noise
-    return simulate_noise(captured_data, config_path, args)
+    from tal.noise_simulation import noise_simulation
+    return noise_simulation.simulate_noise(capture_data_path, config_path, args)

@@ -191,15 +191,10 @@ def main():
             from tal.render import render_nlos_scene
             config_file = config_file[0]
             render_nlos_scene(config_file, args)
-    elif args.command == 'simulate_noise':
+    elif args.command == 'noise_simulation':
         from tal.noise_simulation import simulate_noise
-        from tal.io import read_capture
-
-        capture_data_path = args.capture_file
-        capture_data = read_capture(capture_data_path)
         config_path = args.noise_config_file
-
-        simulate_noise(capture_data, config_path, args)
+        simulate_noise(args.capture_file, config_path, args)
         print("TODO: not implemented")
         return
     elif args.command == 'plot':
