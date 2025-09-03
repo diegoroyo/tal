@@ -31,7 +31,7 @@ name: nlos-z
 # See https://mitsuba.readthedocs.io/en/latest/src/key_topics/variants.html
 # you should have compiled this variant previously
 # See mitsuba{2|3}-transient-nlos repository for more information
-mitsuba_variant: llvm_ad_rgb
+mitsuba_variant: llvm_ad_mono
 # Transient Mitsuba's intergator properties
 # See mitsuba{2|3}-transient-nlos' documentation for transient_nlos_path
 integrator_max_depth: -1
@@ -42,13 +42,13 @@ integrator_nlos_hidden_geometry_sampling: true
 integrator_nlos_hidden_geometry_sampling_do_rroulette: false
 integrator_nlos_hidden_geometry_sampling_includes_relay_wall: true
 # Number of samples per pixel (spatial pixel, not time dimension pixel)
-sample_count: 10_000
+sample_count: 1000000
 # Transient Mitsuba's film properties
 # See mitsuba{2|3}-transient-nlos' documentation for transient_hdr_film
 account_first_and_last_bounces: false
 num_bins: 320
-bin_width_opl: 0.003
-start_opl: 1.95
+bin_width_opl: 0.003 # 10.01ps
+start_opl: 1.95 # 6ns
 auto_detect_bins: false
 
 ##
@@ -59,8 +59,8 @@ auto_detect_bins: false
 # confocal: The laser illuminates one point in the relay wall,
 #           the sensor only captures that same point in the relay wall
 # exhaustive: The laser and sensor illuminate and capture all points
-#             on the relay wall 
-scan_type: single  # single, confocal or exhaustive
+#             on the relay wall
+scan_type: confocal # single, confocal or exhaustive
 # XYZ coordinates of the laser and sensor devices
 # Note that this is NOT the illuminated or captured points' position
 # on the relay wall.
@@ -77,8 +77,8 @@ laser_z: 0.25
 # and sensor_height are set to 2, it will have a grid of 2x2 pixels, where the
 # top-left pixel goes from UV (0, 0) to UV (0.5, 0.5).
 # It is important to use a "rectangle" relay wall for correct UV coordinates. 
-sensor_width: 64
-sensor_height: 64
+sensor_width: 32
+sensor_height: 32
 # --- for scan_type=single
 # if set to null, laser points to the center pixel
 # if set to a number, laser points to that pixel (e.g. center = 128, 128)

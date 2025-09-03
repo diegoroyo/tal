@@ -196,6 +196,7 @@ def main():
         config_path = args.noise_config_file
         simulate_noise(args.capture_file, config_path, args)
         print("TODO: not implemented")
+        # TODO: Save the noised file to an hdf5 file. Deep copy the original (except transient data), add the noise configuration parameters too.
         return
     elif args.command == 'plot':
         import tal.plot
