@@ -8,8 +8,8 @@ time_jitter_n_timebins: 640   # Number of timebins of the jitter function
 time_jitter_timebin_width: 1  # Timebin width of the jitter function in picoseconds. Should be as precise as possible, to avoid aliasing
 
 # Load experimental time-jitter capture from hdf5 file. If defined, the previous parameters are ignored
-time_jitter_path: '/home/genguita/PycharmProjects/tal_SPAD/spad_data_1.hdf5'
-# time_jitter_path: '' # Leave the path empty (or not set) to use the parametric jitter
+# time_jitter_path: '/home/genguita/PycharmProjects/tal_SPAD/spad_data_1.hdf5'
+time_jitter_path: '' # Leave the path empty (or not set) to use the parametric jitter
 
 photon_detection_ratio: 0.3 # Ratio of photons that are actually detected
 excess_voltage: 5           # TODO: compute the photon detection ratio from the excess voltage? Do we need this?

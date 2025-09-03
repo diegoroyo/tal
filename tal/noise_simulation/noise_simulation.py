@@ -10,7 +10,7 @@ import h5py
 
 c = 3e8 # Speed of light in m/s
 
-def gaussian(mean, std, n_timebins):
+def gaussian(mean: float, std: float, n_timebins: int):
     """
 
     """
@@ -18,7 +18,7 @@ def gaussian(mean, std, n_timebins):
     return np.exp(-((t_range - mean) ** 2) / (2 * std ** 2))
 
 
-def exponenitally_modified_gaussian(mean, std, decay_rate, n_timebins):
+def exponenitally_modified_gaussian(mean:float , std:float, decay_rate:float, n_timebins:int):
     """
 
     """
@@ -28,7 +28,7 @@ def exponenitally_modified_gaussian(mean, std, decay_rate, n_timebins):
     return exgaussian
 
 
-def generate_parametric_jitter(SPAD_FWHM, SPAD_tail, gaussian_laser_FWHM, timebin_width_ps, n_timebins):
+def generate_parametric_jitter(SPAD_FWHM:float, SPAD_tail:float, gaussian_laser_FWHM:float, timebin_width_ps:float, n_timebins:int):
     """
 
     """
@@ -54,7 +54,7 @@ def generate_parametric_jitter(SPAD_FWHM, SPAD_tail, gaussian_laser_FWHM, timebi
     return jitter
 
 
-def load_jitter_from_file(path):
+def load_jitter_from_file(path:str):
     """
 
     """
@@ -66,14 +66,49 @@ def load_jitter_from_file(path):
     return jitter, jitter_n_timebins, jitter_timebin_width_ps
 
 
+def get_indices_from_linear(index:int, capture_dimensionality:int, shape):
+    if capture_dimensionality == 2:
+        i = index % shape[0]
+        j = index // shape[0]
+        return i, j # TODO: TUPLE
+    elif capture_dimensionality == 4:
+        i = index % shape[0]
+        j = (index // shape[0]) % shape[1]
+        k = (index // (shape[0] * shape[1])) % shape[2]
+        l = (index // (shape[0] * shape[1] * shape[2]))
+        return i, j, k, l
+    else:
+        print('Error, capture is neither single, confocal nor exhaustive')
+        exit(1)
+
+
+def access_transient_data(transient_data, index_tuple, capture_dimensionality):
+    if capture_dimensionality == 2:
+        return transient_data[:, index_tuple[0], index_tuple[1]]
+    elif capture_dimensionality == 4:
+        return transient_data[:, index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3]]
+    else:
+        print('Error, capture is neither single, confocal nor exhaustive')
+        exit(1)
+
+
+def store_transient_data(transient_data, transient_data_i, index_tuple, capture_dimensionality):
+    if capture_dimensionality == 2:
+        transient_data[:, index_tuple[0], index_tuple[1]] = transient_data_i
+    elif capture_dimensionality == 4:
+        transient_data[:, index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3]] = transient_data_i
+    else:
+        print('Error, capture is neither single, confocal nor exhaustive')
+        exit(1)
+
+
 # TODO: Given simulation_data (loaded hdf5 file) & configuration, apply noise to the capture
-def simulate_noise(capture_data, config_path, args):
+def simulate_noise(capture_data_path:str, config_path:str, args):
     """
 
     """
     # Load capture data from file
     from tal.io import read_capture
-    capture_data_path = args.capture_file
     capture_data = read_capture(capture_data_path)
 
     start_time = time.time()
@@ -83,12 +118,12 @@ def simulate_noise(capture_data, config_path, args):
     timebin_width_opl = capture_data.delta_t
     timebin_width_ps = timebin_width_opl / c * 1e12
     start_opl = capture_data.t_start
-    start_ps = start_opl / c * 1e12
+    start_ps = start_opl / c * 1e12 # TODO: this is unused. Check if we need it
     n_timebins = H.shape[0]
-    capture_dimensionality = H.ndim - 1 # TODO: flatten so we can use a single for loop (no more nesting) regardless of the number of dimensions
-
-
-    print(f'{H.shape=}')
+    n_measurements = H[0].size
+    capture_dimensionality = H.ndim - 1
+    assert capture_dimensionality == 4 or capture_dimensionality == 2, \
+        'Transient data does not match with single, confocal or exhaustive capture data'
 
     # Load noise simulation configuration from YAML file
     noise_config = None
@@ -130,42 +165,30 @@ def simulate_noise(capture_data, config_path, args):
     jitter_sampler = DiscreteGuideTable(jitter, random_state=np.random.RandomState())
     jitter_peak_idx = np.argmax(jitter)
 
-    # TODO: loop implementation needed if we want to use the DiscreteGuideTable (only one dimensional arrays)
-    #       With this resolution (32 x 32) the complete loop (create one sampler, sample twice and create histogram)
-    #       takes around 0.6 seconds
-    """
-    i = 0
-    for i in range(32):
-        for j in range(32):
-            H_sampler = DiscreteGuideTable(H[:, i, j], random_state=np.random.RandomState())
-            H_sampled = H_sampler.rvs(int(n_samples))
-            jitter_sampled = jitter_sampler.rvs(int(n_samples))
-            H_histogram = np.histogram(H_sampled + jitter_sampled, bins=int(n_timebins))
-            
-            # TODO: afterpulsing
-            #       1. Is it needed? (Only if the temporal sequence is very long)
-            #       2. How do we do it? Quercus and JSolan did it photon by photon
-    """
-    H_sampler = DiscreteGuideTable(H[:, 16, 16], random_state=np.random.RandomState())
+    for i in range(n_measurements):
+        index = get_indices_from_linear(i, capture_dimensionality, H[0].shape)
+        H_original = access_transient_data(H, index, capture_dimensionality)
 
-    # Simulate jitter noise for a single measurement for now
-    H_sampled = H_sampler.rvs(int(n_samples))
-    jitter_sampled = jitter_sampler.rvs(int(n_samples)) - jitter_peak_idx # Center the sampled jitter around the peak. Equivalent to a convolution with a centered jitter function
-    jitter_sampled_histogram = np.histogram(jitter_sampled, bins=jitter_n_timebins)[0]
-    jitter_sampled_scaled = jitter_sampled * jitter_timebin_width_ps / timebin_width_ps # Transform to the timebin width of the transient data # TODO: check this is implemented correctly
+        H_sampler = DiscreteGuideTable(H_original, random_state=np.random.RandomState())
+        H_sampled = H_sampler.rvs(int(n_samples))
+        jitter_sampled = jitter_sampler.rvs(int(n_samples))
+        jitter_sampled_scaled = jitter_sampled * jitter_timebin_width_ps / timebin_width_ps # Transform to the timebin width of the transient data
 
-    H_sampled_convolved = H_sampled + jitter_sampled_scaled
-    H_noise[:, 16, 16] = np.histogram(H_sampled_convolved, bins=n_timebins)[0] # TODO: np.histogram generates discontinuities (eg some values go to 0, even if every timebin has actual samples)
+        H_sampled_convolved = H_sampled + jitter_sampled_scaled
+        H_histogram = np.histogram(H_sampled_convolved, bins=n_timebins)[0] # TODO: np.histogram generates discontinuities (eg some values go to 0, even if every timebin has actual samples)
+        store_transient_data(H_noise, H_histogram, index, capture_dimensionality)
+
+        # TODO: other noise sources. Dark counts and ambient/external noise
+
+        # TODO: afterpulsing
+        #       1. Is it needed? (Only if the temporal sequence is very long)
+        #       2. How do we do it? Quercus and JSolan did it photon by photon
+
     print(f'Noise simulation took {time.time() - start_time} seconds (SO FAR)')
 
-    plt.plot(jitter); plt.title('System Jitter')
-    # plt.gca().set_yscale('log');
-    plt.show()
-    plt.plot(H[:, 16, 16] / np.max(H[:, 16, 16]) * 250, label='H')
-    plt.hist(H_sampled, bins=n_timebins); plt.show()
-    plt.plot(H[:, 16, 16] / np.max(H[:, 16, 16]), label='H')
-    plt.plot(H_noise[:, 16, 16] / np.max(H_noise[:, 16, 16]), label='H noisy'); plt.legend(); plt.show()
-    plt.plot(jitter / np.max(jitter), label='jitter')
-    plt.plot(jitter_sampled_histogram / np.max(jitter_sampled_histogram)); plt.show()
+    plt.plot(H[:, 16, 17] / np.max(H[:, 16, 17]), label='H')
+    plt.plot(H_noise[:, 16, 17] / np.max(H_noise[:, 16, 17]), label='H noisy'); plt.legend(); plt.show()
+    # plt.plot(jitter / np.max(jitter), label='jitter')
+    # plt.plot(jitter_sampled_histogram / np.max(jitter_sampled_histogram)); plt.show()
 
     return H_noise
