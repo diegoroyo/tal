@@ -40,7 +40,7 @@ def generate_parametric_jitter(SPAD_FWHM:float, SPAD_tail:float, gaussian_laser_
     laser_std = gaussian_laser_FWHM_scaled / (2 * np.sqrt(2 * np.log(2)))
 
     # Compute the time jitter caused by the SPAD (exponentially modified gaussian)
-    mean = n_timebins * 0.2 # TODO: start value, should be computed automatically
+    mean = n_timebins * 0.3
     SPAD_jitter = exponenitally_modified_gaussian(mean, SPAD_std, 1 / SPAD_tail_scaled, n_timebins)
 
     # Compute time jitter caused by a laser pulse (gaussian)
@@ -70,7 +70,7 @@ def get_indices_from_linear(index:int, capture_dimensionality:int, shape):
     if capture_dimensionality == 2:
         i = index % shape[0]
         j = index // shape[0]
-        return i, j # TODO: TUPLE
+        return i, j
     elif capture_dimensionality == 4:
         i = index % shape[0]
         j = (index // shape[0]) % shape[1]
@@ -102,7 +102,6 @@ def store_transient_data(transient_data, transient_data_i, index_tuple, capture_
         exit(1)
 
 
-# TODO: Given simulation_data (loaded hdf5 file) & configuration, apply noise to the capture
 def simulate_noise(capture_data_path:str, config_path:str, args):
     """
 
@@ -118,7 +117,7 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     timebin_width_opl = capture_data.delta_t
     timebin_width_ps = timebin_width_opl / c * 1e12
     start_opl = capture_data.t_start
-    start_ps = start_opl / c * 1e12 # TODO: this is unused. Check if we need it
+    start_ps = start_opl / c * 1e12
     n_timebins = H.shape[0]
     n_measurements = H[0].size
     capture_dimensionality = H.ndim - 1
@@ -175,7 +174,7 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
         jitter_sampled_scaled = jitter_sampled * jitter_timebin_width_ps / timebin_width_ps # Transform to the timebin width of the transient data
 
         H_sampled_convolved = H_sampled + jitter_sampled_scaled
-        H_histogram = np.histogram(H_sampled_convolved, bins=n_timebins)[0] # TODO: np.histogram generates discontinuities (eg some values go to 0, even if every timebin has actual samples)
+        H_histogram = np.histogram(H_sampled_convolved, bins=n_timebins)[0]
         store_transient_data(H_noise, H_histogram, index, capture_dimensionality)
 
         # TODO: other noise sources. Dark counts and ambient/external noise
@@ -186,9 +185,13 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
 
     print(f'Noise simulation took {time.time() - start_time} seconds (SO FAR)')
 
-    plt.plot(H[:, 16, 17] / np.max(H[:, 16, 17]), label='H')
-    plt.plot(H_noise[:, 16, 17] / np.max(H_noise[:, 16, 17]), label='H noisy'); plt.legend(); plt.show()
+    plt.plot(H[:, 16, 21] / np.max(H[:, 16, 17]), label='H')
+    plt.plot(H_noise[:, 16, 21] / np.max(H_noise[:, 16, 21]), label='H noisy'); plt.legend(); plt.show()
     # plt.plot(jitter / np.max(jitter), label='jitter')
     # plt.plot(jitter_sampled_histogram / np.max(jitter_sampled_histogram)); plt.show()
 
-    return H_noise
+    # TODO: save to file
+    capture_data_noisy = capture_data
+    capture_data_noisy.H = H_noise
+    capture_data_noisy.noise_info = noise_config
+    return capture_data_noisy

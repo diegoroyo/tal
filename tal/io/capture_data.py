@@ -160,6 +160,10 @@ class NLOSCaptureData:
                 If it hits, depth[i, j] stores the distance from the relay wall to the hit point.
             - 'normals': GroundTruthNormalsType (TensorXY3)
                 Similar to depth, but stores the normal of the hidden geometry at the hit point.
+
+    noise_info
+        YAML-encoded string. Contains additional information about the simulated noise (if any). Implemented keys:
+        # TODO: document
     """
 
     #
@@ -209,6 +213,7 @@ class NLOSCaptureData:
     t_start: Float = None
     t_accounts_first_and_last_bounces: bool = None
     scene_info: dict = None  # additional information
+    noise_info: dict = None
     _end: None = None  # used in as_dict()
 
     def __get_dict_keys(self):
@@ -247,7 +252,7 @@ class NLOSCaptureData:
         for key, value in raw_data.items():
             if key not in own_dict_keys:
                 raise AssertionError(f'raw_data contains unknown key: {key}')
-            if key == 'scene_info':
+            if key == 'scene_info' or key == 'noise_info':
                 if isinstance(value, h5py.Empty) or isinstance(value, dict):
                     pass
                 else:

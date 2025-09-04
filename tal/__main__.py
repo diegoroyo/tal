@@ -123,6 +123,9 @@ def main():
     noise_simulation_parser.add_argument('-n', '--noise_config_file',
                                          type=str, required=True,
                                          help='Path to the .yaml configuration file for the noise simulation')
+    noise_simulation_parser.add_argument('-o', '--output_path',
+                                         type=str, required=True,
+                                          help='Path to save the capture data with the simulated noise')
 
     # plot commands
     plot_parser = subparsers.add_parser(
@@ -193,10 +196,12 @@ def main():
             render_nlos_scene(config_file, args)
     elif args.command == 'noise_simulation':
         from tal.noise_simulation import simulate_noise
+        from tal.io import write_capture
+        from tal.io import FileFormat
         config_path = args.noise_config_file
-        simulate_noise(args.capture_file, config_path, args)
-        print("TODO: not implemented")
-        # TODO: Save the noised file to an hdf5 file. Deep copy the original (except transient data), add the noise configuration parameters too.
+        capture_data_noisy = simulate_noise(args.capture_file, config_path, args)
+        write_capture(args.output_path ,capture_data_noisy, FileFormat.HDF5_TAL, 0)
+        print("TODO: partial implementation")
         return
     elif args.command == 'plot':
         import tal.plot
