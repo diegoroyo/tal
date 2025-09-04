@@ -17,15 +17,15 @@ dead_time: 1000                 # Hold-off time of the SPAD after each detected 
 simulate_afterpulses: True      # If True, simulates SPAD afterpulsing (increases execution time). If False, afterpulsing is ignored.
 afterpulse_probability : 0.01   # Probability of each detected photon of generating an afterpulse, in range [0, 1]
 exposure_time: 0.001            # Exposure time for each captured point, in seconds
-number_of_samples: 0            # Number of captured photons per measurements. If 0 or non-defined, it will be computed from exposure time, laser frequency and the photon detection ratio
+number_of_samples: 2000            # Number of captured photons per measurements. If 0 or non-defined, it will be computed from exposure time, laser frequency and the photon detection ratio
 
 ##
 # External noise
 ##
 # TODO: as counts/second, but Quercus et al only takes into account a mu value to generate Poisson noise. Check their implementation.
-dark_count_rate: 1e3
-external_noise_rate: 1e3
-mu_noise: 0 # ???
+dark_count_rate: 1000
+external_noise_rate: 1000000
+number_of_false_counts: 0     # Number of false positive photons (either dark counts or external noise). If 0 or non-defined, this value is computed from exposure time and noise rates
 
 ##
 # Laser

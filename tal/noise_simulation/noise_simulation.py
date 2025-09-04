@@ -6,6 +6,7 @@ from scipy.special import erfc
 from scipy.stats.sampling import DiscreteGuideTable
 import time
 import h5py
+from tqdm import tqdm
 
 
 c = 3e8 # Speed of light in m/s
@@ -140,20 +141,19 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     jitter_timebin_width_ps = 0
     if noise_config['time_jitter_path'] == '' or noise_config['time_jitter_path'] is None:
         # Analytical time jitter function
-        print('Generate parametric')
         jitter_n_timebins = noise_config['time_jitter_n_timebins']
         jitter_timebin_width_ps = noise_config['time_jitter_timebin_width']
         jitter = generate_parametric_jitter(noise_config['time_jitter_FWHM'], noise_config['time_jitter_tail'],
                                             noise_config['laser_jitter_FWHM'], jitter_timebin_width_ps, jitter_n_timebins)
     else:
         # Recorded time jitter function from file
-        print('Generate from file')
         jitter, jitter_n_timebins, jitter_timebin_width_ps = load_jitter_from_file(noise_config['time_jitter_path'])
 
     exposure_time = noise_config['exposure_time']               # Exposure time per measurement
     laser_frequency = noise_config['frequency']                 # Laser frequency in MHz
     dead_time_ps = noise_config['dead_time'] # SPAD deadtime after capturing a photon (in picoseconds)
     max_afterpulses = int(sequence_time_ps // dead_time_ps)
+
     photon_detection_ratio = 0.0
     if noise_config['photon_detection_ratio'] > 0.0:
         photon_detection_ratio = noise_config['photon_detection_ratio']
@@ -168,11 +168,19 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     else:
         n_samples = int(noise_config['number_of_samples'])
 
+    # Expected number of false positive samples (caused by dark counts or external noise)
+    n_false_samples = 0
+    if noise_config['number_of_false_counts'] == 0 or noise_config['number_of_false_counts'] == None:
+        n_false_samples = int(exposure_time * int(noise_config['dark_count_rate'] + noise_config['external_noise_rate']))
+    else:
+        n_false_samples = int(noise_config['number_of_false_counts'])
+
     H_noise = np.zeros(shape=H.shape)
     jitter_sampler = DiscreteGuideTable(jitter, random_state=np.random.RandomState())
     jitter_peak_idx = np.argmax(jitter)
+    false_count_sampler = DiscreteGuideTable(np.ones(shape=(n_timebins), dtype=float), random_state=np.random.RandomState())
 
-    for i in range(n_measurements):
+    for i in tqdm(range(n_measurements), total=n_measurements, desc=f'Simulating noise ({n_samples} samples per measurement)...'):
         index = get_indices_from_linear(i, capture_dimensionality, H[0].shape)
         H_original = access_transient_data(H, index, capture_dimensionality)
 
@@ -202,14 +210,18 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
                 H_afterpulses = (H_sampled_convolved + afterpulse_time_offset)[afterpulse_mask]
                 H_afterpulses_histogram = np.histogram(H_afterpulses, bins=n_timebins, range=(0.0, n_timebins-1))[0]
                 H_histogram = H_histogram + H_afterpulses_histogram
+
+        # Add other noise sources: dark counts and external noise
+        # NOTE: Assumes the same number of false positive counts in all measurements
+        false_count_sampled = false_count_sampler.rvs(n_false_samples)
+        false_count_histogram = np.histogram(false_count_sampled, bins=n_timebins, range=(0, n_timebins-1))[0]
+        H_histogram = H_histogram + false_count_histogram
+
         store_transient_data(H_noise, H_histogram, index, capture_dimensionality)
 
-        # TODO: other noise sources. Dark counts and ambient/external noise
-
-    print(f'Noise simulation took {time.time() - start_time} seconds (SO FAR)')
-
+    print('DONE. Noise simulation took {0:.3f} seconds'.format(time.time() - start_time))
     plt.plot(H[:, 16, 16] / np.max(H[16, 16]), label='H')
-    plt.plot(H_noise[:, 16, 16] / np.max(H_noise[:, 16, 16]), label='H noisy'); plt.legend();
+    plt.plot(H_noise[:, 16, 16] / np.max(H_noise[:, 16, 16]), label='H noisy'); plt.legend()
     plt.show()
 
     capture_data_noisy = capture_data
