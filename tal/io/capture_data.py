@@ -163,7 +163,28 @@ class NLOSCaptureData:
 
     noise_info
         YAML-encoded string. Contains additional information about the simulated noise (if any). Implemented keys:
-        # TODO: document
+        - time_jitter_FWHM: FWHM of the gaussian component of the SPAD's time-jitter, in picoseconds
+        - time_jitter_tail: Tail (exponential decay parameter) of the exponential component of the
+                SPAD's time-jitter, in picoseconds
+        - time_jitter_tail_scale: Relative scale of the peak of the exponential decay in the time-jitter
+                with respect to the gaussian component
+        - time_jitter_n_timebins: Number of timebins of the jitter function
+        - time_jitter_timebin_width: Timebin width of the jitter function in picoseconds.
+                Should be as precise as possible, to avoid aliasing
+        - time_jitter_path: Leave the path empty (or not set) to use the parametric jitter
+        - photon_detection_ratio: Ratio of photons that are actually detected
+        - excess_voltage: # TODO
+        - dead_time: Hold-off time of the SPAD after each detected photon, in picoseconds
+        - simulate_afterpulses: If True, simulates SPAD afterpulsing (increases execution time).
+                If False, afterpulsing is ignored
+        - afterpulse_probability: Probability of each detected photon of generating an afterpulse, in range [0, 1]
+        - exposure_time: Exposure time for each captured point, in seconds
+        - number_of_samples: Number of captured photons per measurements. If 0 or non-defined,
+                it will be computed from exposure time, laser frequency and the photon detection ratio
+        - dark_count_rate: # TODO
+        - external_noise_rate: # TODO
+        - laser_jitter_FWHM: FWHM of the gaussian laser pulse, in picoseconds
+        - frequency: Pulse frequency (nº of pulses per second) in MHz
     """
 
     #

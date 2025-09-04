@@ -2,7 +2,7 @@
 # SPAD parameters
 ##
 time_jitter_FWHM: 20          # FWHM of the gaussian component of the SPAD's time-jitter, in picoseconds
-time_jitter_tail: 50          # Tail (exponential decay parameter) of the exponential component of the SPAD's time-jitter, in picoseconds # TODO: ask, parametric or given SPAD properties?
+time_jitter_tail: 50          # Tail (exponential decay parameter) of the exponential component of the SPAD's time-jitter, in picoseconds
 time_jitter_tail_scale: 0.8   # Relative scale of the peak of the exponential decay in the time-jitter with respect to the gaussian component
 time_jitter_n_timebins: 640   # Number of timebins of the jitter function
 time_jitter_timebin_width: 1  # Timebin width of the jitter function in picoseconds. Should be as precise as possible, to avoid aliasing
@@ -11,10 +11,13 @@ time_jitter_timebin_width: 1  # Timebin width of the jitter function in picoseco
 # time_jitter_path: '/home/genguita/PycharmProjects/tal_SPAD/spad_data_1.hdf5'
 time_jitter_path: '' # Leave the path empty (or not set) to use the parametric jitter
 
-photon_detection_ratio: 0.3 # Ratio of photons that are actually detected
-excess_voltage: 5           # TODO: compute the photon detection ratio from the excess voltage? Do we need this?
-dead_time: 1e3              # Hold-off time of the SPAD after each detected photon, in picoseconds
+photon_detection_ratio: 0.3     # Ratio of photons that are actually detected
+excess_voltage: 5               # TODO: compute the photon detection ratio from the excess voltage?
+dead_time: 1000                 # Hold-off time of the SPAD after each detected photon, in picoseconds
+simulate_afterpulses: True      # If True, simulates SPAD afterpulsing (increases execution time). If False, afterpulsing is ignored.
+afterpulse_probability : 0.01   # Probability of each detected photon of generating an afterpulse, in range [0, 1]
 exposure_time: 0.001            # Exposure time for each captured point, in seconds
+number_of_samples: 0            # Number of captured photons per measurements. If 0 or non-defined, it will be computed from exposure time, laser frequency and the photon detection ratio
 
 ##
 # External noise
@@ -28,7 +31,7 @@ mu_noise: 0 # ???
 # Laser
 ##
 laser_jitter_FWHM: 30 # FWHM of the gaussian laser pulse, in picoseconds
-wavelength: 650       # TODO: Wavelength in nanometers, this should be in the simulation. Ask what do they need it for
-power: 1              # TODO: scalar value. Could be used to scale the simulated signal. Ask what they need it for (maybe they mean powers as in Watts)
+wavelength: 650       # TODO: Wavelength in nanometers, this should be in the simulation. TODO
+power: 1              # TODO: scalar value. Could be used to scale the simulated signal. TODO
 frequency: 20         # Pulse frequency (nº of pulses per second) in MHz
 

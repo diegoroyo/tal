@@ -119,6 +119,7 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     start_opl = capture_data.t_start
     start_ps = start_opl / c * 1e12
     n_timebins = H.shape[0]
+    sequence_time_ps = n_timebins * timebin_width_ps # Total time of the temporal sequence in picoseconds
     n_measurements = H[0].size
     capture_dimensionality = H.ndim - 1
     assert capture_dimensionality == 4 or capture_dimensionality == 2, \
@@ -149,8 +150,10 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
         print('Generate from file')
         jitter, jitter_n_timebins, jitter_timebin_width_ps = load_jitter_from_file(noise_config['time_jitter_path'])
 
-    exposure_time = noise_config['exposure_time'] # Exposure time per measurement
-    laser_frequency = noise_config['frequency']   # Laser frequency in MHz
+    exposure_time = noise_config['exposure_time']               # Exposure time per measurement
+    laser_frequency = noise_config['frequency']                 # Laser frequency in MHz
+    dead_time_ps = noise_config['dead_time'] # SPAD deadtime after capturing a photon (in picoseconds)
+    max_afterpulses = int(sequence_time_ps // dead_time_ps)
     photon_detection_ratio = 0.0
     if noise_config['photon_detection_ratio'] > 0.0:
         photon_detection_ratio = noise_config['photon_detection_ratio']
@@ -159,7 +162,12 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
         photon_detection_ratio = 1.0
 
     # Expected number of samples per measurement, taking into account the photon detection rate
-    n_samples = exposure_time * laser_frequency * 1e6 * photon_detection_ratio
+    n_samples = 0
+    if noise_config['number_of_samples'] == 0 or noise_config['number_of_samples'] == None:
+        n_samples = int(exposure_time * laser_frequency * 1e6 * photon_detection_ratio)
+    else:
+        n_samples = int(noise_config['number_of_samples'])
+
     H_noise = np.zeros(shape=H.shape)
     jitter_sampler = DiscreteGuideTable(jitter, random_state=np.random.RandomState())
     jitter_peak_idx = np.argmax(jitter)
@@ -169,28 +177,41 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
         H_original = access_transient_data(H, index, capture_dimensionality)
 
         H_sampler = DiscreteGuideTable(H_original, random_state=np.random.RandomState())
-        H_sampled = H_sampler.rvs(int(n_samples))
-        jitter_sampled = jitter_sampler.rvs(int(n_samples))
+        H_sampled = H_sampler.rvs(n_samples)
+        jitter_sampled = jitter_sampler.rvs(n_samples) - jitter_peak_idx
         jitter_sampled_scaled = jitter_sampled * jitter_timebin_width_ps / timebin_width_ps # Transform to the timebin width of the transient data
 
         H_sampled_convolved = H_sampled + jitter_sampled_scaled
-        H_histogram = np.histogram(H_sampled_convolved, bins=n_timebins)[0]
+        H_histogram = np.histogram(H_sampled_convolved, bins=n_timebins, range=(0, n_timebins-1))[0]
+
+        # After pulse simulation
+        H_afterpulses_histogram = None
+        if noise_config['simulate_afterpulses']:
+            previous_afterpulse_mask = np.ones(n_samples, dtype=bool)
+            for afterpulse_index in range(max_afterpulses):
+                # Generate a mask for all the measurements that cause an afterpulse
+                afterpulse_samples = np.random.rand(n_samples)
+                afterpulse_mask = afterpulse_samples <= noise_config['afterpulse_probability']
+
+                # Only measurements that cause a previous afterpulse could cause another one
+                afterpulse_mask = afterpulse_mask & previous_afterpulse_mask
+                previous_afterpulse_mask = afterpulse_mask
+
+                # Accumulate the afterpulsed samples
+                afterpulse_time_offset = dead_time_ps * (afterpulse_index + 1) / timebin_width_ps
+                H_afterpulses = (H_sampled_convolved + afterpulse_time_offset)[afterpulse_mask]
+                H_afterpulses_histogram = np.histogram(H_afterpulses, bins=n_timebins, range=(0.0, n_timebins-1))[0]
+                H_histogram = H_histogram + H_afterpulses_histogram
         store_transient_data(H_noise, H_histogram, index, capture_dimensionality)
 
         # TODO: other noise sources. Dark counts and ambient/external noise
 
-        # TODO: afterpulsing
-        #       1. Is it needed? (Only if the temporal sequence is very long)
-        #       2. How do we do it? Quercus and JSolan did it photon by photon
-
     print(f'Noise simulation took {time.time() - start_time} seconds (SO FAR)')
 
-    plt.plot(H[:, 16, 21] / np.max(H[:, 16, 17]), label='H')
-    plt.plot(H_noise[:, 16, 21] / np.max(H_noise[:, 16, 21]), label='H noisy'); plt.legend(); plt.show()
-    # plt.plot(jitter / np.max(jitter), label='jitter')
-    # plt.plot(jitter_sampled_histogram / np.max(jitter_sampled_histogram)); plt.show()
+    plt.plot(H[:, 16, 16] / np.max(H[16, 16]), label='H')
+    plt.plot(H_noise[:, 16, 16] / np.max(H_noise[:, 16, 16]), label='H noisy'); plt.legend();
+    plt.show()
 
-    # TODO: save to file
     capture_data_noisy = capture_data
     capture_data_noisy.H = H_noise
     capture_data_noisy.noise_info = noise_config
