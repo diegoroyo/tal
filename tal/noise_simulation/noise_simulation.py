@@ -8,104 +8,12 @@ import time
 import h5py
 from tqdm import tqdm
 
-
 c = 3e8 # Speed of light in m/s
-
-def gaussian(mean: float, std: float, n_timebins: int):
-    """
-
-    """
-    t_range = np.linspace(0, n_timebins, n_timebins)
-    return np.exp(-((t_range - mean) ** 2) / (2 * std ** 2))
-
-
-def exponenitally_modified_gaussian(mean:float , std:float, decay_rate:float, n_timebins:int):
-    """
-
-    """
-    t_range = np.linspace(0, n_timebins, n_timebins)
-    exgaussian = (decay_rate / 2) * np.exp((decay_rate / 2) * (2 * mean + decay_rate * std * std - 2 * t_range)) \
-                  * erfc((mean + decay_rate * std * std - t_range) / (np.sqrt(2) * std))
-    return exgaussian
-
-
-def generate_parametric_jitter(SPAD_FWHM:float, SPAD_tail:float, gaussian_laser_FWHM:float, timebin_width_ps:float, n_timebins:int):
-    """
-
-    """
-    # Convert parameters in picoseconds to number of timebins
-    SPAD_FWHM_scaled = SPAD_FWHM / timebin_width_ps
-    SPAD_tail_scaled = SPAD_tail / timebin_width_ps
-    SPAD_std = SPAD_FWHM_scaled / (2 * np.sqrt(2 * np.log(2)))
-    gaussian_laser_FWHM_scaled = gaussian_laser_FWHM / timebin_width_ps
-    laser_std = gaussian_laser_FWHM_scaled / (2 * np.sqrt(2 * np.log(2)))
-
-    # Compute the time jitter caused by the SPAD (exponentially modified gaussian)
-    mean = n_timebins * 0.3
-    SPAD_jitter = exponenitally_modified_gaussian(mean, SPAD_std, 1 / SPAD_tail_scaled, n_timebins)
-
-    # Compute time jitter caused by a laser pulse (gaussian)
-    mean = n_timebins * 0.5
-    laser_jitter = gaussian(mean, laser_std, n_timebins)
-    laser_jitter_centered = np.roll(laser_jitter, shift=-int(mean))
-
-    # Complete time jitter (SPAD and laser convolved)
-    jitter = np.real(np.fft.ifft(np.fft.fft(SPAD_jitter) * np.fft.fft(laser_jitter_centered)))
-    jitter = jitter / np.max(jitter) + 1e-8
-    return jitter
-
-
-def load_jitter_from_file(path:str):
-    """
-
-    """
-    jitter_file = h5py.File(path, 'r')
-    jitter = np.array(jitter_file['counts'])[:, 0]
-    jitter_n_timebins = np.array(jitter_file['n_timebins']).item()
-    jitter_timebin_width_ps = np.array(jitter_file['timebin_width_ps']).item()
-    jitter_file.close()
-    return jitter, jitter_n_timebins, jitter_timebin_width_ps
-
-
-def get_indices_from_linear(index:int, capture_dimensionality:int, shape):
-    if capture_dimensionality == 2:
-        i = index % shape[0]
-        j = index // shape[0]
-        return i, j
-    elif capture_dimensionality == 4:
-        i = index % shape[0]
-        j = (index // shape[0]) % shape[1]
-        k = (index // (shape[0] * shape[1])) % shape[2]
-        l = (index // (shape[0] * shape[1] * shape[2]))
-        return i, j, k, l
-    else:
-        print('Error, capture is neither single, confocal nor exhaustive')
-        exit(1)
-
-
-def access_transient_data(transient_data, index_tuple, capture_dimensionality):
-    if capture_dimensionality == 2:
-        return transient_data[:, index_tuple[0], index_tuple[1]]
-    elif capture_dimensionality == 4:
-        return transient_data[:, index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3]]
-    else:
-        print('Error, capture is neither single, confocal nor exhaustive')
-        exit(1)
-
-
-def store_transient_data(transient_data, transient_data_i, index_tuple, capture_dimensionality):
-    if capture_dimensionality == 2:
-        transient_data[:, index_tuple[0], index_tuple[1]] = transient_data_i
-    elif capture_dimensionality == 4:
-        transient_data[:, index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3]] = transient_data_i
-    else:
-        print('Error, capture is neither single, confocal nor exhaustive')
-        exit(1)
-
 
 def simulate_noise(capture_data_path:str, config_path:str, args):
     """
-
+        Simulates the noise caused by a transient capture process using a SPAD and a pulsed laser, to a transient
+        capture file previously generated using 'tal render'.
     """
     # Load capture data from file
     from tal.io import read_capture
@@ -135,6 +43,8 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     except yaml.YAMLError as exc:
         raise AssertionError(f'Invalid YAML format in noise simulation configuration file: {exc}') from exc
 
+    print(f'Simulating noise for capture data {capture_data_path}.')
+
     # Generate or load from file the time jitter function of SPAD and laser
     jitter = None
     jitter_n_timebins = 0
@@ -145,26 +55,28 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
         jitter_timebin_width_ps = noise_config['time_jitter_timebin_width']
         jitter = generate_parametric_jitter(noise_config['time_jitter_FWHM'], noise_config['time_jitter_tail'],
                                             noise_config['laser_jitter_FWHM'], jitter_timebin_width_ps, jitter_n_timebins)
+        print(f' - Jitter function:')
+        print(f'   - SPAD FWHM = {noise_config["time_jitter_FWHM"]} ps')
+        print(f'   - SPAD tail = {noise_config["time_jitter_tail"]} ps')
+        print(f'   - Laser FWHM = {noise_config["laser_jitter_FWHM"]} ps')
     else:
         # Recorded time jitter function from file
         jitter, jitter_n_timebins, jitter_timebin_width_ps = load_jitter_from_file(noise_config['time_jitter_path'])
+        print(f' - Jitter function loaded from {noise_config["time_jitter_path"]}.')
 
-    exposure_time = noise_config['exposure_time']               # Exposure time per measurement
-    laser_frequency = noise_config['frequency']                 # Laser frequency in MHz
-    dead_time_ps = noise_config['dead_time'] # SPAD deadtime after capturing a photon (in picoseconds)
-    max_afterpulses = int(sequence_time_ps // dead_time_ps)
+    exposure_time = noise_config['exposure_time'] # Exposure time per measurement
+    laser_frequency = noise_config['frequency']   # Laser frequency in MHz
 
-    photon_detection_ratio = 0.0
-    if noise_config['photon_detection_ratio'] > 0.0:
-        photon_detection_ratio = noise_config['photon_detection_ratio']
-    else:
-        # TODO: compute from the excess voltage of the SPAD. Is this needed?
-        photon_detection_ratio = 1.0
+    # Compute the photon detection ratio using the excess voltage or load it directly from the configuration
+    photon_detection_ratio = noise_config['photon_detection_ratio']
+    print(f' - Photon detection ratio = {100 * photon_detection_ratio:.2f} %.')
 
-    # Expected number of samples per measurement, taking into account the photon detection rate
+    # Compute the expected number of samples per measurement, taking into account the photon detection rate
     n_samples = 0
     if noise_config['number_of_samples'] == 0 or noise_config['number_of_samples'] == None:
         n_samples = int(exposure_time * laser_frequency * 1e6 * photon_detection_ratio)
+        print(f' - Simulated exposure time = {exposure_time:.3f} seconds.')
+        print(f' - Laser frequency = {laser_frequency:.2f} MHz.')
     else:
         n_samples = int(noise_config['number_of_samples'])
 
@@ -175,33 +87,49 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     else:
         n_false_samples = int(noise_config['number_of_false_counts'])
 
+    # Afterpulse configuration
+    simulate_afterpulses = noise_config['simulate_afterpulses']
+    afterpulse_probability = noise_config['afterpulse_probability']
+    dead_time_ps = noise_config['dead_time'] # SPAD deadtime after capturing a photon (in picoseconds)
+    max_afterpulses = int(sequence_time_ps // dead_time_ps)
+    if simulate_afterpulses:
+        print(f' - SPAD dead time = {dead_time_ps} ps')
+        print(f' - Afterpulse probability = {100 * afterpulse_probability:.2f} %')
+
+
     H_noise = np.zeros(shape=H.shape)
+    jitter_peak_idx = np.argmax(jitter) # To center the jitter function and avoid offseting the signal
     jitter_sampler = DiscreteGuideTable(jitter, random_state=np.random.RandomState())
-    jitter_peak_idx = np.argmax(jitter)
     false_count_sampler = DiscreteGuideTable(np.ones(shape=(n_timebins), dtype=float), random_state=np.random.RandomState())
 
+    print(f' - Number of photons sampled = {n_samples}')
+    print(f' - Number of false positive samples = {n_false_samples}')
+
+    # For every transient sequence in the capture
     for i in tqdm(range(n_measurements), total=n_measurements, desc=f'Simulating noise ({n_samples} samples per measurement)...'):
         index = get_indices_from_linear(i, capture_dimensionality, H[0].shape)
         H_original = access_transient_data(H, index, capture_dimensionality)
 
+        # Sample n_samples photons arrival timestamps from the original transient data, as well as n_samples jitter values
         H_sampler = DiscreteGuideTable(H_original, random_state=np.random.RandomState())
         H_sampled = H_sampler.rvs(n_samples)
         jitter_sampled = jitter_sampler.rvs(n_samples) - jitter_peak_idx
         jitter_sampled_scaled = jitter_sampled * jitter_timebin_width_ps / timebin_width_ps # Transform to the timebin width of the transient data
 
+        # Sum the sampled timestamps
         H_sampled_convolved = H_sampled + jitter_sampled_scaled
         H_histogram = np.histogram(H_sampled_convolved, bins=n_timebins, range=(0, n_timebins-1))[0]
 
-        # After pulse simulation
+        # Afterpulse simulation
         H_afterpulses_histogram = None
-        if noise_config['simulate_afterpulses']:
+        if simulate_afterpulses:
             previous_afterpulse_mask = np.ones(n_samples, dtype=bool)
             for afterpulse_index in range(max_afterpulses):
                 # Generate a mask for all the measurements that cause an afterpulse
                 afterpulse_samples = np.random.rand(n_samples)
-                afterpulse_mask = afterpulse_samples <= noise_config['afterpulse_probability']
+                afterpulse_mask = afterpulse_samples <= afterpulse_probability
 
-                # Only measurements that cause a previous afterpulse could cause another one
+                # Only measurements that caused a previous afterpulse could cause another one
                 afterpulse_mask = afterpulse_mask & previous_afterpulse_mask
                 previous_afterpulse_mask = afterpulse_mask
 
@@ -223,8 +151,123 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     plt.plot(H[:, 16, 16] / np.max(H[16, 16]), label='H')
     plt.plot(H_noise[:, 16, 16] / np.max(H_noise[:, 16, 16]), label='H noisy'); plt.legend()
     plt.show()
+    plt.plot(jitter / np.max(jitter) * 150, label='jitter function')
+    plt.hist(jitter_sampled, bins=n_timebins, label='sampled jitter')
+    plt.hist(jitter_sampled_scaled, bins=n_timebins, label='sampled & scaled jitter')
+    plt.title('Jitter'); plt.legend(); plt.show()
 
+
+    # Store the transient data with the simulated nosie, as well as the configuration used for the nosie
     capture_data_noisy = capture_data
     capture_data_noisy.H = H_noise
     capture_data_noisy.noise_info = noise_config
     return capture_data_noisy
+
+
+def gaussian(mean: float, std: float, n_timebins: int):
+    """
+        Generates a gaussian distribution given its mean and standard deviation
+    """
+    t_range = np.linspace(0, n_timebins, n_timebins)
+    return np.exp(-((t_range - mean) ** 2) / (2 * std ** 2))
+
+
+def exponenitally_modified_gaussian(mean:float , std:float, decay_rate:float, n_timebins:int):
+    """
+        Generates an exponentially modified gaussian distribution, given its mean, standard deviation, and the
+        decay rate of the exponential tail
+    """
+    t_range = np.linspace(0, n_timebins, n_timebins)
+    exgaussian = (decay_rate / 2) * np.exp((decay_rate / 2) * (2 * mean + decay_rate * std * std - 2 * t_range)) \
+                 * erfc((mean + decay_rate * std * std - t_range) / (np.sqrt(2) * std))
+    return exgaussian
+
+
+def generate_parametric_jitter(SPAD_FWHM:float, SPAD_tail:float, gaussian_laser_FWHM:float, timebin_width_ps:float, n_timebins:int):
+    """
+        Generates the jitter function of a SPAD and laser given:
+         - FWHM of the SPAD
+         - Exponential tail of the SPAD
+         - FWHM of the laser
+    """
+    # Convert parameters in picoseconds to number of timebins
+    SPAD_FWHM_scaled = SPAD_FWHM / timebin_width_ps
+    SPAD_tail_scaled = SPAD_tail / timebin_width_ps
+    SPAD_std = SPAD_FWHM_scaled / (2 * np.sqrt(2 * np.log(2)))
+    gaussian_laser_FWHM_scaled = gaussian_laser_FWHM / timebin_width_ps
+    laser_std = gaussian_laser_FWHM_scaled / (2 * np.sqrt(2 * np.log(2)))
+
+    # Compute the time jitter caused by the SPAD (exponentially modified gaussian)
+    mean = n_timebins * 0.3
+    SPAD_jitter = exponenitally_modified_gaussian(mean, SPAD_std, 1 / SPAD_tail_scaled, n_timebins)
+
+    # Compute time jitter caused by a laser pulse (gaussian)
+    mean = n_timebins * 0.5
+    laser_jitter = gaussian(mean, laser_std, n_timebins)
+    laser_jitter_centered = np.roll(laser_jitter, shift=-int(mean))
+
+    # Complete time jitter (SPAD and laser convolved)
+    jitter = np.real(np.fft.ifft(np.fft.fft(SPAD_jitter) * np.fft.fft(laser_jitter_centered)))
+    jitter = jitter / np.max(jitter) + 1e-8
+    return jitter
+
+
+def load_jitter_from_file(path:str):
+    """
+        Loads a jitter function from an hdf5 file. The file must contain the following datasets:
+         - counts: recorded data of the SPAD's jitter
+         - n_timebins: number of timebins of the temporal data
+         - timebin_width_ps: the temporal width of each timebin, in picoseconds
+    """
+    jitter_file = h5py.File(path, 'r')
+    jitter = np.array(jitter_file['counts'])[:, 0]
+    jitter_n_timebins = np.array(jitter_file['n_timebins']).item()
+    jitter_timebin_width_ps = np.array(jitter_file['timebin_width_ps']).item()
+    jitter_file.close()
+    return jitter, jitter_n_timebins, jitter_timebin_width_ps
+
+
+def get_indices_from_linear(index:int, capture_dimensionality:int, shape):
+    """
+        Given a linear index, the dimensionality of the transient data and its shape, returns a tuple of indices
+        to access the transient data tensor.
+    """
+    if capture_dimensionality == 2:
+        i = index % shape[0]
+        j = index // shape[0]
+        return i, j
+    elif capture_dimensionality == 4:
+        i = index % shape[0]
+        j = (index // shape[0]) % shape[1]
+        k = (index // (shape[0] * shape[1])) % shape[2]
+        l = (index // (shape[0] * shape[1] * shape[2]))
+        return i, j, k, l
+    else:
+        print('Error, capture is neither single, confocal nor exhaustive')
+        exit(1)
+
+
+def access_transient_data(transient_data, index_tuple, capture_dimensionality):
+    """
+        Access a single transient measurement from the complete tensor using a tuple of indices.
+    """
+    if capture_dimensionality == 2:
+        return transient_data[:, index_tuple[0], index_tuple[1]]
+    elif capture_dimensionality == 4:
+        return transient_data[:, index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3]]
+    else:
+        print('Error, capture is neither single, confocal nor exhaustive')
+        exit(1)
+
+
+def store_transient_data(transient_data, transient_data_i, index_tuple, capture_dimensionality):
+    """
+        Store a transient sequence into the complete tensor using a tuple of indices.
+    """
+    if capture_dimensionality == 2:
+        transient_data[:, index_tuple[0], index_tuple[1]] = transient_data_i
+    elif capture_dimensionality == 4:
+        transient_data[:, index_tuple[0], index_tuple[1], index_tuple[2], index_tuple[3]] = transient_data_i
+    else:
+        print('Error, capture is neither single, confocal nor exhaustive')
+        exit(1)

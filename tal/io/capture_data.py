@@ -172,8 +172,7 @@ class NLOSCaptureData:
         - time_jitter_timebin_width: Timebin width of the jitter function in picoseconds.
                 Should be as precise as possible, to avoid aliasing
         - time_jitter_path: Leave the path empty (or not set) to use the parametric jitter
-        - photon_detection_ratio: Ratio of photons that are actually detected
-        - excess_voltage: # TODO
+        - photon_detection_ratio: Ratio of photons that are actually detected, in range [0, 1]
         - dead_time: Hold-off time of the SPAD after each detected photon, in picoseconds
         - simulate_afterpulses: If True, simulates SPAD afterpulsing (increases execution time).
                 If False, afterpulsing is ignored
@@ -181,8 +180,10 @@ class NLOSCaptureData:
         - exposure_time: Exposure time for each captured point, in seconds
         - number_of_samples: Number of captured photons per measurements. If 0 or non-defined,
                 it will be computed from exposure time, laser frequency and the photon detection ratio
-        - dark_count_rate: # TODO
-        - external_noise_rate: # TODO
+        - dark_count_rate: Number of dark counts per second
+        - external_noise_rate: Number of counts caused by external noise (ambient light) per second
+        - number_of_false_counts: Number of false positive photons (either dark counts or external noise).
+                If 0 or non-defined, this value is computed from exposure time and noise rates
         - laser_jitter_FWHM: FWHM of the gaussian laser pulse, in picoseconds
         - frequency: Pulse frequency (nº of pulses per second) in MHz
     """
