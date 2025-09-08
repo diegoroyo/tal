@@ -200,9 +200,8 @@ def main():
         from tal.io import FileFormat
         config_path = args.noise_config_file
         capture_data_noisy = simulate_noise(args.capture_file, config_path, args)
-        write_capture(args.output_path ,capture_data_noisy, FileFormat.HDF5_TAL, 0)
+        write_capture(args.output_path, capture_data_noisy, FileFormat.HDF5_TAL, 0)
         print(f'Processed capture saved to {args.output_path}')
-        print("TODO: partial implementation")
         return
     elif args.command == 'plot':
         import tal.plot

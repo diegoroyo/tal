@@ -1,29 +1,29 @@
 ##
 # SPAD parameters
 ##
-time_jitter_FWHM: 20            # FWHM of the gaussian component of the SPAD's time-jitter, in picoseconds
-time_jitter_tail: 50            # Tail (exponential decay parameter) of the exponential component of the SPAD's time-jitter, in picoseconds
-time_jitter_tail_scale: 0.8     # Relative scale of the peak of the exponential decay in the time-jitter with respect to the gaussian component
-time_jitter_n_timebins: 640     # Number of timebins of the jitter function
-time_jitter_timebin_width: 0.75 # Timebin width of the jitter function in picoseconds. Should be as precise as possible, to avoid aliasing
+time_jitter_FWHM: 20             # FWHM of the gaussian component of the SPAD's time-jitter, in picoseconds
+time_jitter_tail: 50             # Tail (exponential decay parameter) of the exponential component of the SPAD's time-jitter, in picoseconds
+time_jitter_tail_scale: 0.8      # Relative scale of the peak of the exponential decay in the time-jitter with respect to the gaussian component
+time_jitter_n_timebins: 640      # Number of timebins of the jitter function
+time_jitter_timebin_width: 0.75  # Timebin width of the jitter function in picoseconds. Should be as precise as possible, to avoid aliasing
 
 # Load experimental time-jitter capture from hdf5 file. If defined, the previous parameters are ignored
-# time_jitter_path: '/home/genguita/PycharmProjects/tal_SPAD/spad_data_1.hdf5'
-# time_jitter_path: '' # Leave the path empty (or not set) to use the parametric jitter
+# time_jitter_path: './spad_data_1.hdf5'
+time_jitter_path: '' # Leave the path empty (or not set) to use the parametric jitter
 
 photon_detection_ratio: 0.3     # Ratio of photons that are actually detected, in range [0, 1]
 dead_time: 1000                 # Hold-off time of the SPAD after each detected photon, in picoseconds
 simulate_afterpulses: False     # If True, simulates SPAD afterpulsing (increases execution time). If False, afterpulsing is ignored.
 afterpulse_probability : 0.10   # Probability of each detected photon of generating an afterpulse, in range [0, 1]
 exposure_time: 0.001            # Exposure time for each captured point, in seconds
-#number_of_samples: 100000      # Number of captured photons per measurements. If 0 or non-defined, it will be computed
+number_of_samples: 0            # Number of captured photons per measurements. If 0 or non-defined, it will be computed
                                 # from exposure time, laser frequency and the photon detection ratio
 
 ##
 # External noise
 ##
-dark_count_rate: 1000         # Number of dark counts per second
-external_noise_rate: 1000000  # Number of counts caused by external noise (ambient light) per second
+dark_count_rate: 0            # Number of dark counts per second
+external_noise_rate: 0        # Number of counts caused by external noise (ambient light) per second
 number_of_false_counts: 0     # Number of false positive photons (either dark counts or external noise).
                               # If 0 or non-defined, this value is computed from exposure time and noise rates
 
@@ -32,4 +32,3 @@ number_of_false_counts: 0     # Number of false positive photons (either dark co
 ##
 laser_jitter_FWHM: 30 # FWHM of the gaussian laser pulse, in picoseconds
 frequency: 20         # Pulse frequency (nº of pulses per second) in MHz
-

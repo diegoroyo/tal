@@ -236,6 +236,7 @@ class NLOSCaptureData:
     t_accounts_first_and_last_bounces: bool = None
     scene_info: dict = None  # additional information
     noise_info: dict = None
+    jitter: dict = None
     _end: None = None  # used in as_dict()
 
     def __get_dict_keys(self):
@@ -274,7 +275,7 @@ class NLOSCaptureData:
         for key, value in raw_data.items():
             if key not in own_dict_keys:
                 raise AssertionError(f'raw_data contains unknown key: {key}')
-            if key == 'scene_info' or key == 'noise_info':
+            if key == 'scene_info' or key == 'noise_info' or key == 'jitter':
                 if isinstance(value, h5py.Empty) or isinstance(value, dict):
                     pass
                 else:
