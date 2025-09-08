@@ -153,18 +153,6 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
 
     print('DONE. Noise simulation took {0:.3f} seconds'.format(time.time() - start_time))
 
-    # TODO: remove this before commiting
-    """
-    plt.plot(H[:, 16, 16] / np.max(H[16, 16]), label='H')
-    plt.plot(H_noise[:, 16, 16] / np.max(H_noise[:, 16, 16]), label='H noisy'); plt.legend()
-    # plt.gca().set_yscale('log')
-    plt.show()
-    plt.plot(jitter / np.max(jitter) * 150, label='jitter function')
-    plt.hist(jitter_sampled, bins=n_timebins, label='sampled jitter')
-    plt.hist(jitter_sampled_scaled, bins=n_timebins, label='sampled & scaled jitter')
-    plt.title('Jitter'); plt.legend(); plt.show()
-    """
-
     # Store the transient data with the simulated nosie, as well as the configuration used for the nosie and the jitter function
     capture_data_noisy = capture_data
     capture_data_noisy.H = H_noise
