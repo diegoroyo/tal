@@ -65,7 +65,7 @@ def solve(data: NLOSCaptureData) -> NLOSCaptureData.SingleReconstructionType:
                         bounds_error = False,
                         fill_value=0)
         f_vol *= z>0
-        f_vol *= np.abs(z) / np.max(sqrt_term)
+        f_vol *= np.abs(z) / np.maximum(sqrt_term, 1e-6)
 
         # IFFT
         t_vol = np.fft.ifftn(np.fft.ifftshift(f_vol))
