@@ -27,8 +27,14 @@ def solve(data: NLOSCaptureData) -> NLOSCaptureData.SingleReconstructionType:
     """
     assert data.is_confocal(), \
         "Data must be confocal to use fk-migration with y-tal"
+        
     # TODO: implement non confocal approach from "Wave-Based Non-Line-of-Sight Imaging using Fast f-k Migration"
     if data.is_confocal():
+        from tal.config import get_resources
+        downscale = get_resources().downscale
+        if downscale is not None and downscale > 1:
+            data.downscale(downscale)
+
         # Padding of the data
         N = data.sensor_grid_xyz.shape[0]
         M = data.H.shape[0]
