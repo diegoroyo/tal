@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.special import erfc
 from scipy.stats.sampling import DiscreteGuideTable
 import time
+from math import floor
 import h5py
 from tqdm import tqdm
 
@@ -65,21 +66,43 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
         print(f'   - Laser FWHM = {noise_config["laser_jitter_FWHM"]} ps')
 
 
-    exposure_time = noise_config['exposure_time'] # Exposure time per measurement
-    laser_frequency = noise_config['frequency']   # Laser frequency in MHz
+    exposure_time = float(noise_config['exposure_time']) # Exposure time per measurement
+    laser_frequency = float(noise_config['frequency'])   # Laser frequency in MHz
 
-    # Compute the photon detection ratio using the excess voltage or load it directly from the configuration
+    # Load the photon detection ratio
     photon_detection_ratio = noise_config['photon_detection_ratio']
     print(f' - Photon detection ratio = {100 * photon_detection_ratio:.2f} %.')
 
     # Compute the expected number of samples per measurement, taking into account the photon detection rate
+    # NOTE: n_samples is the theoretical maximum number of photons detected by the sensor, assuming at most one
+    #       photon can be detected per laser pulse (in the case of event based) or per frame
+
     n_samples = 0
     if 'number_of_samples' in noise_config and noise_config['number_of_samples'] != 0:
+        # Load explicit number of detected samples if defined in configuration file
         n_samples = int(noise_config['number_of_samples'])
-    else:
+    elif noise_config['sensor_type'] == 'frame':
+        # Frame based SPAD
+        frame_exposure_time = float(noise_config['frame_exposure_time']) # Exposure time per frame in microseconds
+
+        n_frames = 0
+        if 'n_frames' in noise_config and noise_config['n_frames'] != '':
+            # Load number of frames from configuration if defined
+            n_frames = int(noise_config['n_frames'])
+        else:
+            # Compute the number of frames given the total exposure time and the per frame exposure time
+            n_frames = floor(exposure_time / (frame_exposure_time * 1e-6))
+
+        # The sensor can only detect at most a single photon per frame
+        n_samples = int(n_frames * photon_detection_ratio)
+
+    elif noise_config['sensor_type'] == 'event':
+        # Event based SPAD
         n_samples = int(exposure_time * laser_frequency * 1e6 * photon_detection_ratio)
         print(f' - Simulated exposure time = {exposure_time:.3f} seconds.')
         print(f' - Laser frequency = {laser_frequency:.2f} MHz.')
+    else:
+        raise AssertionError('sensor_type must be one of ("frame", "event")')
 
     # Expected number of false positive samples (caused by dark counts or external noise)
     n_false_samples = 0
@@ -87,6 +110,7 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
         n_false_samples = int(noise_config['number_of_false_counts'])
     else:
         n_false_samples = int(exposure_time * int(noise_config['dark_count_rate'] + noise_config['external_noise_rate']))
+    print(f'{n_samples=}')
 
     # Afterpulse configuration
     simulate_afterpulses = noise_config['simulate_afterpulses']
@@ -101,7 +125,7 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     H_noise = np.zeros(shape=H.shape)
     jitter_peak_idx = np.argmax(jitter) # To center the jitter function and avoid offseting the signal
     jitter_sampler = DiscreteGuideTable(jitter, random_state=np.random.RandomState())
-    false_count_sampler = DiscreteGuideTable(np.ones(shape=(n_timebins), dtype=float), random_state=np.random.RandomState())
+    false_count_sampler = DiscreteGuideTable(np.ones(shape=(n_timebins), dtype=float), random_state=np.random.RandomState()) # Uniform Guide Table
 
     print(f' - Number of photons sampled = {n_samples}')
     print(f' - Number of false positive samples = {n_false_samples}')

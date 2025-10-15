@@ -16,8 +16,25 @@ dead_time: 1000                 # Hold-off time of the SPAD after each detected 
 simulate_afterpulses: False     # If True, simulates SPAD afterpulsing (increases execution time). If False, afterpulsing is ignored.
 afterpulse_probability : 0.10   # Probability of each detected photon of generating an afterpulse, in range [0, 1]
 exposure_time: 0.001            # Exposure time for each captured point, in seconds
-#number_of_samples: 100000      # Number of captured photons per measurements. If 0 or non-defined, it will be computed
+#number_of_samples: 100000      # Number of captured photons per measurement. If 0 or non-defined, it will be computed
                                 # from exposure time, laser frequency and the photon detection ratio
+sensor_type: 'event'            # Either frame (for frame-based SPADs) or event (for event-based SPADs)
+
+##
+# Frame based SPAD parameters, used if camera_type == 'frame'
+##
+frame_exposure_time: 100  # Exposure time of each SPAD frame in microseconds
+n_frames: 500_000         # Number of measured frames in the capture. During each frame, only one photon can be captured
+                          # If not set, this number is obtained from the total exposure time and the exposure time of each frame
+
+# TODO: not implemented yet
+##
+# SPAD array parameters
+##
+is_spad_array: false         # If true, assumes each measured point corresponds to a pixel in a SPAD array, enabling crosstalk simulation
+crosstalk_probability: 0.001 # Probability of a detected photon triggering an avalanche in a neighboring pixel, in range [0, 1]
+dead_pixel_mask: ''          # Mask indicating which pixels of the SPAD should be ignored (and set to 0).
+                             # If empty or not set, all of the pixels will be taken into account # TODO: define the format
 
 ##
 # External noise
@@ -25,7 +42,7 @@ exposure_time: 0.001            # Exposure time for each captured point, in seco
 dark_count_rate: 1000         # Number of dark counts per second
 external_noise_rate: 1000000  # Number of counts caused by external noise (ambient light) per second
 number_of_false_counts: 0     # Number of false positive photons (either dark counts or external noise).
-                              # If 0 or non-defined, this value is computed from exposure time and noise rates
+# If 0 or non-defined, this value is computed from exposure time and noise rates
 
 ##
 # Laser

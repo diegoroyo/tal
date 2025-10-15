@@ -18,6 +18,14 @@ afterpulse_probability : 0.10   # Probability of each detected photon of generat
 exposure_time: 0.001            # Exposure time for each captured point, in seconds
 number_of_samples: 0            # Number of captured photons per measurements. If 0 or non-defined, it will be computed
                                 # from exposure time, laser frequency and the photon detection ratio
+sensor_type: 'event'            # Either frame (for frame-based SPADs) or event (for event-based SPADs)
+
+##
+# Frame based SPAD parameters, used if camera_type == 'frame'
+##
+frame_exposure_time: 100  # Exposure time of each SPAD frame in microseconds
+# n_frames: 500_000       # Number of measured frames in the capture. During each frame, only one photon can be captured
+                          # If not set, this number is obtained from the total exposure time and the exposure time of each frame
 
 ##
 # External noise
