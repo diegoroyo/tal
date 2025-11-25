@@ -130,18 +130,26 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     print(f' - Number of photons sampled = {n_samples}')
     print(f' - Number of false positive samples = {n_false_samples}')
 
+    H_maximum = np.max(H, axis=None) # Highest signal intensity
+
     # For every transient sequence in the capture
     for i in tqdm(range(n_measurements), total=n_measurements, desc=f'Simulating noise ({n_samples} samples per measurement)...'):
         index = get_indices_from_linear(i, capture_dimensionality, H[0].shape)
         H_original = access_transient_data(H, index, capture_dimensionality)
         H_histogram = np.zeros(shape=H_original.shape)  # Array to store the noised transient data
 
+        # If desired, scale n_samples given the ratio of the maximum of the current measurement and the maximum of the highest measurement
+        if noise_config['intensity_scaling']:
+            n_samples_i = int(n_samples * np.max(H_original, axis=None) / H_maximum)
+        else:
+            n_samples_i = n_samples
+
         # Apply jitter and afterpulsing. If the transient signal is empty, only dark count and ambient noise will be added
         if not (H_original == 0.0).all():
             # Sample n_samples photons arrival timestamps from the original transient data, as well as n_samples jitter values
             H_sampler = DiscreteGuideTable(H_original, random_state=np.random.RandomState())
-            H_sampled = H_sampler.rvs(n_samples)
-            jitter_sampled = jitter_sampler.rvs(n_samples) - jitter_peak_idx
+            H_sampled = H_sampler.rvs(n_samples_i)
+            jitter_sampled = jitter_sampler.rvs(n_samples_i) - jitter_peak_idx
             jitter_sampled_scaled = jitter_sampled * jitter_timebin_width_ps / timebin_width_ps # Transform to the timebin width of the transient data
 
             # Sum the sampled timestamps
@@ -151,10 +159,10 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
             # Afterpulse simulation
             H_afterpulses_histogram = None
             if simulate_afterpulses:
-                previous_afterpulse_mask = np.ones(n_samples, dtype=bool)
+                previous_afterpulse_mask = np.ones(n_samples_i, dtype=bool)
                 for afterpulse_index in range(max_afterpulses):
                     # Generate a mask for all the measurements that cause an afterpulse
-                    afterpulse_samples = np.random.rand(n_samples)
+                    afterpulse_samples = np.random.rand(n_samples_i)
                     afterpulse_mask = afterpulse_samples <= afterpulse_probability
 
                     # Only measurements that caused a previous afterpulse could cause another one

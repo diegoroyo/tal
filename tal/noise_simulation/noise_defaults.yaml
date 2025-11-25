@@ -16,10 +16,12 @@ dead_time: 1000                 # Hold-off time of the SPAD after each detected 
 simulate_afterpulses: False     # If True, simulates SPAD afterpulsing (increases execution time). If False, afterpulsing is ignored.
 afterpulse_probability : 0.10   # Probability of each detected photon of generating an afterpulse, in range [0, 1]
 exposure_time: 0.001            # Exposure time for each captured point, in seconds
-#number_of_samples: 100000      # Number of captured photons per measurement. If 0 or non-defined, it will be computed
-                                # from exposure time, laser frequency and the photon detection ratio
+number_of_samples: 10000      # Number of captured photons per measurement. If 0 or non-defined, it will be computed
+                                #   from exposure time, laser frequency and the photon detection ratio
 sensor_type: 'event'            # Either frame (for frame-based SPADs) or event (for event-based SPADs)
-
+intensity_scaling: True         # If set to True, the number of detected photons is scaled per measurement, given the ratio between
+                                #   the highest intensity in the data and the highest intensity of the current measurement. Thus
+                                #   measurements with lower relative intensity will also appear noisier.
 ##
 # Frame based SPAD parameters, used if camera_type == 'frame'
 ##
