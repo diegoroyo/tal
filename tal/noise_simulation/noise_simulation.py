@@ -123,6 +123,7 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
 
 
     H_noise = np.zeros(shape=H.shape)
+    # plt.plot(jitter); plt.title('Jitter function'); plt.show()
     jitter_peak_idx = np.argmax(jitter) # To center the jitter function and avoid offseting the signal
     jitter_sampler = DiscreteGuideTable(jitter, random_state=np.random.RandomState())
     false_count_sampler = DiscreteGuideTable(np.ones(shape=(n_timebins), dtype=float), random_state=np.random.RandomState()) # Uniform Guide Table
@@ -136,7 +137,7 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
     for i in tqdm(range(n_measurements), total=n_measurements, desc=f'Simulating noise ({n_samples} samples per measurement)...'):
         index = get_indices_from_linear(i, capture_dimensionality, H[0].shape)
         H_original = access_transient_data(H, index, capture_dimensionality)
-        H_histogram = np.zeros(shape=H_original.shape)  # Array to store the noised transient data
+        H_histogram = access_transient_data(H_noise, index, capture_dimensionality) # Array to store the noised transient data
 
         # If desired, scale n_samples given the ratio of the maximum of the current measurement and the maximum of the highest measurement
         if noise_config['intensity_scaling']:
@@ -154,7 +155,7 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
 
             # Sum the sampled timestamps
             H_sampled_convolved = H_sampled + jitter_sampled_scaled
-            H_histogram = np.histogram(H_sampled_convolved, bins=n_timebins, range=(0, n_timebins-1))[0]
+            H_histogram += np.histogram(H_sampled_convolved, bins=n_timebins, range=(0, n_timebins-1))[0]
 
             # Afterpulse simulation
             H_afterpulses_histogram = None
@@ -174,6 +175,38 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
                     H_afterpulses = (H_sampled_convolved + afterpulse_time_offset)[afterpulse_mask]
                     H_afterpulses_histogram = np.histogram(H_afterpulses, bins=n_timebins, range=(0.0, n_timebins-1))[0]
                     H_histogram = H_histogram + H_afterpulses_histogram
+
+            # Crosstalk simulation
+            if noise_config['is_spad_array'] and noise_config['crosstalk_probability'] > 0.0:
+                # Add the crosstalk to the valid neighbors
+
+                # Left neighbor
+                if index[0] != 0:
+                    H_neighbor = access_transient_data(H_noise, (index[0] - 1, index[1]), capture_dimensionality)
+                    H_crosstalk_histogram = compute_crosstalk_histogram(n_samples_i, noise_config['crosstalk_probability'], H_sampled_convolved, n_timebins)
+                    H_neighbor += H_crosstalk_histogram
+                    store_transient_data(H_noise, H_neighbor, (index[0] - 1, index[1]), capture_dimensionality)
+
+                # Upper neighbor
+                if index[1] != 0:
+                    H_neighbor = access_transient_data(H_noise, (index[0], index[1] - 1), capture_dimensionality)
+                    H_crosstalk_histogram = compute_crosstalk_histogram(n_samples_i, noise_config['crosstalk_probability'], H_sampled_convolved, n_timebins)
+                    H_neighbor += H_crosstalk_histogram
+                    store_transient_data(H_noise, H_neighbor, (index[0], index[1] - 1), capture_dimensionality)
+
+                # Right neighbor
+                if index[0] != H[0].shape[0] - 1:
+                    H_neighbor = access_transient_data(H_noise, (index[0] + 1, index[1]), capture_dimensionality)
+                    H_crosstalk_histogram = compute_crosstalk_histogram(n_samples_i, noise_config['crosstalk_probability'], H_sampled_convolved, n_timebins)
+                    H_neighbor += H_crosstalk_histogram
+                    store_transient_data(H_noise, H_neighbor, (index[0] + 1, index[1]), capture_dimensionality)
+
+                # Downward neighbor
+                if index[1] != H[0].shape[1] - 1:
+                    H_neighbor = access_transient_data(H_noise, (index[0], index[1] + 1), capture_dimensionality)
+                    H_crosstalk_histogram = compute_crosstalk_histogram(n_samples_i, noise_config['crosstalk_probability'], H_sampled_convolved, n_timebins)
+                    H_neighbor += H_crosstalk_histogram
+                    store_transient_data(H_noise, H_neighbor, (index[0], index[1] + 1), capture_dimensionality)
 
         # Add other noise sources: dark counts and external noise
         # NOTE: Assumes the same number of false positive counts in all measurements
@@ -278,6 +311,16 @@ def get_indices_from_linear(index:int, capture_dimensionality:int, shape):
     else:
         print('Error, capture is neither single, confocal nor exhaustive')
         exit(1)
+
+
+def compute_crosstalk_histogram(n_samples, crosstalk_probability, H_sampled, n_timebins):
+    crosstalk_samples = np.random.rand(n_samples)
+    crosstalk_mask = crosstalk_samples <= crosstalk_probability
+    H_crosstalk = H_sampled[crosstalk_mask]
+
+    H_crosstalk_histogram = np.histogram(H_crosstalk, bins=n_timebins, range=(0.0, n_timebins-1))[0]
+    print(f'{np.count_nonzero(crosstalk_mask)=}, {H_crosstalk.shape=}')
+    return H_crosstalk_histogram
 
 
 def access_transient_data(transient_data, index_tuple, capture_dimensionality):

@@ -8,7 +8,6 @@ time_jitter_n_timebins: 640     # Number of timebins of the jitter function
 time_jitter_timebin_width: 0.75 # Timebin width of the jitter function in picoseconds. Should be as precise as possible, to avoid aliasing
 
 # Load experimental time-jitter capture from hdf5 file. If defined, the previous parameters are ignored
-# time_jitter_path: '/home/genguita/PycharmProjects/tal_SPAD/spad_data_1.hdf5'
 # time_jitter_path: '' # Leave the path empty (or not set) to use the parametric jitter
 
 photon_detection_ratio: 0.3     # Ratio of photons that are actually detected, in range [0, 1]
@@ -29,14 +28,15 @@ frame_exposure_time: 100  # Exposure time of each SPAD frame in microseconds
 n_frames: 500_000         # Number of measured frames in the capture. During each frame, only one photon can be captured
                           # If not set, this number is obtained from the total exposure time and the exposure time of each frame
 
-# TODO: not implemented yet
 ##
 # SPAD array parameters
 ##
-is_spad_array: false         # If true, assumes each measured point corresponds to a pixel in a SPAD array, enabling crosstalk simulation
-crosstalk_probability: 0.001 # Probability of a detected photon triggering an avalanche in a neighboring pixel, in range [0, 1]
-dead_pixel_mask: ''          # Mask indicating which pixels of the SPAD should be ignored (and set to 0).
-                             # If empty or not set, all of the pixels will be taken into account # TODO: define the format
+is_spad_array: True         # If true, assumes each measured point corresponds to a pixel in a SPAD array, enabling crosstalk simulation
+crosstalk_probability: 0.1  # Probability of a detected photon triggering an avalanche in a neighboring pixel, in range [0, 1]
+                            # Note that very low values may have negligible effects in the signal
+# TODO: dead pixel mask not implemented yet
+dead_pixel_mask: ''         # Mask indicating which pixels of the SPAD should be ignored (and set to 0).
+                            # If empty or not set, all of the pixels will be taken into account
 
 ##
 # External noise
