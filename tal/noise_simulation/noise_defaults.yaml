@@ -34,7 +34,6 @@ n_frames: 500_000         # Number of measured frames in the capture. During eac
 is_spad_array: True         # If true, assumes each measured point corresponds to a pixel in a SPAD array, enabling crosstalk simulation
 crosstalk_probability: 0.1  # Probability of a detected photon triggering an avalanche in a neighboring pixel, in range [0, 1]
                             # Note that very low values may have negligible effects in the signal
-# TODO: dead pixel mask not implemented yet
 dead_pixel_mask: ''         # Mask indicating which pixels of the SPAD should be ignored (and set to 0).
                             # If empty or not set, all of the pixels will be taken into account
 

@@ -133,9 +133,22 @@ def simulate_noise(capture_data_path:str, config_path:str, args):
 
     H_maximum = np.max(H, axis=None) # Highest signal intensity
 
+    use_dead_pixel_mask = False
+    dead_pixel_mask = np.zeros(shape=H[0].shape, dtype=bool)
+    if noise_config['is_spad_array'] and noise_config['dead_pixel_mask'] != '':
+        use_dead_pixel_mask = True
+        dead_pixel_mask = np.load(noise_config['dead_pixel_mask']).astype(bool)
+        assert dead_pixel_mask.shape == H[0].shape, 'Dead pixel mask should match the shape of the spad array simulation'
+
+
     # For every transient sequence in the capture
     for i in tqdm(range(n_measurements), total=n_measurements, desc=f'Simulating noise ({n_samples} samples per measurement)...'):
         index = get_indices_from_linear(i, capture_dimensionality, H[0].shape)
+
+        # Skip the measurement if the pixel is in the dead pixel mask of the spad array
+        if use_dead_pixel_mask and dead_pixel_mask[index[0], index[1]]:
+            continue
+
         H_original = access_transient_data(H, index, capture_dimensionality)
         H_histogram = access_transient_data(H_noise, index, capture_dimensionality) # Array to store the noised transient data
 
@@ -319,7 +332,6 @@ def compute_crosstalk_histogram(n_samples, crosstalk_probability, H_sampled, n_t
     H_crosstalk = H_sampled[crosstalk_mask]
 
     H_crosstalk_histogram = np.histogram(H_crosstalk, bins=n_timebins, range=(0.0, n_timebins-1))[0]
-    print(f'{np.count_nonzero(crosstalk_mask)=}, {H_crosstalk.shape=}')
     return H_crosstalk_histogram
 
 
