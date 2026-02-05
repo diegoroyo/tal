@@ -42,6 +42,8 @@ integrator_nlos_hidden_geometry_sampling: true
 integrator_nlos_hidden_geometry_sampling_do_rroulette: false
 integrator_nlos_hidden_geometry_sampling_includes_relay_wall: true
 # Number of samples per pixel (spatial pixel, not time dimension pixel)
+# NOTE: for the noise simulation is important to have a high number of samples, so the transient signal converges.
+#       Then, the desired amount of noise can be obtained through tal noise_simulation.
 sample_count: 1000000
 # Transient Mitsuba's film properties
 # See mitsuba{2|3}-transient-nlos' documentation for transient_hdr_film

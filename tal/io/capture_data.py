@@ -160,6 +160,32 @@ class NLOSCaptureData:
                 If it hits, depth[i, j] stores the distance from the relay wall to the hit point.
             - 'normals': GroundTruthNormalsType (TensorXY3)
                 Similar to depth, but stores the normal of the hidden geometry at the hit point.
+
+    noise_info
+        YAML-encoded string. Contains additional information about the simulated noise (if any). Implemented keys:
+        - time_jitter_FWHM: FWHM of the gaussian component of the SPAD's time-jitter, in picoseconds
+        - time_jitter_tail: Tail (exponential decay parameter) of the exponential component of the
+                SPAD's time-jitter, in picoseconds
+        - time_jitter_tail_scale: Relative scale of the peak of the exponential decay in the time-jitter
+                with respect to the gaussian component
+        - time_jitter_n_timebins: Number of timebins of the jitter function
+        - time_jitter_timebin_width: Timebin width of the jitter function in picoseconds.
+                Should be as precise as possible, to avoid aliasing
+        - time_jitter_path: Leave the path empty (or not set) to use the parametric jitter
+        - photon_detection_ratio: Ratio of photons that are actually detected, in range [0, 1]
+        - dead_time: Hold-off time of the SPAD after each detected photon, in picoseconds
+        - simulate_afterpulses: If True, simulates SPAD afterpulsing (increases execution time).
+                If False, afterpulsing is ignored
+        - afterpulse_probability: Probability of each detected photon of generating an afterpulse, in range [0, 1]
+        - exposure_time: Exposure time for each captured point, in seconds
+        - number_of_samples: Number of captured photons per measurements. If 0 or non-defined,
+                it will be computed from exposure time, laser frequency and the photon detection ratio
+        - dark_count_rate: Number of dark counts per second
+        - external_noise_rate: Number of counts caused by external noise (ambient light) per second
+        - number_of_false_counts: Number of false positive photons (either dark counts or external noise).
+                If 0 or non-defined, this value is computed from exposure time and noise rates
+        - laser_jitter_FWHM: FWHM of the gaussian laser pulse, in picoseconds
+        - frequency: Pulse frequency (nº of pulses per second) in MHz
     """
 
     #
@@ -209,6 +235,8 @@ class NLOSCaptureData:
     t_start: Float = None
     t_accounts_first_and_last_bounces: bool = None
     scene_info: dict = None  # additional information
+    noise_info: dict = None
+    jitter: dict = None
     _end: None = None  # used in as_dict()
 
     def __get_dict_keys(self):
@@ -247,7 +275,7 @@ class NLOSCaptureData:
         for key, value in raw_data.items():
             if key not in own_dict_keys:
                 raise AssertionError(f'raw_data contains unknown key: {key}')
-            if key == 'scene_info':
+            if key == 'scene_info' or key == 'noise_info' or key == 'jitter':
                 if isinstance(value, h5py.Empty) or isinstance(value, dict):
                     pass
                 else:

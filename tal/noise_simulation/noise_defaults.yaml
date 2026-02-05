@@ -1,0 +1,53 @@
+##
+# SPAD parameters
+##
+time_jitter_FWHM: 20            # FWHM of the gaussian component of the SPAD's time-jitter, in picoseconds
+time_jitter_tail: 50            # Tail (exponential decay parameter) of the exponential component of the SPAD's time-jitter, in picoseconds
+time_jitter_tail_scale: 0.8     # Relative scale of the peak of the exponential decay in the time-jitter with respect to the gaussian component
+time_jitter_n_timebins: 640     # Number of timebins of the jitter function
+time_jitter_timebin_width: 0.75 # Timebin width of the jitter function in picoseconds. Should be as precise as possible, to avoid aliasing
+
+# Load experimental time-jitter capture from hdf5 file. If defined, the previous parameters are ignored
+# time_jitter_path: '' # Leave the path empty (or not set) to use the parametric jitter
+
+photon_detection_ratio: 0.3     # Ratio of photons that are actually detected, in range [0, 1]
+dead_time: 1000                 # Hold-off time of the SPAD after each detected photon, in picoseconds
+simulate_afterpulses: False     # If True, simulates SPAD afterpulsing (increases execution time). If False, afterpulsing is ignored.
+afterpulse_probability : 0.10   # Probability of each detected photon of generating an afterpulse, in range [0, 1]
+exposure_time: 0.001            # Exposure time for each captured point, in seconds
+number_of_samples: 10000      # Number of captured photons per measurement. If 0 or non-defined, it will be computed
+                                #   from exposure time, laser frequency and the photon detection ratio
+sensor_type: 'event'            # Either frame (for frame-based SPADs) or event (for event-based SPADs)
+intensity_scaling: True         # If set to True, the number of detected photons is scaled per measurement, given the ratio between
+                                #   the highest intensity in the data and the highest intensity of the current measurement. Thus
+                                #   measurements with lower relative intensity will also appear noisier.
+##
+# Frame based SPAD parameters, used if camera_type == 'frame'
+##
+frame_exposure_time: 100  # Exposure time of each SPAD frame in microseconds
+n_frames: 500_000         # Number of measured frames in the capture. During each frame, only one photon can be captured
+                          # If not set, this number is obtained from the total exposure time and the exposure time of each frame
+
+##
+# SPAD array parameters
+##
+is_spad_array: True         # If true, assumes each measured point corresponds to a pixel in a SPAD array, enabling crosstalk simulation
+crosstalk_probability: 0.1  # Probability of a detected photon triggering an avalanche in a neighboring pixel, in range [0, 1]
+                            # Note that very low values may have negligible effects in the signal
+dead_pixel_mask: ''         # Mask indicating which pixels of the SPAD should be ignored (and set to 0).
+                            # If empty or not set, all of the pixels will be taken into account
+
+##
+# External noise
+##
+dark_count_rate: 1000         # Number of dark counts per second
+external_noise_rate: 1000000  # Number of counts caused by external noise (ambient light) per second
+number_of_false_counts: 0     # Number of false positive photons (either dark counts or external noise).
+# If 0 or non-defined, this value is computed from exposure time and noise rates
+
+##
+# Laser
+##
+laser_jitter_FWHM: 30 # FWHM of the gaussian laser pulse, in picoseconds
+frequency: 20         # Pulse frequency (nº of pulses per second) in MHz
+

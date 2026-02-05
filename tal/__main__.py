@@ -114,6 +114,19 @@ def main():
                                dest='keep_partial_results', action='store_false',
                                help='Delete the "partial" folder (which stores raw render results) after finishing the render and generating the final HDF5 file')
 
+    # noise simulation commands
+    noise_simulation_parser = subparsers.add_parser(
+        'noise_simulation', help='Simulate noise for already generated capture data', formatter_class=SmartFormatter)
+    noise_simulation_parser.add_argument('-c', '--capture_file',
+                                         type=str, required=True,
+                                         help='Path to the .hdf5 capture file to add noise to')
+    noise_simulation_parser.add_argument('-n', '--noise_config_file',
+                                         type=str, required=True,
+                                         help='Path to the .yaml configuration file for the noise simulation')
+    noise_simulation_parser.add_argument('-o', '--output_path',
+                                         type=str, required=True,
+                                          help='Path to save the capture data with the simulated noise')
+
     # plot commands
     plot_parser = subparsers.add_parser(
         'plot', help='Plot capture data using one of the configured methods', formatter_class=SmartFormatter)
@@ -181,6 +194,15 @@ def main():
             from tal.render import render_nlos_scene
             config_file = config_file[0]
             render_nlos_scene(config_file, args)
+    elif args.command == 'noise_simulation':
+        from tal.noise_simulation import simulate_noise
+        from tal.io import write_capture
+        from tal.io import FileFormat
+        config_path = args.noise_config_file
+        capture_data_noisy = simulate_noise(args.capture_file, config_path, args)
+        write_capture(args.output_path, capture_data_noisy, FileFormat.HDF5_TAL, 0)
+        print(f'Processed capture saved to {args.output_path}')
+        return
     elif args.command == 'plot':
         import tal.plot
         from tal.io import read_capture

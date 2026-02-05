@@ -63,6 +63,7 @@ positional arguments:
   {config,render,plot}  Command
     config              Edit the TAL configuration file
     render              Create, edit or execute renders of simulated NLOS scene data captures
+    noise_simulation    Simulate noise for already generated capture data
     plot                Plot capture data using one of the configured methods
 
 optional arguments:
@@ -251,6 +252,34 @@ V = np.moveaxis(np.mgrid[-1:1.1:0.1, -1:1.1:0.1, 0.5:2.6:0.1], 0, -1).reshape(-1
 reconstruction = tal.reconstruct.pf.solve(data, 6, 4, V, verbose=3, n_threads=1)
 ```
 
+## `tal noise_simulation`: Command line tool to simulate SPAD noise
+
+`tal noise_simulation` modifies a transient capture previously generated with `tal render`, simulating the noise
+caused by a capture with a Single Photon Avalanche Diode (SPAD) sensor. Following [Hernandez2017] the noise simulation 
+takes random photon samples from the ground truth transient signal, with an added temporal jitter randomly sampled from
+the time jitter function of the SPAD, as well as the gaussian pulse of the laser.
+
+The simulation also models other sources of noise, namely dark counts and external noise caused by ambient lighting, as
+well as afterpulsing. You can find examples on how to use the noise simulation in the 
+[`examples`](https://github.com/diegoroyo/tal/tree/master/examples) folder of this repository. 
+Note that to test the noise simulation you will need to have a HDF5 capture file. 
+If you don't, please check the `tal render` section or [convert your data to a format usable by `tal`](https://github.com/diegoroyo/tal/blob/master/tal/io/format.py).
+
+
+```
+❯ tal noise_simulation -h
+usage: tal noise_simulation [-h] -c CAPTURE_FILE -n NOISE_CONFIG_FILE -o OUTPUT_PATH
+
+options:
+  -h, --help            show this help message and exit
+  -c CAPTURE_FILE, --capture_file CAPTURE_FILE
+                        Path to the .hdf5 capture file to add noise to
+  -n NOISE_CONFIG_FILE, --noise_config_file NOISE_CONFIG_FILE
+                        Path to the .yaml configuration file for the noise simulation
+  -o OUTPUT_PATH, --output_path OUTPUT_PATH
+                        Path to save the capture data with the simulated noise
+```
+
 ### Logging
 
 The verbosity of the output can be controlled through `tal.set_log_level(level)`.
@@ -289,6 +318,8 @@ tal.set_resources(4)  # use 4 CPUs
 > [Velten2012] Velten, A., Willwacher, T., Gupta, O., Veeraraghavan, A., Bawendi, M. G., & Raskar, R. (2012). Recovering three-dimensional shape around a corner using ultrafast time-of-flight imaging. Nature communications, 3(1), 745.
 
 > [Liu2019] Liu, X., Guillén, I., La Manna, M., Nam, J. H., Reza, S. A., Huu Le, T., ... & Velten, A. (2019). Non-line-of-sight imaging using phasor-field virtual wave optics. Nature, 572(7771), 620-623.
+
+> [Hernandez2017] Hernández, Q., Gutiérrez, D., Jarabo, A. (2017) A Computational Model of a Single-Photon Avalanche Diode Sensor for Transient Imaging. Technical report (arXiv:1703.02635).
 
 ### License and citation
 
