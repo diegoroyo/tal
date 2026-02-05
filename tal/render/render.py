@@ -426,7 +426,8 @@ def _main_render(config_path, args,
             __run_mitsuba(args, log_path, mitsuba_backend, mitsuba_variant, steady_scene_xml, hdr_path, dict(),
                           experiment_name, render_name, sensor_index, check_done=lambda: os.path.exists(ldr_path))
 
-            if not args.dry_run:
+            import mitsuba
+            if not args.dry_run and 'polarized' not in mitsuba.variant():
                 mitsuba_backend.convert_hdr_to_ldr(hdr_path, ldr_path)
 
         render_steady('back_view', 0)

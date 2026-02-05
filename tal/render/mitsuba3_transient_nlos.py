@@ -76,6 +76,9 @@ def set_variant(s):
     if not (s.startswith('llvm_') or s.startswith('cuda_')):
         raise AssertionError(
             f'Variant {s} is not supported. It must start with "llvm_" or "cuda_"')
+    if 'polarized' in s and 'mono' not in s:
+        raise AssertionError(
+            f'Variant {s} is not supported. TAL currently does not support "rgb" or "spectral" polarized variants')
     mitsuba.set_variant(s)
 
 
@@ -203,22 +206,12 @@ def get_scene_xml(config, random_seed=0):
         </integrator>''')
 
     if 'polarized' in v('mitsuba_variant'):
-        # TODO(diego): mitsuba3 does not have a transient stokes integrator yet
-        # https://github.com/mitsuba-renderer/mitsuba3/blob/master/src/integrators/stokes.cpp
-        # https://github.com/diegoroyo/mitsuba2-transient-nlos/blob/a270850d1f9b9d863e759f880048df665cd7d2a1/src/integrators/transientstokes.cpp
-        # https://github.com/diegoroyo/mitsuba3-transient-nlos/blob/main/mitransient/integrators/transientnlospath.py
-        # the end goal would be to generate a transient stokes plugin in python (like transient_nlos_path.py)
-        # that implements the functionality of stokes.cpp similar to mitsuba2-transient-nlos's transientstokes.cpp
-        raise NotImplementedError(
-            'Polarized variants are not implemented in mitsuba3 yet')
-
         def add_stokes(s, itype):
             return fdent('''\
                 <integrator type="{itype}">
                     {s}
                 </integrator>''', itype=itype, s=s)
         integrator_steady = add_stokes(integrator_steady, 'stokes')
-        integrator_nlos = add_stokes(integrator_nlos, 'transientstokes')
 
     # relay wall
     geometry_names = list(map(lambda g: g['name'], v('geometry')))
@@ -693,6 +686,9 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
         else:
             image = integrator.render(scene, sensor=sensor_index)
             result = np.array(image)
+            import mitsuba
+            if mitsuba.variant().endswith('_polarized') and '_ground_truth' not in hdr_path:
+                result = np.array(image)[:, :, [0, 4, 7, 10]]
 
         np.save(hdr_path, result)
 
@@ -700,7 +696,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
     except Exception as e:
         import traceback
         import sys
-        print('/!\ Mitsuba process threw an exception:', e, file=sys.stderr)
+        print('! Mitsuba process threw an exception:', e, file=sys.stderr)
         print('', file=sys.stderr)
         print('Traceback:', file=sys.stderr)
         print(traceback.format_exc(), file=sys.stderr)
