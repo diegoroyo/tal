@@ -189,12 +189,18 @@ def get_scene_xml(config, random_seed=0):
             <string name="aovs" value="pp:position, nn:geo_normal"/>
         </integrator>''')
 
+    scan_type_map = {'single': 1, 'confocal': 2, 'exhaustive': 3}
+
     integrator_nlos = fdent(f'''\
         <integrator type="transient_nlos_path">
             <integer name="block_size" value="1"/>
             <integer name="max_depth" value="{v('integrator_max_depth')}"/>
             <integer name="filter_bounces" value="{v('integrator_filter_bounces')}"/>
             <boolean name="discard_direct_paths" value="{v('integrator_discard_direct_paths')}"/>
+            <boolean name="account_first_and_last_bounces" value="{v('account_first_and_last_bounces')}"/>
+            <integer name="capture_type" value="{scan_type_map[v('scan_type')]}"/>
+            <boolean name="force_equal_illumination_scanning" value="{v('integrator_force_equal_illumination_scanning')}"/>
+            <float name="illumination_scan_fov" value="{v('integrator_illumination_scan_fov')}"/>
             <boolean name="nlos_laser_sampling" value="{v('integrator_nlos_laser_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling" value="{v('integrator_nlos_hidden_geometry_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling_do_rroulette" value="{v('integrator_nlos_hidden_geometry_sampling_do_rroulette')}"/>
@@ -341,14 +347,15 @@ def get_scene_xml(config, random_seed=0):
                        laser_x=laser_x, laser_y=laser_y, laser_z=laser_z,
                        laser_emission=laser_emission, laser_fov=laser_fov)
 
-    if v('scan_type') == 'confocal':
+    if v('scan_type') == 'confocal' and not config['simultaneous_scan']:
         film_width = 1
         film_height = 1
         confocal_config = fdent(f'''\
             <integer name="original_film_width" value="{v('sensor_width')}"/>
             <integer name="original_film_height" value="{v('sensor_height')}"/>
         ''')
-    elif v('scan_type') == 'single' or v('scan_type') == 'exhaustive':
+    elif v('scan_type') == 'single' or v('scan_type') == 'exhaustive' or \
+          (v('scan_type') == 'confocal' and config['simultaneous_scan']):
         film_width = v('sensor_width')
         film_height = v('sensor_height')
         confocal_config = ''
