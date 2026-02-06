@@ -5,7 +5,7 @@ mitsuba_variant: $default_mitsuba_variant$  # see mitsuba for possible types
 integrator_max_depth: -1
 integrator_filter_bounces: -1
 integrator_discard_direct_paths: false
-integrator_force_equal_illumination_scanning: false
+integrator_force_equal_illumination_scanning: true
 integrator_illumination_scan_fov: 20
 integrator_nlos_laser_sampling: true
 integrator_nlos_hidden_geometry_sampling: false

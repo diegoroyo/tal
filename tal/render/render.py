@@ -155,13 +155,13 @@ def __write_metadata_and_get_laser_lookats(mitsuba_backend, args, scene_config, 
     laser_aperture_end_x = scene_config['laser_aperture_end_x'] or 1
     laser_aperture_end_y = scene_config['laser_aperture_end_y'] or 1
 
-    if scan_type == 'single' or (scan_type == 'confocal' and simultaneous_scan):
+    if scan_type == 'single' or ((scan_type == 'confocal' or scan_type == 'exhaustive') and simultaneous_scan):
         laser_lookat_x = \
             scene_config['laser_lookat_x'] or sensor_width / 2
         laser_lookat_y = \
             scene_config['laser_lookat_y'] or sensor_height / 2
         laser_lookats.append((0, 0, laser_lookat_x, laser_lookat_y))
-    elif scan_type == 'exhaustive' or (scan_type == 'confocal' and not simultaneous_scan):
+    elif (scan_type == 'exhaustive' or scan_type == 'confocal') and not simultaneous_scan:
         assert not (scan_type == 'confocal' and
                     (laser_width != sensor_width or
                         laser_height != sensor_height)), \
@@ -361,13 +361,14 @@ def __merge_gt_results(args, mitsuba_backend, capture_data, gt_path):
 
 
 def __merge_nlos_results(args, mitsuba_backend, capture_data, partial_results_dir, experiment_name, scan_type, laser_lookats, simultaneous_scan):
-    if scan_type == 'single' or (scan_type == 'confocal' and simultaneous_scan):
+    if scan_type == 'single' or ((scan_type == 'confocal' or scan_type == 'exhaustive') and simultaneous_scan):
         hdr_path, _ = mitsuba_backend.partial_laser_path(
             partial_results_dir,
             experiment_name,
             *laser_lookats[0][0:2])
         capture_data.H = mitsuba_backend.read_transient_image(hdr_path)
-    elif scan_type == 'exhaustive' or (scan_type == 'confocal' and not simultaneous_scan):
+        print(f'{capture_data.H.shape=}')
+    elif (scan_type == 'exhaustive' or scan_type == 'confocal') and not simultaneous_scan:
         if len(laser_lookats) > 1:
             laser_lookats = tqdm(
                 laser_lookats, desc='Merging partial results...',
@@ -494,6 +495,10 @@ def _main_render(config_path, args,
             args, mitsuba_backend, capture_data, partial_results_dir, experiment_name, scan_type, laser_lookats, simultaneous_scanning)
     except RenderException as exc:
         if num_retries >= 10:
+            if scene_config['scan_type'] == 'exhaustive':
+                print('If exhaustive captures fail due to high memory usage, try to reduce the resolution of the scan, '
+                      'or the number of bins of the histograms. Besides, you can try setting "simultaneous_scan" to false, '
+                      'however, be aware that this will require significatively longer execution times.')
             raise AssertionError(
                 f'Failed to read partial results after {num_retries} retries')
         # TODO(diego): Mitsuba sometimes fails to write some images,
