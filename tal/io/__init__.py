@@ -26,7 +26,14 @@ def read_capture(filename: str, file_format: FileFormat = FileFormat.AUTODETECT,
     See tal.io.NLOSCaptureData for information about the data structure.
     """
     from tal.io.capture_data import NLOSCaptureData
-    return NLOSCaptureData(filename, file_format=file_format, skip_H=skip_H)
+    capture = NLOSCaptureData(filename, file_format=file_format, skip_H=skip_H)
+
+    if (capture.H.ndim == 4 or capture.H.ndim == 6) and capture.H.shape[-1] == 4:
+        print('WARNING: The loaded capture was rendered with a polarized backend. '
+              'The reconstruction algorithms provided only support unpolarized data, '
+              'if you need to use them, use only the intensity component of the Stokes vector: '
+              'data[..., 0].')
+    return capture
 
 
 def write_capture(filename: str, capture_data: NLOSCaptureData, file_format: FileFormat = FileFormat.HDF5_TAL,
