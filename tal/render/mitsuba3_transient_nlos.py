@@ -362,6 +362,12 @@ def get_scene_xml(config, random_seed=0):
     else:
         raise AssertionError(
             'scan_type should be one of {single|confocal|exhaustive}')
+
+    laser_scan_width = laser_scan_height = 0
+    if v('scan_type') == 'exhaustive':
+        laser_scan_width = v('laser_width')
+        laser_scan_height = v('laser_height')
+
     histogram_mode = v('histogram_mode') or 'time'
     if histogram_mode == 'time':
         film_xml = fdent('''\
@@ -376,13 +382,19 @@ def get_scene_xml(config, random_seed=0):
                 <rfilter type="box">
                     <!-- <float name="radius" value="0.5"/> -->
                 </rfilter>
+                <boolean name="exhaustive_scan" value="{exhaustive_scan}"/>
+                <integer name="laser_scan_width" value="{laser_scan_width}"/>
+                <integer name="laser_scan_height" value="{laser_scan_height}"/>
             </film>''',
                          film_width=film_width,
                          film_height=film_height,
                          num_bins=v('num_bins'),
                          auto_detect_bins=v('auto_detect_bins'),
                          bin_width_opl=v('bin_width_opl'),
-                         start_opl=v('start_opl'))
+                         start_opl=v('start_opl'),
+                         exhaustive_scan=v('scan_type') == 'exhaustive',
+                         laser_scan_width=laser_scan_width,
+                         laser_scan_height=laser_scan_height)
     elif histogram_mode == 'frequency':
         assert v('wl_mean') is not None, 'wl_mean must be specified'
         assert v('wl_sigma') is not None, 'wl_sigma must be specified'
@@ -420,7 +432,6 @@ def get_scene_xml(config, random_seed=0):
             </sampler>
 
             {confocal_config}
-            <boolean name="account_first_and_last_bounces" value="{account_first_and_last_bounces}"/>
             <point name="sensor_origin" x="{sensor_x}"
                                         y="{sensor_y}"
                                         z="{sensor_z}"/>
@@ -429,8 +440,6 @@ def get_scene_xml(config, random_seed=0):
                         sample_count=v('sample_count'),
                         random_seed=random_seed,
                         confocal_config=confocal_config,
-                        account_first_and_last_bounces=v(
-                            'account_first_and_last_bounces'),
                         sensor_x=v('sensor_x'),
                         sensor_y=v('sensor_y'),
                         sensor_z=v('sensor_z'),
@@ -686,10 +695,12 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             if result.ndim == 2:
                 nt, nc = result.shape
                 result = result.reshape((nt, 1, 1, nc))
-            result = np.moveaxis(result, 2, 0)
+            result = np.moveaxis(result, -2, 0)
             result = np.swapaxes(result, 1, 2)
-            # result has shape (nt, nx, ny, nchannels)
-            if result.ndim == 4:
+            if result.ndim == 6:
+                result = np.swapaxes(result, 3, 4)
+            # result has shape (nt, nx, ny, nchannels or nt, nx, ny, nx_laser, ny_laser, nchannels)
+            if result.ndim == 4 or result.ndim == 6:
                 # sum all channels
                 result = np.sum(result, axis=-1)
             if isinstance(scene.sensors()[0].film(), PhasorHDRFilm):
