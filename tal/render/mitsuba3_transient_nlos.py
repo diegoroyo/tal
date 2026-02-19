@@ -78,7 +78,7 @@ def set_variant(s):
             f'Variant {s} is not supported. It must start with "llvm_" or "cuda_"')
     if 'polarized' in s and 'mono' not in s:
         raise AssertionError(
-            f'Variant {s} is not supported. TAL currently does not support "rgb" or "spectral" polarized variants')
+            f'Variant {s} is not supported. We do not support polarized versions of "rgb" or "spectral" variants')
     mitsuba.set_variant(s)
 
 
@@ -690,6 +690,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             result = np.array(image)
             import mitsuba
             if mitsuba.variant().endswith('_polarized') and '_ground_truth' not in hdr_path:
+                # only take unpolarized components
                 result = np.array(image)[:, :, [0, 4, 7, 10]]
 
         np.save(hdr_path, result)
@@ -698,7 +699,7 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
     except Exception as e:
         import traceback
         import sys
-        print('! Mitsuba process threw an exception:', e, file=sys.stderr)
+        print('/!\\ Mitsuba process threw an exception:', e, file=sys.stderr)
         print('', file=sys.stderr)
         print('Traceback:', file=sys.stderr)
         print(traceback.format_exc(), file=sys.stderr)
