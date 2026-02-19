@@ -8,33 +8,41 @@ from tal.io.capture_data import NLOSCaptureData
 def resolve_lct(H_0, sensor_grid_xyz, delta_t: float, diffuse_material: bool, backprojection: bool, snr: float) -> NLOSCaptureData.SingleReconstructionType:
     """
     Resolve the Light Cone Transform (LCT) reconstruction.
+
     H_0
         The input data in the time domain, shaped as (nt, nx, ny).
+
     sensor_grid_xyz
         The sensor grid coordinates, shaped as (nx, ny, 3).
+
     delta_t
-        The time step between samples.
+        The time step between samples (measured in optical path length).
+
     diffuse_material
         Whether the material is diffuse or not.
+
     backprojection
         If True, the reconstruction is done using backprojection.
+
     snr
         The signal-to-noise ratio for the reconstruction.
+
     Returns
         The reconstructed volume in the time domain, shaped as (nt, nx, ny).
     """
     nt, nx, ny = H_0.shape
-    width = sensor_grid_xyz[-1,-1,0]
-    range = delta_t * nt
+    width = sensor_grid_xyz[-1, -1, 0]
+    t_range = delta_t * nt
 
     # Define NLOS blur kernel
-    inverse_psf = define_psf(H_0.shape, width / range, backprojection, snr)
+    inverse_psf = define_psf(H_0.shape, width / t_range, backprojection, snr)
 
     # Define transform operators
     mtx, mtxi = resampling_operator(nt)
 
     # Define volume representing voxel distance from wall
-    grid_z = np.tile(np.linspace(0, 1, nt)[:, np.newaxis, np.newaxis], (1, nx, ny))
+    grid_z = np.tile(np.linspace(0, 1, nt)[:, np.newaxis, np.newaxis],
+                     (1, nx, ny))
 
     # Scale radiometric component
     if diffuse_material:
@@ -47,7 +55,7 @@ def resolve_lct(H_0, sensor_grid_xyz, delta_t: float, diffuse_material: bool, ba
     H_1 = mtx @ H_1
     H_1 = H_1.reshape(nt, nx, ny)
 
-    f_H_1 = np.zeros((2 * nt, 2 * nx, 2 * ny), dtype=np.complex128)  
+    f_H_1 = np.zeros((2 * nt, 2 * nx, 2 * ny), dtype=np.complex64)
     f_H_1[:nt, :nx, :ny] = H_1
 
     # Apply the inverse PSF and transform to the time domain again
@@ -70,7 +78,8 @@ def define_psf(shape: tuple, slope: float, backprojection: bool, snr: float) -> 
     # Define PSF
     psf = np.abs(((4 * slope) ** 2) * (grid_x ** 2 + grid_y ** 2) - grid_z)
     psf = (psf == np.min(psf, axis=0, keepdims=True)).astype(float)
-    psf = psf / np.sum(psf[:, shape[1], shape[2]])      # Normalize along z-axis
+    # Normalize along z-axis
+    psf = psf / np.sum(psf[:, shape[1], shape[2]])
     psf = psf / np.linalg.norm(psf)
     psf = np.roll(psf, shape[1:], axis=(1, 2))          # Shift to center
 
@@ -86,7 +95,8 @@ def define_psf(shape: tuple, slope: float, backprojection: bool, snr: float) -> 
 
 def resampling_operator(M):
     """Define resampling operators"""
-    mtx = lil_matrix((M ** 2, M))           # We need an sparse matrix for efficiency; the final mtx and mtxi are shaped as (M, M) though
+    # We need an sparse matrix for efficiency; the final mtx and mtxi are shaped as (M, M) though
+    mtx = lil_matrix((M ** 2, M))
 
     x = np.arange(1, M ** 2 + 1)
     rows = x - 1
@@ -96,7 +106,8 @@ def resampling_operator(M):
     mtxi = mtx.T
 
     K = int(np.round(np.log2(M)))
-    for k in range(K):                      # Merge every two rows and columns until we have M rows and columns
+    # Merge every two rows and columns until we have M rows and columns
+    for _ in range(K):
         mtx = 0.5 * (mtx[::2] + mtx[1::2])
         mtxi = 0.5 * (mtxi[:, ::2] + mtxi[:, 1::2])
 

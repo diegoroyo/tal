@@ -16,29 +16,28 @@ data.
 
 from tal.io.capture_data import NLOSCaptureData
 
-def solve(data: NLOSCaptureData, diffuse_material: bool = False, backprojection : bool = False, snr: float = 8e-1) -> NLOSCaptureData.SingleReconstructionType:
+
+def solve(data: NLOSCaptureData,
+          diffuse_material: bool = False,
+          backprojection: bool = False,
+          snr: float = 8e-1) -> NLOSCaptureData.SingleReconstructionType:
     """
-    See module description of tal.reconstruct.fbp
+    Reconstruction using the Light Cone Transform (LCT) algorithm.
 
     data
         See tal.io.read_capture
+
     diffuse_material
         If True, the material is considered diffuse, which affects the radiometric scaling.
+
     backprojection
         If True, the reconstruction is done using backprojection.
+
     snr
         The signal-to-noise ratio for the reconstruction, used in the Wiener filter.
     """
     assert data.is_confocal(), \
         "Data must be confocal to use LCT with y-tal"
 
-    if data.is_confocal():
-        from tal.config import get_resources
-
-        downscale = get_resources().downscale
-        if downscale is not None and downscale > 1:
-            data.downscale(downscale)
-
-        from tal.reconstruct.lct.lct import resolve_lct
-        
-        return resolve_lct(data.H, data.sensor_grid_xyz, data.delta_t, diffuse_material, backprojection, snr)
+    from tal.reconstruct.lct.lct import resolve_lct
+    return resolve_lct(data.H, data.sensor_grid_xyz, data.delta_t, diffuse_material, backprojection, snr)
