@@ -108,7 +108,6 @@ def remove_transient_image(path):
 
 
 def is_H_in_frequency_domain(config):
-    import numpy as np
     if 'histogram_mode' not in config or config['histogram_mode'] == 'time':
         return False
     elif config['histogram_mode'] == 'frequency':
@@ -189,8 +188,6 @@ def get_scene_xml(config, random_seed=0):
             <string name="aovs" value="pp:position, nn:geo_normal"/>
         </integrator>''')
 
-    scan_type_map = {'single': 1, 'confocal': 2, 'exhaustive': 3}
-
     integrator_nlos = fdent(f'''\
         <integrator type="transient_nlos_path">
             <integer name="block_size" value="1"/>
@@ -198,7 +195,7 @@ def get_scene_xml(config, random_seed=0):
             <integer name="filter_bounces" value="{v('integrator_filter_bounces')}"/>
             <boolean name="discard_direct_paths" value="{v('integrator_discard_direct_paths')}"/>
             <boolean name="account_first_and_last_bounces" value="{v('account_first_and_last_bounces')}"/>
-            <integer name="capture_type" value="{scan_type_map[v('scan_type')]}"/>
+            <string name="capture_type" value="{v('scan_type')}"/>
             <boolean name="force_equal_illumination_scanning" value="{v('integrator_force_equal_illumination_scanning')}"/>
             <float name="illumination_scan_fov" value="{v('integrator_illumination_scan_fov')}"/>
             <boolean name="nlos_laser_sampling" value="{v('integrator_nlos_laser_sampling')}"/>
@@ -692,20 +689,30 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             steady_image, transient_image = integrator.render(
                 scene, sensor=sensor_index, progress_callback=update_progress)
             result = np.array(transient_image)
+            # result has shape (nt, nchannels) or (ny, nx, nt, nchannels) or (ny, nx, ny_laser, nx_laser, nt, nchannels)
             if result.ndim == 2:
                 nt, nc = result.shape
-                result = result.reshape((nt, 1, 1, nc))
-            result = np.moveaxis(result, -2, 0)
-            result = np.swapaxes(result, 1, 2)
-            if result.ndim == 6:
-                result = np.swapaxes(result, 3, 4)
-            # result has shape (nt, nx, ny, nchannels or nt, nx, ny, nx_laser, ny_laser, nchannels)
-            if result.ndim == 4 or result.ndim == 6:
-                # sum all channels
-                result = np.sum(result, axis=-1)
+                result = result.reshape((1, 1, nt, nc))
+            # result has shape (ny, nx, nt, nchannels or (ny, nx, ny_laser, nx_laser, nt, nchannels)
+            # we want to convert it to (nt, nx, ny) or (nt, nx_laser, ny_laser, nx, ny)
+            # regarding the channels:
+            # - if it's a PhasorHDRFilm, we convert (real, imag) to complex and sum all channels
+            # - if it's polarized we keep all channels, and warn the user that they'll need to handle them
+            # - otherwise we sum all channels
+            if result.ndim == 4:
+                result = result.transpose(2, 1, 0, 3)
+            elif result.ndim == 6:
+                result = result.transpose(4, 3, 2, 1, 0, 5)
+            else:
+                raise AssertionError(
+                    f'Unexpected number of dimensions in transient image: {result.ndim}')
+
             if isinstance(scene.sensors()[0].film(), PhasorHDRFilm):
                 # convert (real, imag) to complex
-                result = result[::2, ...] + 1j * result[1::2, ...]
+                result = result[..., ::2] + 1j * result[..., 1::2]
+            elif 'polarized' not in mi.variant():
+                result = np.sum(result, axis=-1)
+
             progress_bar.close()
             del steady_image, transient_image, progress_bar
         else:
