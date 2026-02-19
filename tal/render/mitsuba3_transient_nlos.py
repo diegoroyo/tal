@@ -111,7 +111,6 @@ def remove_transient_image(path):
 
 
 def is_H_in_frequency_domain(config):
-    import numpy as np
     if 'histogram_mode' not in config or config['histogram_mode'] == 'time':
         return False
     elif config['histogram_mode'] == 'frequency':
@@ -198,6 +197,10 @@ def get_scene_xml(config, random_seed=0):
             <integer name="max_depth" value="{v('integrator_max_depth')}"/>
             <integer name="filter_bounces" value="{v('integrator_filter_bounces')}"/>
             <boolean name="discard_direct_paths" value="{v('integrator_discard_direct_paths')}"/>
+            <boolean name="account_first_and_last_bounces" value="{v('account_first_and_last_bounces')}"/>
+            <string name="capture_type" value="{v('scan_type')}"/>
+            <boolean name="force_equal_illumination_scanning" value="{v('integrator_force_equal_illumination_scanning')}"/>
+            <float name="illumination_scan_fov" value="{v('integrator_illumination_scan_fov')}"/>
             <boolean name="nlos_laser_sampling" value="{v('integrator_nlos_laser_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling" value="{v('integrator_nlos_hidden_geometry_sampling')}"/>
             <boolean name="nlos_hidden_geometry_sampling_do_rroulette" value="{v('integrator_nlos_hidden_geometry_sampling_do_rroulette')}"/>
@@ -334,20 +337,27 @@ def get_scene_xml(config, random_seed=0):
                        laser_x=laser_x, laser_y=laser_y, laser_z=laser_z,
                        laser_emission=laser_emission, laser_fov=laser_fov)
 
-    if v('scan_type') == 'confocal':
+    if v('scan_type') == 'confocal' and not config['simultaneous_scan']:
         film_width = 1
         film_height = 1
         confocal_config = fdent(f'''\
             <integer name="original_film_width" value="{v('sensor_width')}"/>
             <integer name="original_film_height" value="{v('sensor_height')}"/>
         ''')
-    elif v('scan_type') == 'single' or v('scan_type') == 'exhaustive':
+    elif v('scan_type') == 'single' or v('scan_type') == 'exhaustive' or \
+          (v('scan_type') == 'confocal' and config['simultaneous_scan']):
         film_width = v('sensor_width')
         film_height = v('sensor_height')
         confocal_config = ''
     else:
         raise AssertionError(
             'scan_type should be one of {single|confocal|exhaustive}')
+
+    laser_scan_width = laser_scan_height = 0
+    if v('scan_type') == 'exhaustive':
+        laser_scan_width = v('laser_width')
+        laser_scan_height = v('laser_height')
+
     histogram_mode = v('histogram_mode') or 'time'
     if histogram_mode == 'time':
         film_xml = fdent('''\
@@ -362,13 +372,19 @@ def get_scene_xml(config, random_seed=0):
                 <rfilter type="box">
                     <!-- <float name="radius" value="0.5"/> -->
                 </rfilter>
+                <boolean name="exhaustive_scan" value="{exhaustive_scan}"/>
+                <integer name="laser_scan_width" value="{laser_scan_width}"/>
+                <integer name="laser_scan_height" value="{laser_scan_height}"/>
             </film>''',
                          film_width=film_width,
                          film_height=film_height,
                          num_bins=v('num_bins'),
                          auto_detect_bins=v('auto_detect_bins'),
                          bin_width_opl=v('bin_width_opl'),
-                         start_opl=v('start_opl'))
+                         start_opl=v('start_opl'),
+                         exhaustive_scan=v('scan_type') == 'exhaustive',
+                         laser_scan_width=laser_scan_width,
+                         laser_scan_height=laser_scan_height)
     elif histogram_mode == 'frequency':
         assert v('wl_mean') is not None, 'wl_mean must be specified'
         assert v('wl_sigma') is not None, 'wl_sigma must be specified'
@@ -406,7 +422,6 @@ def get_scene_xml(config, random_seed=0):
             </sampler>
 
             {confocal_config}
-            <boolean name="account_first_and_last_bounces" value="{account_first_and_last_bounces}"/>
             <point name="sensor_origin" x="{sensor_x}"
                                         y="{sensor_y}"
                                         z="{sensor_z}"/>
@@ -415,8 +430,6 @@ def get_scene_xml(config, random_seed=0):
                         sample_count=v('sample_count'),
                         random_seed=random_seed,
                         confocal_config=confocal_config,
-                        account_first_and_last_bounces=v(
-                            'account_first_and_last_bounces'),
                         sensor_x=v('sensor_x'),
                         sensor_y=v('sensor_y'),
                         sensor_z=v('sensor_z'),
@@ -669,20 +682,30 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             steady_image, transient_image = integrator.render(
                 scene, sensor=sensor_index, progress_callback=update_progress)
             result = np.array(transient_image)
+            # result has shape (nt, nchannels) or (ny, nx, nt, nchannels) or (ny, nx, ny_laser, nx_laser, nt, nchannels)
             if result.ndim == 2:
                 nt, nc = result.shape
-                result = result.reshape((nt, 1, 1, nc))
-            result = np.moveaxis(result, 2, 0)
-            result = np.swapaxes(result, 1, 2)
+                result = result.reshape((1, 1, nt, nc))
+            # result has shape (ny, nx, nt, nchannels or (ny, nx, ny_laser, nx_laser, nt, nchannels)
+            # we want to convert it to (nt, nx, ny) or (nt, nx_laser, ny_laser, nx, ny)
+            # regarding the channels:
+            # - if it's a PhasorHDRFilm, we convert (real, imag) to complex and sum all channels
+            # - if it's polarized we keep all channels, and warn the user that they'll need to handle them
+            # - otherwise we sum all channels
+            if result.ndim == 4:
+                result = result.transpose(2, 1, 0, 3)
+            elif result.ndim == 6:
+                result = result.transpose(4, 3, 2, 1, 0, 5)
+            else:
+                raise AssertionError(
+                    f'Unexpected number of dimensions in transient image: {result.ndim}')
 
-            # result has shape (nt, nx, ny, nchannels)
-            import mitsuba
-            if result.ndim == 4 and 'polarized' not in mitsuba.variant():
-                # sum all channels, except in the case of polarized rendering
-                result = np.sum(result, axis=-1)
             if isinstance(scene.sensors()[0].film(), PhasorHDRFilm):
                 # convert (real, imag) to complex
-                result = result[::2, ...] + 1j * result[1::2, ...]
+                result = result[..., ::2] + 1j * result[..., 1::2]
+            elif 'polarized' not in mi.variant():
+                result = np.sum(result, axis=-1)
+
             progress_bar.close()
             del steady_image, transient_image, progress_bar
         else:
