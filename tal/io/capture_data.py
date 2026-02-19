@@ -141,6 +141,8 @@ class NLOSCaptureData:
         - 'original_format': str (e.g. 'HDF5_ZNLOS' if imported from ZNLOS dataset instead of tal render)
         - 'config': dict (original scene_config.yaml when generated using tal render)
         - 'args': dict (original args passed when generated using tal render)
+        - 'is_polarized': boolean (true only for the cases where the data was rendered using tal,
+                                   and using a polarized backend)
         - 'volume': dict (if available e.g. for 'HDF5_ZNLOS' datasets, *not for tal render*)
             - 'center': Array3 (center of volume)
             - 'rotation': Array3 (rotation of volume formatted as per Z-NLOS - probably unused for now)
@@ -279,6 +281,9 @@ class NLOSCaptureData:
             return False
 
         return np.allclose(self.sensor_grid_xyz, self.laser_grid_xyz)
+
+    def is_polarized(self):
+        return self.scene_info.get('is_polarized', False)
 
     def as_dict(self):
         """ Returns a dict containing all the data in this object """
