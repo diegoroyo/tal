@@ -88,7 +88,7 @@ tal render bunny-confocal-128x128
 ```
 Which should generate a `bunny-confocal-128x128.hdf5` file.
 
-> [!INFO]
+> [!IMPORTANT]
 > Make sure you have `mitransient>=1.3.0` and `y-tal>=0.21.0`, which will greatly speed up render times thanks to the `simultaneous_scan` option that becomes available in the YAML file. Make sure that it's set to `true`, else your renders will take a looong time.
 
 ### Exhaustive capture
