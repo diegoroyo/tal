@@ -9,8 +9,13 @@ This implementation is an alternative to the other bp, fbp and pf/pf_dev
 approaches. 
 
 WARNING: the fk-migration demands a lot of memory usage. If you think you might
-get memory errors, try downscaling the y-tal data or trim the latest temporal
-data.
+get memory errors, try downscaling your data* or trim the temporal dimension.
+
+*To downscale, you can use:
+
+import tal
+data = tal.io.read_capture('...')  # capture grid uses 256x256 sensor points
+data.downscale(4)  # capture grid is now 64x64
 """
 
 from tal.io.capture_data import NLOSCaptureData
