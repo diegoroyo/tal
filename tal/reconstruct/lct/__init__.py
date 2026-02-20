@@ -7,11 +7,7 @@ See "Confocal non-line-of-sight imaging based on the light-cone transform",
 O'Toole et al. (2018).
 
 This implementation is an alternative to the other bp, fbp and pf/pf_dev 
-approaches. 
-
-WARNING: the fk-migration demands a lot of memory usage. If you think you might
-get memory errors, try downscaling the y-tal data or trim the latest temporal
-data.
+approaches.
 """
 
 from tal.io.capture_data import NLOSCaptureData

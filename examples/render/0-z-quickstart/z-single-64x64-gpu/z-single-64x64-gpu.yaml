@@ -1,0 +1,163 @@
+# TAL v0.21.0 NLOS scene description file: https://github.com/diegoroyo/tal
+# Created on 2026/02/20 11:08 with experiment name "z-single-64x64"
+#
+# * TAL uses YAML files to configure everything in the NLOS setup:
+# * 1) Parameters for the light transport simulation that will be
+# *    executed using Transient Mitsuba 3 (see section labeled as "Mitsuba")
+# * 2) Laser and sensor position, and where they are pointed towards
+# *    (see section labeled as "Laser and sensor")
+# * 3) Geometry of the scene (visible or hidden): its location, materials, etc.
+# *    (see sections labeled as "Geometry", "Relay wall" and "Materials reference")
+#
+#
+# * This is the YAML file that you would get if you executed the command
+# * "tal render new nlos-z" on your shell.
+#
+# * Basically, this file specifies different properties under YAML format.
+# * For example:
+name: z-single-64x64-gpu
+
+# * Note: when you generate a YAML file, you will see that many parameters
+# * are commented. When you see this written:
+#parameter: value
+# * It means that the default value for "parameter" is "value", you need
+# * to uncomment that line and modify the value if you want to change it.
+
+##
+# Mitsuba and Monte Carlo integrator settings
+##
+# * See https://mitsuba.readthedocs.io/en/latest/src/key_topics/variants.html
+# * you should have compiled this variant previously
+# * See the mitransient repository for more information
+mitsuba_variant: cuda_ad_mono
+# * mitransient's intergator properties
+# * See the mitransient documentation for transient_nlos_path
+#integrator_max_depth: -1
+#integrator_filter_bounces: -1
+#integrator_discard_direct_paths: false
+#integrator_nlos_laser_sampling: true
+integrator_nlos_hidden_geometry_sampling: true
+#integrator_nlos_hidden_geometry_sampling_do_rroulette: false
+#integrator_nlos_hidden_geometry_sampling_includes_relay_wall: true
+# Number of samples per pixel (spatial pixel, not time dimension pixel)
+sample_count: 10_000
+# Used only for scan_type=exhaustive, ignored otherwise
+# integrator_force_equal_illumination_scanning: false
+# integrator_illumination_scan_fov: 20
+
+# Used only for scan_type=confocal or exhaustive.
+# If true, scans are performed simultaneously, without needing to relaunch the renderer.
+# This results in much faster execution times, but requires to allocate the memory for the scan at once,
+# which may not be feasible for high resolution scans (mostly exhaustive ones).
+# If false, we launch one render per laser point, which is much slower but more memory efficient.
+simultaneous_scan: true
+
+##
+# Histograms
+##
+# * See mitsuba{2|3}-transient-nlos' documentation for transient_hdr_film
+#account_first_and_last_bounces: false
+num_bins: 2048
+bin_width_opl: 0.003
+start_opl: 0
+#auto_detect_bins: false
+#histogram_mode: time  # time or frequency
+# --- for histogram_mode=frequency
+#wl_mean: null
+#wl_sigma: null
+
+##
+# Laser and sensor
+##
+#scan_type: single  # single, confocal or exhaustive
+#sensor_x: -0.5
+#sensor_y: 0.0
+#sensor_z: 0.25
+#laser_x: -0.5
+#laser_y: 0.0
+#laser_z: 0.25
+sensor_width: 64
+sensor_height: 64
+# --- for scan_type=single
+# if set to null, laser points to the center pixel
+# if set to a number, laser points to that pixel (e.g. center = 128, 128)
+#laser_lookat_x: null
+#laser_lookat_y: null
+# --- for scan_type=confocal/exhaustive
+#laser_width: 32
+#laser_height: 32
+# these next four variables specify the scanned area of the relay wall
+# they are in UV coordinates, where (0, 0) is the top-left corner and (1, 1) is the bottom-right corner
+# by default they cover the whole relay wall i.e. (0, 0) to (1, 1)
+#laser_aperture_start_x: 0  # 0: left, 1: right of relay wall
+#laser_aperture_start_y: 0  # 0: top, 1: bottom of relay wall
+#laser_aperture_end_x: 1
+#laser_aperture_end_y: 1
+#laser_emission_mode: rgb   # mono, rgb, spectrum
+# see https://mitsuba.readthedocs.io/en/latest/src/key_topics/scene_format.html#rgb-colors
+# mono expects a single float value, rgb expects three float values separated by commas
+# spectrum expects a wavelength:intensity list separated by commas e.g. "400:1, 700:1"
+#laser_emission: 1.0, 1.0, 1.0
+
+##
+# Geometry (valid for hidden geometry or relay wall)
+##
+geometry:
+- name: Z
+  description: >
+    Hidden geometry of the scene
+  mesh:
+    type: obj
+    filename: ../meshes/Z.obj
+  displacement_x: 0.0
+  displacement_y: 0.0
+  # * Controls the displacement of the geometry in the Z direction (away from the relay wall)
+  displacement_z: 1.0  # using default RW settings this corresponds to depth
+  rot_degrees_x: 0.0
+  rot_degrees_y: 0.0
+  rot_degrees_z: 0.0
+  scale_x: 1
+  scale_y: 1
+  scale_z: 1
+  material:
+    id: white
+- name: relay_wall
+  mesh:
+    type: rectangle
+  # Relay wall rotation is NYI (see tal.render.render.py)
+  # as an alternative, you can rotate the rest of the scene
+  displacement_x: 0.0
+  displacement_y: 0.0
+  displacement_z: 0.0
+  scale_x: 1  # 1: relay wall is 2x2, 0.5: relay wall is 1x1 (X dimension)
+  scale_y: 1  # same for Y dimension
+  scale_z: 1  # Only valid values are: +1: normal is (0, 0, 1), -1. normal is (0, 0, -1)
+  material:
+    id: white
+
+##
+# Relay walls
+##
+relay_wall: relay_wall  # must correspond to a geometry name above
+
+##
+# Implemented materials reference
+# (variables e.g. $alpha are substituted)
+##
+
+#| id: white
+#| <bsdf type="diffuse">
+#|     <rgb name="reflectance" value="1.0, 1.0, 1.0"/>
+#| </bsdf>
+
+#| id: copper
+#| alpha: $alpha
+#| <bsdf type="roughconductor">
+#|     <string name="material" value="Cu"/>
+#|     <string name="distribution" value="beckmann"/>
+#|     <float name="alpha" value="$alpha"/>
+#| </bsdf>
+
+#| id: custom
+#| text: $text
+#| $text

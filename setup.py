@@ -1,5 +1,8 @@
 import setuptools
-from tal import __version__ as tal_version
+
+version = {}
+exec(open("tal/version.py").read(), version)
+tal_version = version['__version__']
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()

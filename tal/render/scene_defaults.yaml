@@ -10,6 +10,16 @@ integrator_nlos_hidden_geometry_sampling: false
 integrator_nlos_hidden_geometry_sampling_do_rroulette: false
 integrator_nlos_hidden_geometry_sampling_includes_relay_wall: true
 sample_count: 1_000_000
+# Used only for scan_type=exhaustive, ignored otherwise
+integrator_force_equal_illumination_scanning: true
+integrator_illumination_scan_fov: 20
+
+# Used only for scan_type=confocal or exhaustive.
+# If true, scans are performed simultaneously, without needing to relaunch the renderer.
+# This results in much faster execution times, but requires to allocate the memory for the scan at once,
+# which may not be feasible for high resolution scans (mostly exhaustive ones).
+# If false, we launch one render per laser point, which is much slower but more memory efficient.
+simultaneous_scan: true
 
 ##
 # Histograms

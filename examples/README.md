@@ -1,9 +1,12 @@
 # Examples
 
-* `render-reconstruct`: Tutorial on (1) how to simulate a NLOS scene using tal, choosing parameters in the YAML file, and (2) how to use the implemented reconstruction algorithms to reconstruct the object hidden around the corner.
-    * For step (1), check the `render-reconstruct/nlos-z/nlos-z.yaml` file.
-    * For step (2), check the `render-reconstruct/reconstruct.ipynb` file.
-    * You can find further documentation in the `tal render` and `tal reconstruct` sections of this repo's README.
-* `render-reconstruct-confocal`: Advanced use case where the NLOS scene contains multiple **confocal** illumination points. You will need to read the `render-reconstruct` case first. **Note that this case has not been thoroughly tested.**
-* `render-reconstruct-exhaustive`: Advanced use case where the NLOS scene contains multiple **exhaustive** illumination points. You will need to read the `render-reconstruct` case first. This shows most of the possibilities of the `fbp` and `pf_dev` reconstruction modules.
-* `old`: Undocumented examples/scenes which may not work now.
+> [!WARNING]
+> Running the `reconstruct` tutorials requires that you have run the corresponding `render` tutorials beforehand (to generate files), or that you have downloaded the corresponding capture `hdf5` files from here: TODO. Check the `render` tutorials first, then move to the `reconstruct` tutorials.
+
+> [!WARNING]
+> Our code is mostly designed to work with files that have also been rendered with `y-tal`, however we also support some other file formats (e.g., capture files from the phasor field/phasor field diffraction papers). To see if we support your capture files, check the `tal.io.read_capture` function (try to read it, see if it works, and if it does not, feel free to write a pull request for it, you'll need to write your conversion function in `tal.io.format.py`)
+
+We provide the following tutorials:
+
+* `render`: Tutorials on how to simulate a NLOS scene using `y-tal`, choosing parameters in the YAML file.
+* `reconstruct` Tutorials on how to use our reconstruction algorithms.

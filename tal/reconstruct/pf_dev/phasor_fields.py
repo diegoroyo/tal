@@ -234,11 +234,11 @@ def backproject_pf_multi_frequency(
             if not np.isclose(d_014, 0.0):
                 if d_014.size == 1:
                     d_014_reshaped = np.repeat(
-                        np.repeat(d_014.reshape(1, 1, 1),
+                        np.repeat(np.array(d_014).reshape(1, 1, 1),
                                   repeats=nl, axis=1),
                         repeats=ns, axis=2)
                     invsq_14_reshaped = np.repeat(
-                        np.repeat(invsq_14.reshape(1, 1, 1),
+                        np.repeat(np.array(invsq_14).reshape(1, 1, 1),
                                   repeats=nl, axis=1),
                         repeats=ns, axis=2)
                 else:
@@ -257,7 +257,7 @@ def backproject_pf_multi_frequency(
             elif not np.isclose(invsq_14, 1):
                 if invsq_14.size == 1:
                     invsq_14_reshaped = np.repeat(
-                        np.repeat(invsq_14.reshape(1, 1, 1),
+                        np.repeat(np.array(invsq_14).reshape(1, 1, 1),
                                   repeats=nl, axis=1),
                         repeats=ns, axis=2)
                 else:
