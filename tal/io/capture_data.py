@@ -283,7 +283,8 @@ class NLOSCaptureData:
         return np.allclose(self.sensor_grid_xyz, self.laser_grid_xyz)
 
     def is_polarized(self):
-        return self.scene_info.get('is_polarized', False)
+        """ Returns True if H contains confocal data (i.e. Sx and Sy represent both laser and sensor coordinates) """
+        return 'config' in self.scene_info and 'polarized' in self.scene_info['config']['mitsuba_variant']
 
     def as_dict(self):
         """ Returns a dict containing all the data in this object """

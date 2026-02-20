@@ -17,7 +17,7 @@ sudo apt install libhdf5-dev
 You will also need the required packages with the included `requirements.txt` file in this repo.
 
 ```
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 To install `tal` you have the following options:
@@ -25,13 +25,13 @@ To install `tal` you have the following options:
 1) Latest published version (recommended):
 
 ```
-pip3 install y-tal
+pip install y-tal
 ```
 
 2) Latest version in GitHub (more features, more unstable):
 
 ```
-pip3 install git+https://github.com/diegoroyo/tal
+pip install git+https://github.com/diegoroyo/tal
 ```
 
 # Usage:
@@ -161,7 +161,7 @@ optional arguments:
 
 _NOTE: No command-line version for now_
 
-[You can check the implemented algorithms here](https://github.com/diegoroyo/tal/tree/master/tal/reconstruct). As of Nov. 2023, implemented: backprojection, filtered backprojection, and different phasor-field cameras.
+[You can check the implemented algorithms here](https://github.com/diegoroyo/tal/tree/master/tal/reconstruct). As of 2026, implemented: backprojection, filtered backprojection, light cone transform, f-k migration, and many different phasor-field cameras.
 
 You can find examples for how use the reconstruction algorithms in the [`examples`](https://github.com/diegoroyo/tal/tree/master/examples) folder of this repository. Note that to test the reconstruction algorithms you will need to have a HDF5 capture file. If you don't, please check the `tal render` section or [convert your data to a format usable by `tal`](https://github.com/diegoroyo/tal/blob/master/tal/io/format.py).
 
@@ -250,6 +250,14 @@ V = np.moveaxis(np.mgrid[-1:1.1:0.1, -1:1.1:0.1, 0.5:2.6:0.1], 0, -1).reshape(-1
 # with central wavefactor 6 and 4 cycles
 reconstruction = tal.reconstruct.pf.solve(data, 6, 4, V, verbose=3, n_threads=1)
 ```
+
+### `lct`
+
+TODO
+
+### `fk`
+
+TODO
 
 ### Logging
 

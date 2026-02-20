@@ -382,7 +382,10 @@ def get_scene_xml(config, random_seed=0):
                          auto_detect_bins=v('auto_detect_bins'),
                          bin_width_opl=v('bin_width_opl'),
                          start_opl=v('start_opl'),
-                         exhaustive_scan=v('scan_type') == 'exhaustive',
+                         exhaustive_scan=(
+                             v('scan_type') == 'exhaustive' and
+                             config['simultaneous_scan']
+                         ).__str__().lower(),
                          laser_scan_width=laser_scan_width,
                          laser_scan_height=laser_scan_height)
     elif histogram_mode == 'frequency':
@@ -703,7 +706,8 @@ def run_mitsuba(scene_xml_path, hdr_path, defines,
             if isinstance(scene.sensors()[0].film(), PhasorHDRFilm):
                 # convert (real, imag) to complex
                 result = result[..., ::2] + 1j * result[..., 1::2]
-            elif 'polarized' not in mi.variant():
+
+            if 'polarized' not in mi.variant():
                 result = np.sum(result, axis=-1)
 
             progress_bar.close()

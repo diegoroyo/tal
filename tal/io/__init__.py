@@ -29,7 +29,7 @@ def read_capture(filename: str, file_format: FileFormat = FileFormat.AUTODETECT,
     from tal import log, LogLevel
     capture = NLOSCaptureData(filename, file_format=file_format, skip_H=skip_H)
 
-    if (capture.H.ndim == 4 or capture.H.ndim == 6) and capture.H.shape[-1] == 4:
+    if capture.is_polarized():
         log(LogLevel.WARNING, 'The loaded capture was rendered with a polarized backend. '
             'The provided reconstruction algorithms only support unpolarized data, '
             'if you need to use them, use only the intensity component of the Stokes vector: '
