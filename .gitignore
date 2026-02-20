@@ -19,6 +19,8 @@ examples/render/2-exhaustive/plane-exhaustive-16x16x16x16/*
 !examples/render/2-exhaustive/plane-exhaustive-16x16x16x16/plane-exhaustive-16x16x16x16.yaml
 examples/render/3-freq-space/z-single-64x64-freq/*
 !examples/render/3-freq-space/z-single-64x64-freq/z-single-64x64-freq.yaml
+examples/render/4-polarized/z-single-64x64-polarized/*
+!examples/render/4-polarized/z-single-64x64-polarized/z-single-64x64-polarized.yaml
 examples/old/
 examples/old/test/data
 examples/old/test/render
